@@ -95,7 +95,10 @@ async def show_topics(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    topic_index = int(update.callback_query.data.replace("topic_", ""))
+    query = update.callback_query
+    await query.answer() # Подтверждаем нажатие кнопки
+
+    topic_index = int(query.data.replace("topic_", ""))
     topic = TOPICS[topic_index]
     context.user_data['current_topic'] = topic
     context.user_data['current_question'] = 0
@@ -104,89 +107,103 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('errors', None) # Очищаем ошибки предыдущего теста
     context.user_data['answered_questions'] = {} # Initialize storage for answered questions
     
-    # Attempt to delete the last explanation message shown on the results screen
-    last_expl_info = context.user_data.pop('last_explanation_message_info_on_results', None)
-    if last_expl_info:
-        try:
-            await context.bot.delete_message(
-                chat_id=last_expl_info['chat_id'],
-                message_id=last_expl_info['message_id']
-            )
-            logging.info(f"Deleted previous explanation message {last_expl_info['message_id']} from chat {last_expl_info['chat_id']}")
-        except telegram.error.BadRequest as e:
-            if "message to delete not found" in str(e).lower():
-                logging.info(f"Previous explanation message {last_expl_info.get('message_id')} not found for deletion (already deleted or too old).")
-            else:
-                logging.warning(f"Could not delete previous explanation message {last_expl_info.get('message_id')}: {e}")
-        except Exception as e:
-            logging.error(f"Unexpected error deleting previous explanation message {last_expl_info.get('message_id')}: {e}")
-
-    user_id = update.effective_user.id
-    # Получаем вопросы, где были ошибки (текст_вопроса, прав_ответ, объяснение)
-    error_task_tuples = db.get_error_tasks_for_user(user_id, topic, limit=DEFAULT_QUESTIONS_PER_TEST)
-    
-    all_test_questions = []
-
-    if not error_task_tuples:
-        logging.info(f"User {user_id} has no outstanding error tasks for topic '{topic}'. Generating {DEFAULT_QUESTIONS_PER_TEST} new questions purely from AI.")
-        all_test_questions = await get_or_generate_tasks(
-            topic, 
-            db, 
-            needed=DEFAULT_QUESTIONS_PER_TEST, 
-            force_ai=True
+    # Устанавливаем флаг загрузки и показываем сообщение о загрузке
+    context.user_data['loading_questions'] = True
+    try:
+        await query.edit_message_text(
+            "⏳ Загрузка вопросов... Пожалуйста, подождите.",
+            reply_markup=None # Убираем кнопки с этого сообщения
         )
-    else:
-        logging.info(f"User {user_id} has {len(error_task_tuples)} error tasks for topic '{topic}'. Prioritizing these.")
-        # Преобразуем в формат (вопрос, ответ, объяснение, None для неверных вариантов)
-        error_questions_formatted = []
-        for error_task_tuple in error_task_tuples:
-            if len(error_task_tuple) >= 3:
-                q_text, c_ans, expl = error_task_tuple[:3]
-                error_questions_formatted.append((q_text, c_ans, expl, None))
-            else:
-                logging.warning(f"Skipping malformed error_task_tuple (not enough values): {error_task_tuple}")
-        
-        all_test_questions.extend(error_questions_formatted)
-        
-        # Отслеживаем тексты вопросов с ошибками, чтобы избежать дубликатов
-        current_question_texts = set(q_tuple[0] for q_tuple in error_questions_formatted)
+    except telegram.error.BadRequest as e:
+        if "message is not modified" in str(e).lower():
+            pass # Сообщение уже "загрузка", это нормально
+        else:
+            logging.warning(f"Error editing message to loading state in start_test: {e}")
+    except Exception as e:
+        logging.warning(f"Generic error editing message to loading state in start_test: {e}")
 
-        # Если нужно еще вопросов до DEFAULT_QUESTIONS_PER_TEST
-        if len(all_test_questions) < DEFAULT_QUESTIONS_PER_TEST:
-            needed_additionally = DEFAULT_QUESTIONS_PER_TEST - len(all_test_questions)
-            logging.info(
-                f"Fetching {needed_additionally} additional unique questions for topic '{topic}', "
-                f"excluding {len(current_question_texts)} already selected error questions."
-            )
-            
-            # Запрашиваем ровно столько, сколько нужно, и передаем уже выбранные тексты для исключения.
-            # get_or_generate_tasks сама использует БД, а затем AI, если нужно.
-            additional_unique_questions = await get_or_generate_tasks(
+    try:
+        # Attempt to delete the last explanation message shown on the results screen
+        last_expl_info = context.user_data.pop('last_explanation_message_info_on_results', None)
+        if last_expl_info:
+            try:
+                await context.bot.delete_message(
+                    chat_id=last_expl_info['chat_id'],
+                    message_id=last_expl_info['message_id']
+                )
+                logging.info(f"Deleted previous explanation message {last_expl_info['message_id']} from chat {last_expl_info['chat_id']}")
+            except telegram.error.BadRequest as e:
+                if "message to delete not found" in str(e).lower():
+                    logging.info(f"Previous explanation message {last_expl_info.get('message_id')} not found for deletion (already deleted or too old).")
+                else:
+                    logging.warning(f"Could not delete previous explanation message {last_expl_info.get('message_id')}: {e}")
+            except Exception as e:
+                logging.error(f"Unexpected error deleting previous explanation message {last_expl_info.get('message_id')}: {e}")
+
+        user_id = update.effective_user.id
+        # Получаем вопросы, где были ошибки (текст_вопроса, прав_ответ, объяснение)
+        error_task_tuples = db.get_error_tasks_for_user(user_id, topic, limit=DEFAULT_QUESTIONS_PER_TEST)
+        
+        all_test_questions = []
+
+        if not error_task_tuples:
+            logging.info(f"User {user_id} has no outstanding error tasks for topic '{topic}'. Generating {DEFAULT_QUESTIONS_PER_TEST} new questions purely from AI.")
+            all_test_questions = await get_or_generate_tasks(
                 topic, 
                 db, 
-                needed=needed_additionally, # Запрашиваем точное количество недостающих
-                force_ai=False, # Позволяем использовать БД, затем AI если БД не хватит
-                existing_question_texts_to_exclude=current_question_texts # Передаем тексты уже взятых вопросов
+                needed=DEFAULT_QUESTIONS_PER_TEST, 
+                force_ai=True
             )
+        else:
+            logging.info(f"User {user_id} has {len(error_task_tuples)} error tasks for topic '{topic}'. Prioritizing these.")
+            # Преобразуем в формат (вопрос, ответ, объяснение, None для неверных вариантов)
+            error_questions_formatted = []
+            for error_task_tuple in error_task_tuples:
+                if len(error_task_tuple) >= 3:
+                    q_text, c_ans, expl = error_task_tuple[:3]
+                    error_questions_formatted.append((q_text, c_ans, expl, None))
+                else:
+                    logging.warning(f"Skipping malformed error_task_tuple (not enough values): {error_task_tuple}")
             
-            all_test_questions.extend(additional_unique_questions)
-            # Обновляем current_question_texts, хотя для этого этапа это уже не так критично,
-            # так как get_or_generate_tasks должна была обеспечить уникальность.
-            for q_tuple in additional_unique_questions:
-                current_question_texts.add(q_tuple[0])
+            all_test_questions.extend(error_questions_formatted)
+            
+            current_question_texts = set(q_tuple[0] for q_tuple in error_questions_formatted)
 
-        # Перемешиваем, если комбинировали вопросы с ошибками и дополнительные.
-        # Если все были от ИИ (первая ветка), get_or_generate_tasks уже перемешала.
-        random.shuffle(all_test_questions) 
-    
-    context.user_data['questions'] = all_test_questions[:DEFAULT_QUESTIONS_PER_TEST]
+            if len(all_test_questions) < DEFAULT_QUESTIONS_PER_TEST:
+                needed_additionally = DEFAULT_QUESTIONS_PER_TEST - len(all_test_questions)
+                logging.info(
+                    f"Fetching {needed_additionally} additional unique questions for topic '{topic}', "
+                    f"excluding {len(current_question_texts)} already selected error questions."
+                )
+                
+                additional_unique_questions = await get_or_generate_tasks(
+                    topic, 
+                    db, 
+                    needed=needed_additionally, 
+                    force_ai=False, 
+                    existing_question_texts_to_exclude=current_question_texts
+                )
+                
+                all_test_questions.extend(additional_unique_questions)
+                for q_tuple in additional_unique_questions:
+                    current_question_texts.add(q_tuple[0])
+            random.shuffle(all_test_questions) 
+        
+        context.user_data['questions'] = all_test_questions[:DEFAULT_QUESTIONS_PER_TEST]
 
-    if not context.user_data['questions']:
+    finally:
+        context.user_data.pop('loading_questions', None) # Снимаем флаг загрузки
+
+    if not context.user_data.get('questions'): # Используем .get для безопасной проверки
         logging.warning(f"Failed to load any questions for topic '{topic}' for user {user_id}.")
-        await update.callback_query.edit_message_text(
-            "Не удалось загрузить вопросы для этой темы. Попробуйте позже или выберите другую тему.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад к темам", callback_data="back_to_topics")]])
-        )
+        try:
+            # query здесь все еще доступен и ссылается на исходное сообщение
+            await query.edit_message_text(
+                "Не удалось загрузить вопросы для этой темы. Попробуйте позже или выберите другую тему.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад к темам", callback_data="back_to_topics")]])
+            )
+        except Exception as e_edit_fail:
+            logging.error(f"Failed to edit message for no questions in start_test: {e_edit_fail}")
         return
     
     final_question_count = len(context.user_data.get('questions', []))
@@ -591,6 +608,14 @@ async def show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_data = context.user_data
+
+    # Проверяем, идет ли загрузка вопросов
+    if user_data.get('loading_questions'):
+        await update.message.reply_text(
+            "⏳ Пожалуйста, подождите, идет загрузка вопросов для теста...",
+            reply_markup=main_menu_markup # Можно оставить меню или убрать его временно
+        )
+        return
 
     # Check if a test is actively in progress (questions loaded and not yet at results)
     is_test_active_for_message_handling = (
