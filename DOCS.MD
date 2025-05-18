@@ -210,12 +210,12 @@
 *   **Model Initialization:** `genai.GenerativeModel(os.getenv('GEMINI_MODEL'))`
 *   **Task Generation (`generate_ai_task`)**:
     *   **Prompt Engineering:** A detailed prompt is used, instructing the AI to generate:
-        1.  Question text (for 5-6th grade).
-        2.  One correct answer.
-        3.  Three plausible incorrect answer options.
-        4.  A brief explanation.
-        *   Specific constraints are given (e.g., answer unit consistency, answer length).
-        *   **Strict Formatting Requirement:** AI is asked to format each part with labels like "ВОПРОС:", "ПРАВИЛЬНЫЙ ОТВЕТ:", etc., each on a new line.
+        1.  Question text (for 5-6th grade), emphasizing variety (word problems, logic puzzles, conceptual applications) rather than simple calculations or number swaps.
+        2.  One correct answer (clear, unambiguous, <= 60 chars).
+        3.  Three plausible incorrect answer options, reflecting common student errors.
+        4.  A brief, clear, and potentially step-by-step explanation.
+        *   Specific constraints are given (e.g., answer unit consistency, appropriate difficulty solvable mentally or with minimal writing, novelty).
+        *   **Strict Formatting Requirement:** AI is asked to format each part with labels like "ВОПРОС:", "ПРАВИЛЬНЫЙ ОТВЕТ:", etc., each on a new line, with ALL CAPS headers. An example of the desired structure and question type is provided to the AI.
     *   **Response Parsing:**
         *   Regular expressions (`re.search`, `re.finditer`) are used to extract the question, correct answer, incorrect options, and explanation based on the predefined labels.
         *   Error handling is in place if parsing fails or critical parts are missing.
