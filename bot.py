@@ -970,6 +970,25 @@ async def get_or_generate_tasks(
     return final_tasks_list[:needed]
 
 async def back_to_topics(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Attempt to delete the last explanation message shown on the results screen first
+    last_expl_info = context.user_data.pop('last_explanation_message_info_on_results', None)
+    if last_expl_info and isinstance(last_expl_info, dict): # Ensure it's the expected dict
+        try:
+            # Check if effective_chat is available for logging context
+            chat_id_for_log = update.effective_chat.id if update.effective_chat else "unknown_chat"
+            await context.bot.delete_message(
+                chat_id=last_expl_info['chat_id'],
+                message_id=last_expl_info['message_id']
+            )
+            logging.info(f"Deleted previous explanation message {last_expl_info.get('message_id')} from chat {last_expl_info.get('chat_id')} via back_to_topics for chat {chat_id_for_log}.")
+        except telegram.error.BadRequest as e:
+            if "message to delete not found" in str(e).lower():
+                logging.info(f"Previous explanation message {last_expl_info.get('message_id')} not found for deletion (back_to_topics).")
+            else:
+                logging.warning(f"Could not delete previous explanation message {last_expl_info.get('message_id')} (back_to_topics): {e}")
+        except Exception as e:
+            logging.error(f"Unexpected error deleting previous explanation message {last_expl_info.get('message_id')} (back_to_topics): {e}")
+
     context.user_data.clear()
     await show_topics(update, context)
 
@@ -1198,6 +1217,23 @@ async def go_to_main_menu_callback(update: Update, context: ContextTypes.DEFAULT
         except Exception as e:
             logging.error(f"Неожиданная ошибка при изменении разметки сообщения в go_to_main_menu_callback: {e}")
     
+    # Attempt to delete the last explanation message shown on the results screen
+    last_expl_info = context.user_data.pop('last_explanation_message_info_on_results', None)
+    if last_expl_info and isinstance(last_expl_info, dict): # Ensure it's the expected dict
+        try:
+            await context.bot.delete_message(
+                chat_id=last_expl_info['chat_id'],
+                message_id=last_expl_info['message_id']
+            )
+            logging.info(f"Deleted previous explanation message {last_expl_info.get('message_id')} from chat {last_expl_info.get('chat_id')} via main_menu.")
+        except telegram.error.BadRequest as e:
+            if "message to delete not found" in str(e).lower():
+                logging.info(f"Previous explanation message {last_expl_info.get('message_id')} not found for deletion (main_menu).")
+            else:
+                logging.warning(f"Could not delete previous explanation message {last_expl_info.get('message_id')} (main_menu): {e}")
+        except Exception as e:
+            logging.error(f"Unexpected error deleting previous explanation message {last_expl_info.get('message_id')} (main_menu): {e}")
+
     # Текст для сообщения с главным меню
     menu_text = f"✅ {user.mention_html()}, вы снова в главном меню. Выберите действие:"
     # Альтернативный, более простой текст:

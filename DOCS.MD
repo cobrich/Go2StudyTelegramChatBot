@@ -126,6 +126,7 @@
     *   Constructs the full explanation text.
     *   If a previous explanation message ID is stored (`last_explanation_message_info_on_results`), attempts to edit it.
     *   Otherwise, sends a new message replying to the results message and stores its ID and chat ID.
+    *   Navigating away from the results screen (e.g., to the main menu or back to topic selection) will also delete any currently displayed explanation message.
 
 ### 6.5. Checking Progress
 1.  User clicks "📊 Мой прогресс" from the main menu.
@@ -147,6 +148,7 @@
 2.  `go_to_main_menu_callback()`:
     *   Answers the callback query.
     *   Attempts to remove the inline keyboard from the message it originated from.
+    *   Deletes any active explanation message if `last_explanation_message_info_on_results` is present in `context.user_data`.
     *   Sends a new message "✅ {user.mention_html()}, вы снова в главном меню..." with the `main_menu_markup`.
 
 ### 6.8. Stopping the Bot & Deleting User Data (New)
@@ -158,6 +160,14 @@
     *   Sends a confirmation message to the user indicating that their data has been deleted.
     *   Informs the user that the bot cannot delete the chat history itself, and this must be done manually by the user if desired.
     *   Suggests sending `/start` to begin interacting with the bot again.
+
+### 6.9. Returning to Topic Selection from Results/Test (New)
+1.  User clicks a button with `callback_data="back_to_topics"` (e.g., from results screen or from an active question).
+2.  `back_to_topics()` handler:
+    *   Answers the callback query.
+    *   If called from the results screen where an explanation might be visible, it first attempts to delete the message identified by `context.user_data.pop('last_explanation_message_info_on_results', None)`.
+    *   Clears all `context.user_data` for a clean state before topic selection.
+    *   Calls `show_topics()` to display the topic selection inline keyboard.
 
 ## 7. Database Schema (`database.py`)
 
