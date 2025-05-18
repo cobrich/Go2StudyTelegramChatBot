@@ -1225,6 +1225,58 @@ async def go_to_main_menu_callback(update: Update, context: ContextTypes.DEFAULT
             )
         except Exception as e_fallback:
             logging.error(f"Не удалось отправить сообщение об ошибке (fallback) в go_to_main_menu_callback для чата {chat_id}: {e_fallback}")
+    logging.info(f"User {user.id} returned to main menu from an inline keyboard in chat {chat_id}.") # Ensure this existing log line is present
+
+async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handles the /stop command, deleting all user data."""
+    user = update.effective_user
+    if not user:
+        logging.warning("stop_command received update without effective_user.")
+        chat_id = update.effective_chat.id
+        if chat_id:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="Не удалось определить пользователя для остановки. Пожалуйста, убедитесь, что вы отправили команду из чата с ботом."
+            )
+        return
+
+    user_id = user.id
+    chat_id = update.effective_chat.id
+
+    logging.info(f"User {user_id} ({user.username}) executed /stop command in chat {chat_id}.")
+
+    success = db.delete_all_user_data(user_id)
+
+    if success:
+        logging.info(f"Successfully deleted all data for user {user_id} from the database.")
+        context.user_data.clear()
+        logging.info(f"Cleared context.user_data for user {user_id}.")
+        
+        response_text = (
+            f"🗑️ Все ваши данные были удалены из моей памяти, {user.mention_html()}.\\n\\n"
+            "Я не могу удалить историю этого чата самостоятельно, но вы можете сделать это вручную, если хотите.\\n\\n"
+            "Если вы захотите начать заново, просто отправьте /start."
+        )
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=".", # Dummy text for removing keyboard
+                reply_markup=ReplyKeyboardRemove()
+            )
+        except Exception as e_remove_keyboard:
+            logging.warning(f"Could not remove reply keyboard for user {user_id} during /stop: {e_remove_keyboard}")
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=response_text,
+            parse_mode='HTML'
+        )
+    else:
+        logging.error(f"Failed to delete data for user {user_id} from the database.")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Произошла ошибка при удалении ваших данных. Пожалуйста, попробуйте еще раз или свяжитесь с администратором, если проблема сохранится."
+        )
 
 def main():
     # Создаем приложение
