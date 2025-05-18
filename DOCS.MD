@@ -149,6 +149,16 @@
     *   Attempts to remove the inline keyboard from the message it originated from.
     *   Sends a new message "✅ {user.mention_html()}, вы снова в главном меню..." with the `main_menu_markup`.
 
+### 6.8. Stopping the Bot & Deleting User Data (New)
+1.  User sends the `/stop` command.
+2.  `stop_command()` handler:
+    *   Retrieves the `user_id`.
+    *   Calls `db.delete_all_user_data(user_id)` to remove all data associated with the user from the `users`, `test_history`, `errors`, and `user_question_errors` tables.
+    *   Clears any session data from `context.user_data`.
+    *   Sends a confirmation message to the user indicating that their data has been deleted.
+    *   Informs the user that the bot cannot delete the chat history itself, and this must be done manually by the user if desired.
+    *   Suggests sending `/start` to begin interacting with the bot again.
+
 ## 7. Database Schema (`database.py`)
 
 *   **`users`**:

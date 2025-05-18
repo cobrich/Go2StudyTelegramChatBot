@@ -1242,8 +1242,11 @@ def main():
     application.add_handler(CallbackQueryHandler(back_to_topics, pattern="^back_to_topics$"))
     application.add_handler(CallbackQueryHandler(prev_question, pattern="^prev_question$"))
     application.add_handler(CallbackQueryHandler(next_question, pattern="^next_question$"))
-    application.add_handler(CallbackQueryHandler(show_explanation, pattern="^show_expl_"))
+    application.add_handler(CallbackQueryHandler(show_explanation, pattern=r"^show_expl_\d+$")) # Corrected pattern
     application.add_handler(CallbackQueryHandler(continue_test, pattern="^continue_test$"))
+    
+    # Handler for /stop command
+    application.add_handler(CommandHandler("stop", stop_command))
 
     # Запускаем бота
     application.run_polling()
