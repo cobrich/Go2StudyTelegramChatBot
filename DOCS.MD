@@ -175,12 +175,19 @@
 ### 6.8. Stopping the Bot & Deleting User Data (New)
 1.  User sends the `/stop` command.
 2.  `stop_command()` handler:
-    *   Retrieves the `user_id`.
-    *   Calls `db.delete_all_user_data(user_id)` to remove all data associated with the user from the `users`, `test_history`, `errors`, and `user_question_errors` tables.
-    *   Clears any session data from `context.user_data`.
-    *   Sends a confirmation message to the user indicating that their data has been deleted.
-    *   Informs the user that the bot cannot delete the chat history itself, and this must be done manually by the user if desired.
-    *   Suggests sending `/start` to begin interacting with the bot again.
+    *   Retrieves the `user_id` and `chat_id`.
+    *   **Checks if a session was started**: It verifies `context.user_data.get('session_started')`.
+        *   **If session NOT started**: 
+            *   Logs this event.
+            *   Sends a message: "Бот еще не был активирован командой /start. Для вас нет сохраненных данных. Чтобы начать, отправьте /start."
+            *   Returns, without attempting data deletion.
+        *   **If session WAS started**:
+            *   Logs that `/stop` was executed for an active session.
+            *   Calls `db.delete_all_user_data(user_id)` to remove all data associated with the user from the database.
+            *   Clears any session data from `context.user_data`.
+            *   Sends a confirmation message to the user indicating that their data has been deleted (this message also includes `ReplyKeyboardRemove`).
+            *   Informs the user that the bot cannot delete the chat history itself.
+            *   Suggests sending `/start` to begin interacting with the bot again.
 
 ### 6.9. Returning to Topic Selection from Results/Test
 1.  User clicks a button with `callback_data="back_to_topics"`:

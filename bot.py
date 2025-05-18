@@ -1288,9 +1288,10 @@ async def go_to_main_menu_callback(update: Update, context: ContextTypes.DEFAULT
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles the /stop command, deleting all user data."""
     user = update.effective_user
+    chat_id = update.effective_chat.id # Получаем chat_id здесь для любого ответа
+
     if not user:
         logging.warning("stop_command received update without effective_user.")
-        chat_id = update.effective_chat.id
         if chat_id:
             await context.bot.send_message(
                 chat_id=chat_id,
@@ -1298,10 +1299,22 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
         return
 
-    user_id = user.id
-    chat_id = update.effective_chat.id
+    user_id = user.id # user_id получаем здесь
 
-    logging.info(f"User {user_id} ({user.username}) executed /stop command in chat {chat_id}.")
+    # Проверяем, была ли сессия начата
+    if not context.user_data.get('session_started'):
+        logging.info(f"User {user_id} ({user.username}) executed /stop before starting a session in chat {chat_id}.")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                "Бот еще не был активирован командой /start. "
+                "Для вас нет сохраненных данных. Чтобы начать, отправьте /start."
+            )
+        )
+        return
+
+    # Если сессия была начата, продолжаем с удалением данных
+    logging.info(f"User {user_id} ({user.username}) executed /stop command in chat {chat_id} (session was active).")
 
     success = db.delete_all_user_data(user_id)
 
