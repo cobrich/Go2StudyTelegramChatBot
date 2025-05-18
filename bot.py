@@ -64,6 +64,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # или вводит /start во время другого активного процесса).
     context.user_data.clear()
     logging.info(f"User {user.id} ({user.username}) executed /start. User data cleared for chat {chat_id}.")
+    context.user_data['session_started'] = True # Устанавливаем флаг начала сессии
 
     welcome_text = f"👋 Привет, {user.mention_html()}! Я бот для изучения математики. Выбери действие:"
 
@@ -647,6 +648,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_data = context.user_data
 
+    # ПРОВЕРКА: Если сессия не была начата через /start, предлагаем это сделать
+    if not user_data.get('session_started'):
+        await update.message.reply_text(
+            "Привет! Чтобы начать, пожалуйста, отправь команду /start."
+        )
+        return
+
     # Проверяем, идет ли загрузка вопросов
     if user_data.get('loading_questions'):
         await update.message.reply_text(
@@ -671,7 +679,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=main_menu_markup
             )
         else:
-            context.user_data.clear()
+            # context.user_data.clear() # Пока уберем полный clear здесь
+            # Вместо этого, специфичные для теста данные очищаются в start_test и back_to_topics
             await show_topics_from_message(update, context)
     elif text == "📊 Мой прогресс":
         if is_test_active_for_message_handling:
@@ -681,7 +690,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=main_menu_markup
             )
         else:
-            context.user_data.clear()
+            # context.user_data.clear() # Пока уберем полный clear здесь
             await show_progress_from_message(update, context)
     elif text == "❓ Помощь":
         if is_test_active_for_message_handling:
