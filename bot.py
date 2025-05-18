@@ -44,6 +44,17 @@ main_menu_markup = ReplyKeyboardMarkup(
     one_time_keyboard=False # Клавиатура остается видимой
 )
 
+# НОВАЯ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ для создания клавиатуры выбора тем
+def _build_topic_selection_keyboard() -> InlineKeyboardMarkup:
+    """Создает InlineKeyboardMarkup для выбора темы, включая кнопку 'В главное меню'."""
+    keyboard = [
+        [InlineKeyboardButton(topic, callback_data=f"topic_{i}")]
+        for i, topic in enumerate(TOPICS)
+    ]
+    # Добавляем кнопку "В главное меню" в конец списка
+    keyboard.append([InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")])
+    return InlineKeyboardMarkup(keyboard)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Отправляет приветственное сообщение и главное меню при команде /start."""
     user = update.effective_user
@@ -85,15 +96,48 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             logging.error(f"Error sending fallback error message during /start for chat {chat_id}: {e_fallback}")
 
 async def show_topics(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton(topic, callback_data=f"topic_{i}")]
-        for i, topic in enumerate(TOPICS)
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.callback_query.edit_message_text(
-        "📚 Выбери тему:",
-        reply_markup=reply_markup
-    )
+    """Отображает список тем для выбора, редактируя существующее сообщение."""
+    reply_markup = _build_topic_selection_keyboard() # Используем новую вспомогательную функцию
+    
+    query = update.callback_query # Эта функция обычно вызывается из callback
+    if query:
+        try:
+            await query.edit_message_text(
+                "📚 Выбери тему:",
+                reply_markup=reply_markup
+            )
+        except telegram.error.BadRequest as e:
+            if "message is not modified" in str(e).lower():
+                await query.answer() # Сообщение не изменилось, просто подтверждаем
+            else:
+                logging.error(f"Ошибка редактирования сообщения в show_topics: {e}")
+                # Попытка отправить новое сообщение, если редактирование не удалось
+                if query.message:
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text="📚 Выбери тему: (ошибка редактирования)",
+                        reply_markup=reply_markup
+                    )
+        except Exception as e:
+            logging.error(f"Неожиданная ошибка в show_topics: {e}")
+            # Попытка отправить новое сообщение в случае серьезной ошибки
+            if query and query.message:
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="📚 Выбери тему: (неожиданная ошибка)",
+                    reply_markup=reply_markup
+                )
+    else:
+        # Эта ветка маловероятна, если show_topics вызывается только из колбэков,
+        # таких как back_to_topics.
+        logging.warning("show_topics вызвана без callback_query. Попытка отправить новое сообщение.")
+        chat_id = update.effective_chat.id
+        if chat_id:
+             await context.bot.send_message(
+                chat_id=chat_id,
+                text="📚 Выбери тему:",
+                reply_markup=reply_markup
+            )
 
 async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -669,7 +713,7 @@ async def show_topics_from_message(update: Update, context: ContextTypes.DEFAULT
     try:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=".",  # ИЗМЕНЕНО: с \u200B на "." для предотвращения ошибки "Text must be non-empty"
+            text=".",
             reply_markup=ReplyKeyboardRemove()
         )
         logging.info(f"Sent ReplyKeyboardRemove command for chat {update.effective_chat.id} before showing topics.")
@@ -678,11 +722,7 @@ async def show_topics_from_message(update: Update, context: ContextTypes.DEFAULT
         logging.error(f"Error sending ReplyKeyboardRemove in show_topics_from_message: {e}")
     # --- END EDIT ---
 
-    keyboard = [
-        [InlineKeyboardButton(topic, callback_data=f"topic_{i}")]
-        for i, topic in enumerate(TOPICS)
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = _build_topic_selection_keyboard() # Используем новую вспомогательную функцию
     # Затем отправляем сообщение с выбором тем (инлайн-кнопки)
     await update.message.reply_text("📚 Выбери тему:", reply_markup=reply_markup)
 

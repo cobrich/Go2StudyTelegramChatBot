@@ -30,6 +30,7 @@ model = genai.GenerativeModel(os.getenv('GEMINI_MODEL'))
 
 DEFAULT_QUESTIONS_PER_TEST = 10 # Определяем желаемое количество вопросов в тесте
 MAX_EXPLANATION_PREVIEW_LENGTH = 700 # Макс. длина объяснения для немедленного показа
+MAX_QUESTIONS_PER_TEST = 10 # Убедимся, что эта константа есть, или используем DEFAULT_QUESTIONS_PER_TEST
 
 # ГЛАВНОЕ МЕНЮ - ReplyKeyboardMarkup
 MAIN_MENU_KEYBOARD = [
@@ -145,79 +146,64 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.error(f"Unexpected error deleting previous explanation message {last_expl_info.get('message_id')}: {e}")
 
         user_id = update.effective_user.id
-        # Получаем вопросы, где были ошибки (текст_вопроса, прав_ответ, объяснение)
-        error_task_tuples = db.get_error_tasks_for_user(user_id, topic, limit=DEFAULT_QUESTIONS_PER_TEST)
-        
-        all_test_questions = []
+        force_ai_for_this_test = context.user_data.get('force_ai_next_test', False)
+        context.user_data.pop('force_ai_next_test', None)
 
-        if not error_task_tuples:
-            logging.info(f"User {user_id} has no outstanding error tasks for topic '{topic}'. Generating {DEFAULT_QUESTIONS_PER_TEST} new questions purely from AI.")
-            all_test_questions = await get_or_generate_tasks(
-                topic, 
-                db, 
-                needed=DEFAULT_QUESTIONS_PER_TEST, 
-                force_ai=True
+        questions = await get_or_generate_tasks(
+            user_id=user_id,  # ПЕРЕДАЕМ user_id
+            topic=topic,
+            db=db, # db должно быть доступно в этом скоупе (обычно глобально или через context)
+            needed=DEFAULT_QUESTIONS_PER_TEST, # Используем константу
+            force_ai=force_ai_for_this_test
+        )
+        
+        context.user_data['questions'] = questions
+        context.user_data['loading_questions'] = False
+
+        if questions:
+            logging.info(
+                f"Successfully prepared {len(questions)} questions for topic '{topic}' for user {user_id}. "
+                f"Initial 'force_ai' flag was: {force_ai_for_this_test}."
             )
+            # await ask_question(update, context) # Этот вызов будет ниже, после определения final_question_count
         else:
-            logging.info(f"User {user_id} has {len(error_task_tuples)} error tasks for topic '{topic}'. Prioritizing these.")
-            # Преобразуем в формат (вопрос, ответ, объяснение, None для неверных вариантов)
-            error_questions_formatted = []
-            for error_task_tuple in error_task_tuples:
-                if len(error_task_tuple) >= 3:
-                    q_text, c_ans, expl = error_task_tuple[:3]
-                    error_questions_formatted.append((q_text, c_ans, expl, None))
-                else:
-                    logging.warning(f"Skipping malformed error_task_tuple (not enough values): {error_task_tuple}")
-            
-            all_test_questions.extend(error_questions_formatted)
-            
-            current_question_texts = set(q_tuple[0] for q_tuple in error_questions_formatted)
-
-            if len(all_test_questions) < DEFAULT_QUESTIONS_PER_TEST:
-                needed_additionally = DEFAULT_QUESTIONS_PER_TEST - len(all_test_questions)
-                logging.info(
-                    f"Fetching {needed_additionally} additional unique questions for topic '{topic}', "
-                    f"excluding {len(current_question_texts)} already selected error questions."
+            logging.warning(f"Failed to load any questions for topic '{topic}' for user {user_id}.")
+            try:
+                await query.edit_message_text(
+                    "Не удалось загрузить вопросы для этой темы. Попробуйте позже или выберите другую тему.",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад к темам", callback_data="back_to_topics")]])
                 )
-                
-                additional_unique_questions = await get_or_generate_tasks(
-                    topic, 
-                    db, 
-                    needed=needed_additionally, 
-                    force_ai=False, 
-                    existing_question_texts_to_exclude=current_question_texts
-                )
-                
-                all_test_questions.extend(additional_unique_questions)
-                for q_tuple in additional_unique_questions:
-                    current_question_texts.add(q_tuple[0])
-            random.shuffle(all_test_questions) 
+            except Exception as e_edit_fail:
+                logging.error(f"Failed to edit message for no questions in start_test: {e_edit_fail}")
+            return # Важно выйти, если вопросы не загружены
         
-        context.user_data['questions'] = all_test_questions[:DEFAULT_QUESTIONS_PER_TEST]
+        # Этот блок кода (включая проблемную строку) выполняется, только если questions не пустой.
+        # Однако, вызов ask_question должен быть здесь, если мы хотим использовать final_question_count и source_description
+        # для лога перед тем, как задать вопрос.
+        # Но если questions пуст, мы уже вышли из функции.
+
+        final_question_count = len(context.user_data.get('questions', [])) # Это будет равно len(questions)
+        
+        # Определяем source_description на основе того, как были получены вопросы.
+        # Эта логика может быть не совсем точной, так как get_or_generate_tasks сама решает, как генерировать.
+        # force_ai_for_this_test показывает только *начальное* намерение.
+        # Более точное логирование источника происходит внутри get_or_generate_tasks.
+        # Для этого лога можно упростить или основываться на force_ai_for_this_test.
+        if force_ai_for_this_test:
+            source_description = "All AI generated (forced)"
+        elif not db.get_error_tasks_for_user(user_id, topic, limit=1): # Проверяем, были ли ошибки изначально
+            source_description = "All AI generated (no prior errors)"
+        else:
+            source_description = "Mixed: Prioritized errors, DB, and/or AI"
+        
+        logging.info(
+            f"Prepared {final_question_count}/{DEFAULT_QUESTIONS_PER_TEST} questions for topic '{topic}' for user {user_id}. "
+            f"Source: {source_description} (Initial 'force_ai' flag was: {force_ai_for_this_test})."
+        )
+        await ask_question(update, context) # Перемещаем вызов ask_question сюда
 
     finally:
         context.user_data.pop('loading_questions', None) # Снимаем флаг загрузки
-
-    if not context.user_data.get('questions'): # Используем .get для безопасной проверки
-        logging.warning(f"Failed to load any questions for topic '{topic}' for user {user_id}.")
-        try:
-            # query здесь все еще доступен и ссылается на исходное сообщение
-            await query.edit_message_text(
-                "Не удалось загрузить вопросы для этой темы. Попробуйте позже или выберите другую тему.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад к темам", callback_data="back_to_topics")]])
-            )
-        except Exception as e_edit_fail:
-            logging.error(f"Failed to edit message for no questions in start_test: {e_edit_fail}")
-        return
-    
-    final_question_count = len(context.user_data.get('questions', []))
-    source_description = "All AI generated" if not error_task_tuples else "Prioritized error questions, supplemented with others"
-    
-    logging.info(
-        f"Prepared {final_question_count}/{DEFAULT_QUESTIONS_PER_TEST} questions for topic '{topic}' for user {user_id}. "
-        f"Source: {source_description} (Initial errors found: {len(error_task_tuples)})."
-    )
-    await ask_question(update, context)
 
 async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q_num = context.user_data['current_question']
@@ -794,81 +780,154 @@ async def generate_ai_task(topic):
         logging.error(f"Error in generate_ai_task for topic '{topic}': {err}\nResponse snippet: {response_text[:500] if 'response_text' in locals() else 'Response not available'}")
         return None, None, None, None # Возвращаем 4 значения None
 
-async def get_or_generate_tasks(topic: str, db: Database, needed: int = DEFAULT_QUESTIONS_PER_TEST, force_ai: bool = False, existing_question_texts_to_exclude: set = set()) -> list:
+async def get_or_generate_tasks(
+    user_id: int, # ДОБАВЛЕНО: для получения ошибок пользователя
+    topic: str, 
+    db: Database, 
+    needed: int = DEFAULT_QUESTIONS_PER_TEST, 
+    force_ai: bool = False, 
+    existing_question_texts_to_exclude: set = None
+) -> list:
     """
-    Получает задачи из БД и/или генерирует новые с помощью ИИ,
-    чтобы достичь 'needed' количества УНИКАЛЬНЫХ ПО ТЕКСТУ ВОПРОСА задач для указанной темы.
-    Если force_ai=True, задачи из БД не запрашиваются, генерируются только новые.
+    Получает задачи из БД и/или генерирует новые с помощью ИИ.
+    Приоритеты:
+    1. Если force_ai=True: все 'needed' генерируются ИИ.
+    2. Если force_ai=False:
+        a. Сначала задачи, где пользователь ранее ошибался по этой теме.
+        b. Если таких задач нет, то все 'needed' генерируются ИИ.
+        c. Если ошибочные были, но их < needed, добираются из общей БД по теме.
+        d. Если все еще < needed, остаток генерируется ИИ.
+    Гарантирует уникальность вопросов в рамках текущего вызова, учитывая existing_question_texts_to_exclude.
     Сохраняет новые сгенерированные задачи в БД.
     Возвращает список кортежей: (question_text, correct_answer, explanation, incorrect_options_list)
     """
-    
+    if existing_question_texts_to_exclude is None:
+        existing_question_texts_to_exclude = set()
+
     final_tasks_list = []
-    processed_texts = set() # Tracks texts of questions already added to final_tasks_list
+    # Используем копию existing_question_texts_to_exclude для отслеживания текстов в этом вызове
+    processed_texts_this_call = set(existing_question_texts_to_exclude)
 
-    # Этап 1: Сбор уникальных задач из БД (только если не force_ai)
+    logging.info(
+        f"get_or_generate_tasks: user_id={user_id}, topic='{topic}', needed={needed}, force_ai={force_ai}, "
+        f"exclude_count={len(existing_question_texts_to_exclude)}"
+    )
+
+    generate_all_via_ai_flow = force_ai  # Изначальное значение на основе параметра force_ai
+    error_tasks_collected_count = 0
+
     if not force_ai:
-        # Загружаем немного больше из БД, чтобы был запас.
-        db_tasks_pool = db.get_tasks_for_topic(topic, limit=needed * 2) 
+        # --- Этап 1: Задачи, в которых пользователь ранее ошибался ---
+        # get_error_tasks_for_user возвращает (question, answer, explanation, incorrect_options_JSON)
+        error_tasks_raw = db.get_error_tasks_for_user(user_id, topic, limit=needed)
+        
+        temp_error_tasks_tuples = []
+        for q_text, ans, expl, inc_opt_json in error_tasks_raw:
+            if q_text not in processed_texts_this_call: # Проверяем уникальность сразу
+                try:
+                    inc_opt_list = json.loads(inc_opt_json) if inc_opt_json else []
+                except json.JSONDecodeError:
+                    logging.warning(f"Failed to parse incorrect_options JSON for error task '{q_text[:50]}...'. Skipping.")
+                    continue # Пропускаем задачу, если JSON невалидный
+                temp_error_tasks_tuples.append((q_text, ans, expl, inc_opt_list))
+        
+        if not temp_error_tasks_tuples:
+            logging.info(f"User {user_id} has no usable unique error tasks for topic '{topic}'. Switching to full AI generation for {needed} questions.")
+            generate_all_via_ai_flow = True
+        else:
+            logging.info(f"Prioritizing {len(temp_error_tasks_tuples)} unique error tasks for user {user_id}, topic '{topic}'.")
+            for task_tuple in temp_error_tasks_tuples:
+                if len(final_tasks_list) >= needed:
+                    break
+                final_tasks_list.append(task_tuple)
+                processed_texts_this_call.add(task_tuple[0])
+                error_tasks_collected_count +=1
+            logging.info(f"Collected {len(final_tasks_list)} unique error tasks. Target: {needed}.")
 
-        for task_tuple in db_tasks_pool:
+    # --- Этап 2: Добор из общей базы задач (если не было полной генерации ИИ и еще нужны вопросы) ---
+    if not generate_all_via_ai_flow and len(final_tasks_list) < needed:
+        num_needed_from_general_db = needed - len(final_tasks_list)
+        logging.info(f"Need {num_needed_from_general_db} more tasks from general DB for topic '{topic}'.")
+        
+        # get_tasks_for_topic возвращает (question, answer, explanation, incorrect_options_JSON)
+        # ВАЖНО: Убедитесь, что get_tasks_for_topic возвращает JSON для incorrect_options или измените парсинг
+        db_tasks_pool_raw = db.get_tasks_for_topic(topic, limit=num_needed_from_general_db * 2 + len(processed_texts_this_call))
+        
+        for q_text, ans, expl, inc_opt_json_or_list in db_tasks_pool_raw: # Имя переменной отражает возможный тип
             if len(final_tasks_list) >= needed:
                 break
-            question_text = task_tuple[0]
-            if question_text not in processed_texts and question_text not in existing_question_texts_to_exclude:
+            if q_text not in processed_texts_this_call:
+                inc_opt_list = []
+                if isinstance(inc_opt_json_or_list, str): # Если это JSON строка
+                    try:
+                        inc_opt_list = json.loads(inc_opt_json_or_list) if inc_opt_json_or_list else []
+                    except json.JSONDecodeError:
+                        logging.warning(f"Failed to parse incorrect_options JSON for general DB task '{q_text[:50]}...'. Skipping.")
+                        continue
+                elif isinstance(inc_opt_json_or_list, list): # Если это уже список
+                    inc_opt_list = inc_opt_json_or_list
+                elif inc_opt_json_or_list is None:
+                    inc_opt_list = []
+                else:
+                    logging.warning(f"Unexpected type for incorrect_options in general DB task '{q_text[:50]}...': {type(inc_opt_json_or_list)}. Skipping.")
+                    continue
+
+                task_tuple = (q_text, ans, expl, inc_opt_list)
                 final_tasks_list.append(task_tuple)
-                processed_texts.add(question_text)
-        logging.info(f"Topic '{topic}': Collected {len(final_tasks_list)} unique tasks from DB (target for this call: {needed}, force_ai={force_ai}).")
-    else:
-        logging.info(f"Topic '{topic}': Skipped DB task collection due to force_ai=True (target for this call: {needed}, current list size: {len(final_tasks_list)}).")
+                processed_texts_this_call.add(q_text)
+        logging.info(f"After general DB, collected {len(final_tasks_list)} unique tasks. Target: {needed}.")
 
-
-    # Этап 2: Генерация с помощью ИИ, если все еще необходимо
+    # --- Этап 3: Генерация с помощью ИИ, если все еще необходимо или была выбрана полная генерация ---
     num_still_needed_for_ai = needed - len(final_tasks_list)
 
     if num_still_needed_for_ai > 0:
-        logging.info(f"Need to generate {num_still_needed_for_ai} more unique tasks via AI for topic '{topic}' (force_ai={force_ai}, current list size: {len(final_tasks_list)}).")
-        generated_ai_count_successfully_added = 0
+        if generate_all_via_ai_flow and error_tasks_collected_count == 0 : # Если изначально решили генерировать все через ИИ (force_ai или нет ошибок)
+            logging.info(f"Starting full AI generation for {needed} tasks for topic '{topic}' (force_ai={force_ai}, no prior errors or force_ai active).")
+        else: # Добираем недостающие
+            logging.info(f"Need to generate {num_still_needed_for_ai} more unique tasks via AI for topic '{topic}'.")
         
-        max_total_ai_generation_attempts = num_still_needed_for_ai * 2 + 5 
+        generated_ai_count_successfully_added = 0
+        max_total_ai_generation_attempts = num_still_needed_for_ai * 3 + 7 # Увеличено для большей надежности
         current_ai_generation_attempt = 0
 
         while len(final_tasks_list) < needed and current_ai_generation_attempt < max_total_ai_generation_attempts:
             current_ai_generation_attempt += 1
-            logging.debug( # Изменено на debug для уменьшения количества логов при успешных попытках
+            logging.debug(
                 f"AI Generation Attempt {current_ai_generation_attempt}/{max_total_ai_generation_attempts} for topic '{topic}'. "
-                f"(Target: {needed} unique, Current in list: {len(final_tasks_list)})"
+                f"(Target: {needed} unique, Current in list: {len(final_tasks_list)}, Processed: {len(processed_texts_this_call)})"
             )
             
+            # generate_ai_task возвращает (question_text, correct_answer, incorrect_options_list, explanation)
             ai_task_data = await generate_ai_task(topic) 
             
             if ai_task_data:
                 question_text, correct_answer, incorrect_options, explanation = ai_task_data
                 
-                if question_text and question_text not in processed_texts and question_text not in existing_question_texts_to_exclude: # Убедимся, что question_text не None
+                if question_text and question_text not in processed_texts_this_call:
                     db.add_task_from_ai(topic, question_text, correct_answer, incorrect_options, explanation)
                     new_task_tuple = (question_text, correct_answer, explanation, incorrect_options)
                     final_tasks_list.append(new_task_tuple)
-                    processed_texts.add(question_text)
+                    processed_texts_this_call.add(question_text)
                     generated_ai_count_successfully_added += 1
                     logging.info(f"Successfully generated, saved, and added new unique AI task. Total unique tasks in list now: {len(final_tasks_list)}")
                 elif not question_text:
                     logging.warning(f"AI task generation returned None for question_text on attempt {current_ai_generation_attempt}.")
                 else: # question_text был дубликатом
-                    logging.warning(f"AI generated a question text that is already in processed_texts: '{question_text[:70]}...' on attempt {current_ai_generation_attempt}")
+                    logging.warning(f"AI generated a question text that is already in processed_texts_this_call: '{question_text[:70]}...' on attempt {current_ai_generation_attempt}")
             else:
                 logging.warning(f"AI failed to generate a task (None or incomplete data returned) on AI attempt {current_ai_generation_attempt}.")
         
         if len(final_tasks_list) < needed:
-            logging.warning(f"Could only gather {len(final_tasks_list)} unique tasks out of {needed} needed for topic '{topic}' after {max_total_ai_generation_attempts} AI attempts (force_ai={force_ai}).")
-        logging.info(f"Finished AI generation phase for topic '{topic}'. Added {generated_ai_count_successfully_added} new unique AI tasks to the list during this phase (force_ai={force_ai}).")
+            logging.warning(f"Could only gather {len(final_tasks_list)} unique tasks out of {needed} needed for topic '{topic}' after {max_total_ai_generation_attempts} AI attempts.")
+        logging.info(f"Finished AI generation phase for topic '{topic}'. Added {generated_ai_count_successfully_added} new unique AI tasks to the list during this phase.")
 
     if not final_tasks_list and needed > 0:
         logging.error(f"No tasks found or generated for topic '{topic}' (force_ai={force_ai}, needed={needed}). Returning empty list.")
         return []
 
-    random.shuffle(final_tasks_list) # Перемешиваем перед возвратом среза
-    return final_tasks_list[:needed] # Гарантируем возврат не более 'needed' вопросов
+    random.shuffle(final_tasks_list) 
+    logging.info(f"Returning {min(len(final_tasks_list), needed)} tasks for topic '{topic}' (requested: {needed}). Final list size before slicing: {len(final_tasks_list)}")
+    return final_tasks_list[:needed]
 
 async def back_to_topics(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
@@ -1080,81 +1139,52 @@ def generate_universal_options(correct_answer_str: str, db=None, topic=None) -> 
     # Гарантируем, что вернется ровно 4 варианта
     return final_options_list[:4]
 
-async def go_to_main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Обрабатывает нажатие инлайн-кнопки 'main_menu', обычно с экрана результатов.
-    Отправляет новое сообщение с основной ReplyKeyboardMarkup.
-    """
+async def go_to_main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
-    
-    if not query or not query.message:
-        logging.error("go_to_main_menu_callback: query или query.message отсутствует.")
-        if query:
-            try:
-                await query.answer("Ошибка: не удалось вернуться в меню.", show_alert=True)
-            except Exception as e_ans:
-                logging.error(f"Ошибка при ответе на query в go_to_main_menu_callback (начальная проверка): {e_ans}")
-        return
+    chat_id = update.effective_chat.id
+    user = update.effective_user # Получаем пользователя для возможного упоминания
 
-    try:
-        await query.answer() # Убираем "часики" с инлайн-кнопки
-    except Exception as e_ans:
-        logging.error(f"Ошибка при ответе на query в go_to_main_menu_callback: {e_ans}")
-
-    # Очищаем данные сессии теста
-    context.user_data.clear()
-    logging.info(f"Данные пользователя {query.from_user.id} очищены.")
-
-    # Логируем тип и значение main_menu_markup для диагностики
-    logging.info(f"Попытка отправить главное меню. Тип main_menu_markup: {type(main_menu_markup)}, значение: {main_menu_markup!r}")
-
-    menu_message_text = "✅ Главное меню загружено. Выберите действие:"
-
-    try:
-        # --- BEGIN EDIT: Corrected ReplyKeyboardRemove instantiation ---
-        # Сначала отправляем сообщение с ReplyKeyboardRemove, чтобы "очистить" клавиатуру
-        # Это сообщение может быть невидимым или очень коротким, если клиент его быстро обработает.
-        await context.bot.send_message(
-            chat_id=query.message.chat.id,
-            text="\u200B",  # Невидимый символ
-            reply_markup=ReplyKeyboardRemove()
-        )
-        logging.info(f"Отправлено ReplyKeyboardRemove в чат {query.message.chat.id}")
-        # --- END EDIT ---
-
-        # Затем отправляем новое сообщение с ReplyKeyboardMarkup
-        await context.bot.send_message(
-            chat_id=query.message.chat.id,
-            text=menu_message_text,
-            reply_markup=main_menu_markup
-        )
-        logging.info(f"Сообщение '{menu_message_text}' с главным меню (ReplyKeyboardMarkup) отправлено в чат {query.message.chat.id}")
-        
-        # Удаляем предыдущее сообщение (с инлайн-кнопками)
-        # Лучше делать это после успешной отправки нового меню
+    if query:
+        await query.answer()
         try:
-            await query.delete_message()
-            logging.info(f"Предыдущее сообщение (ID: {query.message.message_id}) удалено в чате {query.message.chat.id}")
-        except telegram.error.BadRequest as e_del:
-            if "message to delete not found" in str(e_del).lower():
-                logging.info(f"Сообщение {query.message.message_id} для удаления не найдено (возможно, уже удалено).")
-            elif "message can't be deleted" in str(e_del).lower():
-                 logging.warning(f"Сообщение {query.message.message_id} не может быть удалено (слишком старое или нет прав).")
+            # Попытка убрать инлайн-клавиатуру с предыдущего сообщения (например, с результатов теста)
+            await query.edit_message_reply_markup(reply_markup=None)
+        except telegram.error.BadRequest as e:
+            if "message is not modified" in str(e).lower() or "message to edit not found" in str(e).lower():
+                # Это нормально, если клавиатура уже убрана или сообщение не найдено
+                pass
             else:
-                logging.error(f"Ошибка при удалении предыдущего сообщения {query.message.message_id}: {e_del}")
-        except Exception as e_del_generic:
-            logging.error(f"Непредвиденная ошибка при удалении предыдущего сообщения {query.message.message_id}: {e_del_generic}")
+                logging.warning(f"Не удалось изменить разметку сообщения в go_to_main_menu_callback: {e}")
+        except Exception as e:
+            logging.error(f"Неожиданная ошибка при изменении разметки сообщения в go_to_main_menu_callback: {e}")
+    
+    # Текст для сообщения с главным меню
+    menu_text = f"✅ {user.mention_html()}, вы снова в главном меню. Выберите действие:"
+    # Альтернативный, более простой текст:
+    # menu_text = "Главное меню. Выберите действие:"
 
+    try:
+        # Лог перед отправкой, похожий на тот, что у вас уже есть
+        logging.info(f"Попытка отправить главное меню для чата {chat_id}. Тип main_menu_markup: {type(main_menu_markup)}, значение: {main_menu_markup}")
+        
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=menu_text,  # <--- ИЗМЕНЕНИЕ: Добавлен непустой текст
+            reply_markup=main_menu_markup,
+            parse_mode="HTML" # Если используете user.mention_html()
+        )
+        logging.info(f"Главное меню успешно отправлено в чат {chat_id} из go_to_main_menu_callback.")
     except Exception as e:
-        logging.error(f"Ошибка при отправке главного меню или удалении предыдущего сообщения в go_to_main_menu_callback: {e}")
-        # Попытка отправить запасное сообщение пользователю, если что-то пошло не так с основным меню
+        # Эта ошибка соответствует той, что вы видите в логах
+        logging.error(f"Ошибка при отправке главного меню в go_to_main_menu_callback для чата {chat_id}: {e}")
         try:
+            # Отправка запасного сообщения пользователю
             await context.bot.send_message(
-                chat_id=query.message.chat.id,
-                text="Не удалось загрузить главное меню. Пожалуйста, попробуйте ввести команду /start"
+                chat_id=chat_id,
+                text="Ошибка: Не удалось загрузить главное меню. Пожалуйста, попробуйте ввести команду /start"
             )
         except Exception as e_fallback:
-            logging.error(f"Ошибка при отправке запасного сообщения в go_to_main_menu_callback: {e_fallback}")
+            logging.error(f"Не удалось отправить сообщение об ошибке (fallback) в go_to_main_menu_callback для чата {chat_id}: {e_fallback}")
 
 def main():
     # Создаем приложение
