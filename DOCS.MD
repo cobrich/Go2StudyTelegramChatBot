@@ -82,13 +82,15 @@
 ### 6.3. Answering Questions
 1.  `ask_question()`:
     *   Checks if the current question index is within bounds. If not, calls `show_results()`.
-    *   Checks `context.user_data['answered_questions']` if the current question has already been answered in this session. If so, displays the previous feedback and navigation.
-    *   If new/unanswered:
-        *   Retrieves question data (text, correct answer, explanation, AI incorrect options).
-        *   Prepares answer options: uses AI-generated incorrect options if available, otherwise uses `generate_universal_options()`.
-        *   Shuffles options.
-        *   Constructs an `InlineKeyboardMarkup` with answer buttons (e.g., `callback_data="ans_0_0"`) and navigation buttons ("⬅️ Предыдущий", "➡️ Следующий" if applicable, "⬅️ Назад к темам").
-        *   Displays the question and options, editing the previous message or sending a new one if editing fails.
+    *   If viewing an *already answered question* (e.g., after navigating with "Предыдущий"/"Следующий"):
+        *   Displays the previous feedback.
+        *   Always includes navigation buttons ("⬅️ Предыдущий", "➡️ Следующий" if applicable) and "⬅️ Назад к темам".
+    *   If the question is *new/unanswered*:
+        *   Retrieves question data.
+        *   Prepares and shuffles answer options.
+        *   Constructs an `InlineKeyboardMarkup` with answer buttons and navigation buttons ("⬅️ Предыдущий", "➡️ Следующий" if applicable).
+        *   The "⬅️ Назад к темам" button is added *only if it's the first question of the test* (`q_num == 0`). For subsequent unanswered questions (Q2, Q3, etc.), this button is omitted.
+        *   Displays the question and options.
 2.  User clicks an answer button.
 3.  `check_answer()` handler:
     *   Answers the callback query.
@@ -161,13 +163,16 @@
     *   Informs the user that the bot cannot delete the chat history itself, and this must be done manually by the user if desired.
     *   Suggests sending `/start` to begin interacting with the bot again.
 
-### 6.9. Returning to Topic Selection from Results/Test (New)
-1.  User clicks a button with `callback_data="back_to_topics"` (e.g., from results screen or from an active question).
-2.  `back_to_topics()` handler:
-    *   Answers the callback query.
-    *   If called from the results screen where an explanation might be visible, it first attempts to delete the message identified by `context.user_data.pop('last_explanation_message_info_on_results', None)`.
-    *   Clears all `context.user_data` for a clean state before topic selection.
-    *   Calls `show_topics()` to display the topic selection inline keyboard.
+### 6.9. Returning to Topic Selection from Results/Test
+1.  User clicks a button with `callback_data="back_to_topics"`:
+    *   This button appears on the results screen, on any *answered* question screen (if navigated back to), and on the *first unanswered* question screen.
+    *   If clicked, `back_to_topics()` handler is called:
+        *   Answers the callback query.
+        *   If called from the results screen where an explanation might be visible, it attempts to delete the explanation message.
+        *   Clears all `context.user_data`.
+        *   Calls `show_topics()` to display the topic selection.
+2.  If a user attempts to use Main Menu commands (like "📚 Выбрать тему и начать") during an active test:
+    *   `handle_message()` informs them: "Вы проходите тест. Чтобы выбрать другую опцию, пожалуйста, завершите текущий тест. Для возврата к выбору тем без завершения теста, перейдите к первому вопросу теста." This guides them to use "⬅️ Предыдущий" to return to the first question if they wish to exit early via the "⬅️ Назад к темам" button available there.
 
 ## 7. Database Schema (`database.py`)
 
