@@ -142,8 +142,17 @@
 ### 6.6. Getting Help
 1.  User clicks "❓ Помощь" from the main menu.
 2.  `handle_message()` detects this.
-3.  The `handle_message` function directly replies with `HELP_TEXT` from `constants.py` and the `main_menu_markup`.
-    *(Note: There's also a `show_help` callback handler, but it's tied to `pattern="^show_help$"` which is not directly used by the main menu flow in `handle_message`. The main menu "Помощь" button is handled as plain text.)*
+3.  The `handle_message` function directly replies with the comprehensive `HELP_TEXT` from `constants.py` and the `main_menu_markup`.
+    The `HELP_TEXT` now provides detailed information on:
+    *   Starting a test and selecting topics.
+    *   Answering questions and receiving feedback/explanations.
+    *   Navigating within a test (previous/next question, returning to topics from the first question).
+    *   Viewing test results and detailed error explanations.
+    *   Checking overall progress.
+    *   Returning to the main menu from different screens.
+    *   Using `/start` to refresh the session.
+    *   Using `/stop` to delete all personal data.
+    *   A brief note on question sourcing (database and AI).
 
 ### 6.7. Returning to Main Menu from Inline Keyboards
 1.  User clicks a button with `callback_data="main_menu"` (e.g., from results screen or topic selection).
