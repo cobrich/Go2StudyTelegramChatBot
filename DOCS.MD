@@ -269,6 +269,7 @@ The bot now implements sequential user processing through the following mechanis
 *   **Task Generation (`generate_ai_task`)**:
     *   **Parallel Generation:** Questions are generated in parallel using `asyncio.gather()` for better performance
     *   **True Async:** AI question generation is now fully asynchronous using `run_in_executor`, so multiple users can start and pass tests independently, even if AI is slow.
+    *   **Retry Logic:** The bot will make several attempts to generate the required number of unique, valid questions, so the test will almost always be full-length unless the AI is completely broken.
     *   **Prompt Engineering:** A detailed prompt is used, instructing the AI to generate:
         1.  Question text (for 5-6th grade), emphasizing variety (word problems, logic puzzles, conceptual applications) rather than simple calculations or number swaps.
         2.  One correct answer (clear, unambiguous, <= 60 chars).

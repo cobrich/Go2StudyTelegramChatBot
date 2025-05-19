@@ -854,20 +854,23 @@ async def get_or_generate_tasks(
     num_still_needed_for_ai = needed - len(final_tasks_list)
 
     if num_still_needed_for_ai > 0:
-        # Генерируем вопросы параллельно (через run_in_executor)
-        tasks = []
-        for _ in range(num_still_needed_for_ai):
-            tasks.append(generate_ai_task(topic))
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for result in results:
-            if isinstance(result, tuple) and len(result) == 4:
-                question_text, correct_answer, incorrect_options, explanation = result
-                if question_text and question_text not in processed_texts_this_call:
-                    db.add_task_from_ai(topic, question_text, correct_answer, incorrect_options, explanation)
-                    final_tasks_list.append((question_text, correct_answer, explanation, incorrect_options))
-                    processed_texts_this_call.add(question_text)
-                    if len(final_tasks_list) >= needed:
-                        break
+        # Новый цикл: пытаемся добрать нужное количество вопросов, если AI иногда возвращает невалидные или дублирующиеся
+        max_attempts = max(10, num_still_needed_for_ai * 3)
+        attempts = 0
+        while len(final_tasks_list) < needed and attempts < max_attempts:
+            to_generate = needed - len(final_tasks_list)
+            tasks = [generate_ai_task(topic) for _ in range(to_generate)]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, tuple) and len(result) == 4:
+                    question_text, correct_answer, incorrect_options, explanation = result
+                    if question_text and question_text not in processed_texts_this_call:
+                        db.add_task_from_ai(topic, question_text, correct_answer, incorrect_options, explanation)
+                        final_tasks_list.append((question_text, correct_answer, explanation, incorrect_options))
+                        processed_texts_this_call.add(question_text)
+                        if len(final_tasks_list) >= needed:
+                            break
+            attempts += 1
 
     if not final_tasks_list and needed > 0:
         logging.error(f"No tasks found or generated for topic '{topic}' (force_ai={force_ai}, needed={needed}). Returning empty list.")
