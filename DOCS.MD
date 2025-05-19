@@ -278,6 +278,7 @@ The bot now implements sequential user processing through the following mechanis
 
 *   **Model Initialization:** `genai.GenerativeModel(os.getenv('GEMINI_MODEL'))`
 *   **Task Generation (`generate_ai_task`)**:
+    *   **Parallel Generation:** Questions are generated in parallel using `asyncio.gather()` for better performance
     *   **Prompt Engineering:** A detailed prompt is used, instructing the AI to generate:
         1.  Question text (for 5-6th grade), emphasizing variety (word problems, logic puzzles, conceptual applications) rather than simple calculations or number swaps.
         2.  One correct answer (clear, unambiguous, <= 60 chars).
@@ -292,6 +293,7 @@ The bot now implements sequential user processing through the following mechanis
 *   **Usage:**
     *   Called by `get_or_generate_tasks` when new unique questions are needed.
     *   Successfully generated tasks are stored in the `tasks` database table, including the `incorrect_options` as a JSON string.
+    *   Questions are generated in parallel for better performance.
 
 ## 10. Potential Future Enhancements / Unimplemented Ideas
 

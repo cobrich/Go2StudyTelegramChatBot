@@ -11,6 +11,7 @@ import re
 import random
 from html import escape
 import telegram.error
+import asyncio
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -146,7 +147,14 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Проверяем, не активен ли уже пользователь
     if db.is_user_active(user_id):
-        await query.answer("Вы уже проходите тест. Пожалуйста, завершите текущий тест перед началом нового.")
+        try:
+            await query.answer("Вы уже проходите тест. Пожалуйста, завершите текущий тест перед началом нового.")
+        except telegram.error.BadRequest as e:
+            if "Query is too old" in str(e):
+                # Если запрос устарел, просто игнорируем ошибку
+                logging.info(f"Old callback query ignored in start_test for user {user_id}")
+            else:
+                raise
         return
     
     topic = query.data.split('_')[1]  # Получаем тему из callback_data
@@ -763,31 +771,17 @@ async def generate_ai_task(topic):
         return None, None, None, None # Возвращаем 4 значения None
 
 async def get_or_generate_tasks(
-    user_id: int, # ДОБАВЛЕНО: для получения ошибок пользователя
+    user_id: int,
     topic: str, 
     db: Database, 
     needed: int = DEFAULT_QUESTIONS_PER_TEST, 
     force_ai: bool = False, 
     existing_question_texts_to_exclude: set = None
 ) -> list:
-    """
-    Получает задачи из БД и/или генерирует новые с помощью ИИ.
-    Приоритеты:
-    1. Если force_ai=True: все 'needed' генерируются ИИ.
-    2. Если force_ai=False:
-        a. Сначала задачи, где пользователь ранее ошибался по этой теме.
-        b. Если таких задач нет, то все 'needed' генерируются ИИ.
-        c. Если ошибочные были, но их < needed, добираются из общей БД по теме.
-        d. Если все еще < needed, остаток генерируется ИИ.
-    Гарантирует уникальность вопросов в рамках текущего вызова, учитывая existing_question_texts_to_exclude.
-    Сохраняет новые сгенерированные задачи в БД.
-    Возвращает список кортежей: (question_text, correct_answer, explanation, incorrect_options_list)
-    """
     if existing_question_texts_to_exclude is None:
         existing_question_texts_to_exclude = set()
 
     final_tasks_list = []
-    # Используем копию existing_question_texts_to_exclude для отслеживания текстов в этом вызове
     processed_texts_this_call = set(existing_question_texts_to_exclude)
 
     logging.info(
@@ -795,22 +789,20 @@ async def get_or_generate_tasks(
         f"exclude_count={len(existing_question_texts_to_exclude)}"
     )
 
-    generate_all_via_ai_flow = force_ai  # Изначальное значение на основе параметра force_ai
+    generate_all_via_ai_flow = force_ai
     error_tasks_collected_count = 0
 
     if not force_ai:
-        # --- Этап 1: Задачи, в которых пользователь ранее ошибался ---
-        # get_error_tasks_for_user возвращает (question, answer, explanation, incorrect_options_JSON)
         error_tasks_raw = db.get_error_tasks_for_user(user_id, topic, limit=needed)
         
         temp_error_tasks_tuples = []
         for q_text, ans, expl, inc_opt_json in error_tasks_raw:
-            if q_text not in processed_texts_this_call: # Проверяем уникальность сразу
+            if q_text not in processed_texts_this_call:
                 try:
                     inc_opt_list = json.loads(inc_opt_json) if inc_opt_json else []
                 except json.JSONDecodeError:
                     logging.warning(f"Failed to parse incorrect_options JSON for error task '{q_text[:50]}...'. Skipping.")
-                    continue # Пропускаем задачу, если JSON невалидный
+                    continue
                 temp_error_tasks_tuples.append((q_text, ans, expl, inc_opt_list))
         
         if not temp_error_tasks_tuples:
@@ -823,92 +815,59 @@ async def get_or_generate_tasks(
                     break
                 final_tasks_list.append(task_tuple)
                 processed_texts_this_call.add(task_tuple[0])
-                error_tasks_collected_count +=1
-            logging.info(f"Collected {len(final_tasks_list)} unique error tasks. Target: {needed}.")
+                error_tasks_collected_count += 1
 
-    # --- Этап 2: Добор из общей базы задач (если не было полной генерации ИИ и еще нужны вопросы) ---
     if not generate_all_via_ai_flow and len(final_tasks_list) < needed:
         num_needed_from_general_db = needed - len(final_tasks_list)
-        logging.info(f"Need {num_needed_from_general_db} more tasks from general DB for topic '{topic}'.")
-        
-        # get_tasks_for_topic возвращает (question, answer, explanation, incorrect_options_JSON)
-        # ВАЖНО: Убедитесь, что get_tasks_for_topic возвращает JSON для incorrect_options или измените парсинг
         db_tasks_pool_raw = db.get_tasks_for_topic(topic, limit=num_needed_from_general_db * 2 + len(processed_texts_this_call))
         
-        for q_text, ans, expl, inc_opt_json_or_list in db_tasks_pool_raw: # Имя переменной отражает возможный тип
+        for q_text, ans, expl, inc_opt_json_or_list in db_tasks_pool_raw:
             if len(final_tasks_list) >= needed:
                 break
             if q_text not in processed_texts_this_call:
                 inc_opt_list = []
-                if isinstance(inc_opt_json_or_list, str): # Если это JSON строка
+                if isinstance(inc_opt_json_or_list, str):
                     try:
                         inc_opt_list = json.loads(inc_opt_json_or_list) if inc_opt_json_or_list else []
                     except json.JSONDecodeError:
-                        logging.warning(f"Failed to parse incorrect_options JSON for general DB task '{q_text[:50]}...'. Skipping.")
                         continue
-                elif isinstance(inc_opt_json_or_list, list): # Если это уже список
+                elif isinstance(inc_opt_json_or_list, list):
                     inc_opt_list = inc_opt_json_or_list
                 elif inc_opt_json_or_list is None:
                     inc_opt_list = []
                 else:
-                    logging.warning(f"Unexpected type for incorrect_options in general DB task '{q_text[:50]}...': {type(inc_opt_json_or_list)}. Skipping.")
                     continue
 
                 task_tuple = (q_text, ans, expl, inc_opt_list)
                 final_tasks_list.append(task_tuple)
                 processed_texts_this_call.add(q_text)
-        logging.info(f"After general DB, collected {len(final_tasks_list)} unique tasks. Target: {needed}.")
 
-    # --- Этап 3: Генерация с помощью ИИ, если все еще необходимо или была выбрана полная генерация ---
     num_still_needed_for_ai = needed - len(final_tasks_list)
 
     if num_still_needed_for_ai > 0:
-        if generate_all_via_ai_flow and error_tasks_collected_count == 0 : # Если изначально решили генерировать все через ИИ (force_ai или нет ошибок)
-            logging.info(f"Starting full AI generation for {needed} tasks for topic '{topic}' (force_ai={force_ai}, no prior errors or force_ai active).")
-        else: # Добираем недостающие
-            logging.info(f"Need to generate {num_still_needed_for_ai} more unique tasks via AI for topic '{topic}'.")
+        # Генерируем вопросы параллельно
+        tasks = []
+        for _ in range(num_still_needed_for_ai):
+            tasks.append(generate_ai_task(topic))
         
-        generated_ai_count_successfully_added = 0
-        max_total_ai_generation_attempts = num_still_needed_for_ai * 3 + 7 # Увеличено для большей надежности
-        current_ai_generation_attempt = 0
-
-        while len(final_tasks_list) < needed and current_ai_generation_attempt < max_total_ai_generation_attempts:
-            current_ai_generation_attempt += 1
-            logging.debug(
-                f"AI Generation Attempt {current_ai_generation_attempt}/{max_total_ai_generation_attempts} for topic '{topic}'. "
-                f"(Target: {needed} unique, Current in list: {len(final_tasks_list)}, Processed: {len(processed_texts_this_call)})"
-            )
-            
-            # generate_ai_task возвращает (question_text, correct_answer, incorrect_options_list, explanation)
-            ai_task_data = await generate_ai_task(topic) 
-            
-            if ai_task_data:
-                question_text, correct_answer, incorrect_options, explanation = ai_task_data
-                
+        # Ждем завершения всех задач
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for result in results:
+            if isinstance(result, tuple) and len(result) == 4:
+                question_text, correct_answer, incorrect_options, explanation = result
                 if question_text and question_text not in processed_texts_this_call:
                     db.add_task_from_ai(topic, question_text, correct_answer, incorrect_options, explanation)
-                    new_task_tuple = (question_text, correct_answer, explanation, incorrect_options)
-                    final_tasks_list.append(new_task_tuple)
+                    final_tasks_list.append((question_text, correct_answer, explanation, incorrect_options))
                     processed_texts_this_call.add(question_text)
-                    generated_ai_count_successfully_added += 1
-                    logging.info(f"Successfully generated, saved, and added new unique AI task. Total unique tasks in list now: {len(final_tasks_list)}")
-                elif not question_text:
-                    logging.warning(f"AI task generation returned None for question_text on attempt {current_ai_generation_attempt}.")
-                else: # question_text был дубликатом
-                    logging.warning(f"AI generated a question text that is already in processed_texts_this_call: '{question_text[:70]}...' on attempt {current_ai_generation_attempt}")
-            else:
-                logging.warning(f"AI failed to generate a task (None or incomplete data returned) on AI attempt {current_ai_generation_attempt}.")
-        
-        if len(final_tasks_list) < needed:
-            logging.warning(f"Could only gather {len(final_tasks_list)} unique tasks out of {needed} needed for topic '{topic}' after {max_total_ai_generation_attempts} AI attempts.")
-        logging.info(f"Finished AI generation phase for topic '{topic}'. Added {generated_ai_count_successfully_added} new unique AI tasks to the list during this phase.")
+                    if len(final_tasks_list) >= needed:
+                        break
 
     if not final_tasks_list and needed > 0:
         logging.error(f"No tasks found or generated for topic '{topic}' (force_ai={force_ai}, needed={needed}). Returning empty list.")
         return []
 
-    random.shuffle(final_tasks_list) 
-    logging.info(f"Returning {min(len(final_tasks_list), needed)} tasks for topic '{topic}' (requested: {needed}). Final list size before slicing: {len(final_tasks_list)}")
+    random.shuffle(final_tasks_list)
     return final_tasks_list[:needed]
 
 async def back_to_topics(update: Update, context: ContextTypes.DEFAULT_TYPE):
