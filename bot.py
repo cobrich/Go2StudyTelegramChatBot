@@ -625,7 +625,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(HELP_TEXT, reply_markup=main_menu_markup)
     else:
         # For any other text input not matching the main menu commands
-        if is_test_active_for_message_handling:
+        if db.is_user_active(user_id):
             await update.message.reply_text(
                 "Пожалуйста, используйте кнопки для ответа на вопрос или навигации в тесте.",
                 reply_markup=main_menu_markup # Keep menu visible, but guide them
