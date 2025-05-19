@@ -547,11 +547,16 @@ async def show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     errors_list = context.user_data.get('errors', [])
     current_topic = context.user_data.get('current_topic', '')
     
+    # Сохраняем ошибки в отдельный ключ для дальнейшего доступа к объяснениям
+    context.user_data['results_errors_list'] = errors_list.copy() if errors_list else []
+    
     # Делаем пользователя неактивным
     db.set_user_inactive(user_id)
     
-    # Очищаем user_data после завершения теста
+    # Очищаем user_data после завершения теста, кроме results_errors_list
+    results_errors_list = context.user_data.get('results_errors_list', [])
     context.user_data.clear()
+    context.user_data['results_errors_list'] = results_errors_list
     
     if total_questions == 0:
         text = "Вы еще не прошли ни одного вопроса в этом тесте."
@@ -565,10 +570,10 @@ async def show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Процент выполнения: {percentage:.1f}%\n"
         )
         buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]]
-        if errors_list:
+        if results_errors_list:
             text += "\n<b>Ошибки:</b>\n"
-            errors_list.sort(key=lambda e: e['q_num'])
-            for i, err in enumerate(errors_list):
+            results_errors_list.sort(key=lambda e: e['q_num'])
+            for i, err in enumerate(results_errors_list):
                 text += f"{i + 1}. Вопрос {err['q_num']}\n"
                 buttons.append([InlineKeyboardButton(
                     f"Показать объяснение к вопросу {err['q_num']}",
@@ -906,7 +911,12 @@ async def show_explanation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # q_num_to_show будет 1-based, так как кнопки генерируются с 1-based номерами
     q_num_to_show = int(query.data.replace("show_expl_", "")) 
     
-    errors = context.user_data.get('errors', [])
+    # Используем errors из user_data, если есть, иначе из results_errors_list
+    errors = context.user_data.get('errors')
+    if not errors:
+        errors = context.user_data.get('results_errors_list', [])
+    logging.info(f"[show_explanation] Запрос объяснения для q_num={q_num_to_show}")
+    logging.info(f"[show_explanation] errors: {errors}")
     error_info = None
     for err in errors:
         # err['q_num'] также 1-based
@@ -919,14 +929,32 @@ async def show_explanation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if error_info:
         question_text = error_info['question']
         explanation = error_info['explanation']
+    logging.info(f"[show_explanation] question_text: {question_text}")
+    logging.info(f"[show_explanation] explanation from session: {explanation}")
     
     # Если объяснения нет, пробуем получить из базы по тексту вопроса
     if not explanation and question_text:
+        logging.info(f"[show_explanation] Пробуем искать explanation в базе по question_text")
         explanation = db.get_explanation_by_question_text(question_text)
+        logging.info(f"[show_explanation] explanation from DB exact: {explanation}")
         if not explanation:
+            # Пробуем fuzzy
+            logging.info(f"[show_explanation] Пробуем fuzzy поиск explanation в базе по question_text")
             explanation = db.get_explanation_fuzzy_by_question_text(question_text)
+            logging.info(f"[show_explanation] explanation from DB fuzzy: {explanation}")
+            # Логируем, если не найдено вообще
             if not explanation:
                 logging.warning(f"[show_explanation] Не найдено объяснение для вопроса: {question_text[:80]}")
+            else:
+                # Найден вопрос, но возможно explanation пустое
+                if explanation.strip() == '':
+                    logging.warning(f"[show_explanation] Вопрос найден, но explanation пустое: {question_text[:80]}")
+        else:
+            # Найден вопрос, но возможно explanation пустое
+            if explanation.strip() == '':
+                logging.warning(f"[show_explanation] Вопрос найден (точно), но explanation пустое: {question_text[:80]}")
+    else:
+        logging.info(f"[show_explanation] explanation найден в session или question_text отсутствует")
 
     if error_info and explanation:
         full_explanation_text = (

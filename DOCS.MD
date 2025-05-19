@@ -331,4 +331,10 @@ The bot now implements sequential user processing through the following mechanis
 *   **`MAX_EXPLANATION_PREVIEW_LENGTH`**: If an explanation is slightly longer than this, the user only sees "Подробное объяснение будет доступно на экране результатов," which might be frustrating for an immediate small overflow.
 *   **Hardcoded Values**: `DEFAULT_QUESTIONS_PER_TEST` is hardcoded. User configuration could be a feature.
 
+### [2024-06-09] Исправление: объяснения к ошибкам после завершения теста
+
+- Теперь объяснения к ошибочным вопросам доступны после завершения теста и очистки context.user_data.
+- Ошибки сохраняются в context.user_data['results_errors_list'] перед очисткой, и используются для показа объяснений на экране результатов.
+- Это устраняет проблему, когда после завершения теста и возврата к результатам объяснения не находились.
+
 This document provides a snapshot of the Go2Study Math Bot based on the provided codebase. It outlines its current capabilities and potential avenues for growth.
