@@ -347,4 +347,10 @@ The bot now implements sequential user processing through the following mechanis
   - Убраны неопределенные фразы типа "Не уверен", "Сложно сказать" и т.д.
   - Улучшено форматирование числовых ответов с учетом единиц измерения
 
+### [2024-06-09] Ограничение длины вариантов ответа
+
+- Теперь все варианты ответа (правильный и неправильные) ограничены 45 символами.
+- Если вариант длиннее, он не попадает в тест (AI-вопрос отбрасывается, универсальные опции не добавляются).
+- Это гарантирует, что все варианты полностью помещаются на кнопках Telegram и пользователь всегда видит весь текст.
+
 This document provides a snapshot of the Go2Study Math Bot based on the provided codebase. It outlines its current capabilities and potential avenues for growth.
