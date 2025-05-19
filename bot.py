@@ -151,25 +151,32 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("Вы уже проходите тест. Пожалуйста, завершите текущий тест перед началом нового.")
         except telegram.error.BadRequest as e:
             if "Query is too old" in str(e):
-                # Если запрос устарел, просто игнорируем ошибку
                 logging.info(f"Old callback query ignored in start_test for user {user_id}")
             else:
                 raise
         return
-    
-    topic = query.data.split('_')[1]  # Получаем тему из callback_data
-    
-    # Инициализируем данные теста
+
+    topic_idx = int(query.data.split('_')[1])
+    topic = TOPICS[topic_idx]
+
+    # Показываем сообщение о загрузке вопросов
+    try:
+        await query.edit_message_text("⏳ Загрузка вопросов...", reply_markup=None)
+    except Exception as e:
+        logging.warning(f"Не удалось показать сообщение о загрузке: {e}")
+
+    # Очищаем user_data для чистого старта теста
+    context.user_data.clear()
     context.user_data['current_topic'] = topic
     context.user_data['current_question'] = 0
     context.user_data['correct_answers'] = 0
     context.user_data['errors'] = []
     context.user_data['answered_questions'] = {}
     context.user_data['max_reached_question'] = 0
-    
+
     # Устанавливаем пользователя как активного
     db.set_user_active(user_id, topic)
-    
+
     # Получаем или генерируем задачи
     tasks = await get_or_generate_tasks(
         user_id=user_id,
@@ -178,13 +185,14 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         needed=DEFAULT_QUESTIONS_PER_TEST,
         force_ai=False
     )
-    
+
     if not tasks:
-        await query.answer("Извините, произошла ошибка при подготовке теста. Пожалуйста, попробуйте позже.")
+        await query.edit_message_text("Извините, произошла ошибка при подготовке теста. Пожалуйста, попробуйте позже.")
+        db.set_user_inactive(user_id)
         return
-    
+
     context.user_data['tasks'] = tasks
-    
+
     # Начинаем тест с первого вопроса
     await ask_question(update, context)
 
@@ -527,6 +535,9 @@ async def show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Делаем пользователя неактивным
     db.set_user_inactive(user_id)
+    
+    # Очищаем user_data после завершения теста
+    context.user_data.clear()
     
     correct_answers = context.user_data.get('correct_answers', 0)
     total_questions = len(context.user_data.get('tasks', []))
@@ -1165,9 +1176,8 @@ async def go_to_main_menu_callback(update: Update, context: ContextTypes.DEFAULT
     logging.info(f"User {user.id} returned to main menu from an inline keyboard in chat {chat_id}.") # Ensure this existing log line is present
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles the /stop command, deleting all user data."""
     user = update.effective_user
-    chat_id = update.effective_chat.id # Получаем chat_id здесь для любого ответа
+    chat_id = update.effective_chat.id
 
     if not user:
         logging.warning("stop_command received update without effective_user.")
@@ -1178,7 +1188,7 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
         return
 
-    user_id = user.id # user_id получаем здесь
+    user_id = user.id
 
     # Проверяем, была ли сессия начата
     if not context.user_data.get('session_started'):
@@ -1195,6 +1205,8 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Если сессия была начата, продолжаем с удалением данных
     logging.info(f"User {user_id} ({user.username}) executed /stop command in chat {chat_id} (session was active).")
 
+    # Удаляем все данные пользователя, включая активные сессии
+    db.set_user_inactive(user_id)
     success = db.delete_all_user_data(user_id)
 
     if success:
@@ -1203,8 +1215,8 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logging.info(f"Cleared context.user_data for user {user_id}.")
         
         response_text = (
-            f"🗑️ Все ваши данные были удалены из моей памяти, {user.mention_html()}.\\n\\n"
-            "Я не могу удалить историю этого чата самостоятельно, но вы можете сделать это вручную, если хотите.\\n\\n"
+            f"🗑️ Все ваши данные были удалены из моей памяти, {user.mention_html()}.\n\n"
+            "Я не могу удалить историю этого чата самостоятельно, но вы можете сделать это вручную, если хотите.\n\n"
             "Если вы захотите начать заново, просто отправьте /start."
         )
         try:
