@@ -159,12 +159,16 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     topic_idx = int(query.data.split('_')[1])
     topic = TOPICS[topic_idx]
 
-    # Показываем сообщение о загрузке вопросов
+    # Показываем сообщение о загрузке вопросов сразу
     try:
         await query.edit_message_text("⏳ Загрузка вопросов...", reply_markup=None)
     except Exception as e:
         logging.warning(f"Не удалось показать сообщение о загрузке: {e}")
 
+    # Запускаем генерацию вопросов и старт теста в фоне, чтобы не блокировать event loop
+    asyncio.create_task(continue_start_test(update, context, user_id, topic))
+
+async def continue_start_test(update, context, user_id, topic):
     # Очищаем user_data для чистого старта теста
     context.user_data.clear()
     context.user_data['current_topic'] = topic
@@ -187,7 +191,11 @@ async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if not tasks:
-        await query.edit_message_text("Извините, произошла ошибка при подготовке теста. Пожалуйста, попробуйте позже.")
+        # Отправляем новое сообщение об ошибке (так как edit_message_text уже был вызван)
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="Извините, произошла ошибка при подготовке теста. Пожалуйста, попробуйте позже."
+        )
         db.set_user_inactive(user_id)
         return
 
@@ -873,7 +881,6 @@ async def back_to_topics(update: Update, context: ContextTypes.DEFAULT_TYPE):
     last_expl_info = context.user_data.pop('last_explanation_message_info_on_results', None)
     if last_expl_info and isinstance(last_expl_info, dict): # Ensure it's the expected dict
         try:
-            # Check if effective_chat is available for logging context
             chat_id_for_log = update.effective_chat.id if update.effective_chat else "unknown_chat"
             await context.bot.delete_message(
                 chat_id=last_expl_info['chat_id'],
@@ -888,7 +895,10 @@ async def back_to_topics(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logging.error(f"Unexpected error deleting previous explanation message {last_expl_info.get('message_id')} (back_to_topics): {e}")
 
+    # Очищаем все данные пользователя и делаем неактивным
+    user_id = update.effective_user.id
     context.user_data.clear()
+    db.set_user_inactive(user_id)
     await show_topics(update, context)
 
 async def prev_question(update: Update, context: ContextTypes.DEFAULT_TYPE):

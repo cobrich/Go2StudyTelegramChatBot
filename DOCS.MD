@@ -74,12 +74,9 @@
 5.  `start_test()` handler:
     *   Answers the callback query.
     *   Retrieves the selected topic.
-    *   **Shows a loading message:** Edits the message to "⏳ Загрузка вопросов...".
-    *   Clears/initializes test-related `context.user_data` (current question index, correct answers, errors, etc.).
-    *   Sets the user as active in the `active_users` table (each user has their own independent session).
-    *   Calls `get_or_generate_tasks()` (see below for details).
-    *   If questions are loaded successfully, stores them in `context.user_data['questions']`.
-    *   Calls `ask_question()` to display the first question.
+    *   **Shows a loading message immediately:** Edits the message to "⏳ Загрузка вопросов...".
+    *   **Starts question generation in the background** (does not block other users).
+    *   When questions are ready, starts the test for the user.
     *   If no questions could be loaded, shows an error message and deactivates the user.
 
 ### 6.3. Answering Questions
@@ -189,7 +186,7 @@
     *   If clicked, `back_to_topics()` handler is called:
         *   Answers the callback query.
         *   If called from the results screen where an explanation might be visible, it attempts to delete the explanation message.
-        *   Clears all `context.user_data`.
+        *   **Clears all `context.user_data` and marks the user as inactive in the database.**
         *   Calls `show_topics()` to display the topic selection.
 2.  If a user attempts to use Main Menu commands (like "📚 Выбрать тему и начать") during an active test:
     *   `handle_message()` informs them: "Вы проходите тест. Чтобы выбрать другую опцию, пожалуйста, завершите текущий тест. Для возврата к выбору тем без завершения теста, перейдите к первому вопросу теста." This guides them to use "⬅️ Предыдущий" to return to the first question if they wish to exit early via the "⬅️ Назад к темам" button available there.
