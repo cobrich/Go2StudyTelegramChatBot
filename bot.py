@@ -843,6 +843,12 @@ async def get_or_generate_tasks(
                 else:
                     continue
 
+                # Если опций мало (например, generate_universal_options вернул пусто), пропускаем вопрос
+                if inc_opt_list is not None and isinstance(inc_opt_list, list) and len(inc_opt_list) < 1:
+                    # Попробуем сгенерировать универсальные опции, если их нет
+                    universal_opts = generate_universal_options(ans)
+                    if not universal_opts or len(universal_opts) < 2:
+                        continue  # Пропускаем вопрос
                 task_tuple = (q_text, ans, expl, inc_opt_list)
                 final_tasks_list.append(task_tuple)
                 processed_texts_this_call.add(q_text)
@@ -1112,18 +1118,13 @@ def generate_universal_options(correct_answer_str: str, db=None, topic=None) -> 
             for option in base_options:
                 if len(options) < 4:
                     options.add(option)
-    if len(options) < 4:
-        placeholder_idx = 1
-        while len(options) < 4:
-            fake_option = f"Вариант {placeholder_idx + 100}"
-            if len(fake_option) <= MAX_OPTION_LENGTH:
-                options.add(fake_option)
-            placeholder_idx += 1
+    # Убираем добавление заглушек "Вариант N"/"Доп. вариант N"
     final_options_list = list(options)
+    # Если не удалось сгенерировать хотя бы 2 осмысленных варианта, возвращаем пустой список
+    if len(final_options_list) < 2:
+        return []
     if correct_answer_str not in final_options_list and len(correct_answer_str) <= MAX_OPTION_LENGTH:
-        if len(final_options_list) == 4:
-            final_options_list[-1] = correct_answer_str
-        else:
+        if len(final_options_list) < 4:
             final_options_list.append(correct_answer_str)
     random.shuffle(final_options_list)
     return final_options_list[:4]
