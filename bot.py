@@ -142,118 +142,48 @@ async def show_topics(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer() # Подтверждаем нажатие кнопки
-
-    topic_index = int(query.data.replace("topic_", ""))
-    topic = TOPICS[topic_index]
+    user_id = update.effective_user.id
+    
+    # Проверяем, не активен ли уже пользователь
+    if db.is_user_active(user_id):
+        await query.answer("Вы уже проходите тест. Пожалуйста, завершите текущий тест перед началом нового.")
+        return
+    
+    topic = query.data.split('_')[1]  # Получаем тему из callback_data
+    
+    # Инициализируем данные теста
     context.user_data['current_topic'] = topic
     context.user_data['current_question'] = 0
-    context.user_data['max_reached_question'] = 0 # Сбрасываем для нового теста
     context.user_data['correct_answers'] = 0
-    context.user_data.pop('errors', None) # Очищаем ошибки предыдущего теста
-    context.user_data['answered_questions'] = {} # Initialize storage for answered questions
+    context.user_data['errors'] = []
+    context.user_data['answered_questions'] = {}
+    context.user_data['max_reached_question'] = 0
     
-    # Устанавливаем флаг загрузки и показываем сообщение о загрузке
-    context.user_data['loading_questions'] = True
-    try:
-        await query.edit_message_text(
-            "⏳ Загрузка вопросов... Пожалуйста, подождите.",
-            reply_markup=None # Убираем кнопки с этого сообщения
-        )
-        # --- BEGIN EDIT: Removed ReplyKeyboardRemove from here ---
-        # Код для удаления ReplyKeyboardMarkup был перемещен в show_topics_from_message
-        # logging.info(f"ReplyKeyboardMarkup removed for chat {query.message.chat.id} during question loading.")
-        # --- END EDIT ---
-    except telegram.error.BadRequest as e:
-        if "message is not modified" in str(e).lower():
-            pass # Сообщение уже "загрузка", это нормально
-        else:
-            logging.warning(f"Error editing message to loading state in start_test: {e}")
-    except Exception as e:
-        logging.warning(f"Generic error editing message to loading state in start_test: {e}")
-
-    try:
-        # Attempt to delete the last explanation message shown on the results screen
-        last_expl_info = context.user_data.pop('last_explanation_message_info_on_results', None)
-        if last_expl_info:
-            try:
-                await context.bot.delete_message(
-                    chat_id=last_expl_info['chat_id'],
-                    message_id=last_expl_info['message_id']
-                )
-                logging.info(f"Deleted previous explanation message {last_expl_info['message_id']} from chat {last_expl_info['chat_id']}")
-            except telegram.error.BadRequest as e:
-                if "message to delete not found" in str(e).lower():
-                    logging.info(f"Previous explanation message {last_expl_info.get('message_id')} not found for deletion (already deleted or too old).")
-                else:
-                    logging.warning(f"Could not delete previous explanation message {last_expl_info.get('message_id')}: {e}")
-            except Exception as e:
-                logging.error(f"Unexpected error deleting previous explanation message {last_expl_info.get('message_id')}: {e}")
-
-        user_id = update.effective_user.id
-        force_ai_for_this_test = context.user_data.get('force_ai_next_test', False)
-        context.user_data.pop('force_ai_next_test', None)
-
-        questions = await get_or_generate_tasks(
-            user_id=user_id,  # ПЕРЕДАЕМ user_id
-            topic=topic,
-            db=db, # db должно быть доступно в этом скоупе (обычно глобально или через context)
-            needed=DEFAULT_QUESTIONS_PER_TEST, # Используем константу
-            force_ai=force_ai_for_this_test
-        )
-        
-        context.user_data['questions'] = questions
-        context.user_data['loading_questions'] = False
-
-        if questions:
-            logging.info(
-                f"Successfully prepared {len(questions)} questions for topic '{topic}' for user {user_id}. "
-                f"Initial 'force_ai' flag was: {force_ai_for_this_test}."
-            )
-            # await ask_question(update, context) # Этот вызов будет ниже, после определения final_question_count
-        else:
-            logging.warning(f"Failed to load any questions for topic '{topic}' for user {user_id}.")
-            try:
-                await query.edit_message_text(
-                    "Не удалось загрузить вопросы для этой темы. Попробуйте позже или выберите другую тему.",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад к темам", callback_data="back_to_topics")]])
-                )
-            except Exception as e_edit_fail:
-                logging.error(f"Failed to edit message for no questions in start_test: {e_edit_fail}")
-            return # Важно выйти, если вопросы не загружены
-        
-        # Этот блок кода (включая проблемную строку) выполняется, только если questions не пустой.
-        # Однако, вызов ask_question должен быть здесь, если мы хотим использовать final_question_count и source_description
-        # для лога перед тем, как задать вопрос.
-        # Но если questions пуст, мы уже вышли из функции.
-
-        final_question_count = len(context.user_data.get('questions', [])) # Это будет равно len(questions)
-        
-        # Определяем source_description на основе того, как были получены вопросы.
-        # Эта логика может быть не совсем точной, так как get_or_generate_tasks сама решает, как генерировать.
-        # force_ai_for_this_test показывает только *начальное* намерение.
-        # Более точное логирование источника происходит внутри get_or_generate_tasks.
-        # Для этого лога можно упростить или основываться на force_ai_for_this_test.
-        if force_ai_for_this_test:
-            source_description = "All AI generated (forced)"
-        elif not db.get_error_tasks_for_user(user_id, topic, limit=1): # Проверяем, были ли ошибки изначально
-            source_description = "All AI generated (no prior errors)"
-        else:
-            source_description = "Mixed: Prioritized errors, DB, and/or AI"
-        
-        logging.info(
-            f"Prepared {final_question_count}/{DEFAULT_QUESTIONS_PER_TEST} questions for topic '{topic}' for user {user_id}. "
-            f"Source: {source_description} (Initial 'force_ai' flag was: {force_ai_for_this_test})."
-        )
-        await ask_question(update, context) # Перемещаем вызов ask_question сюда
-
-    finally:
-        context.user_data.pop('loading_questions', None) # Снимаем флаг загрузки
+    # Устанавливаем пользователя как активного
+    db.set_user_active(user_id, topic)
+    
+    # Получаем или генерируем задачи
+    tasks = await get_or_generate_tasks(
+        user_id=user_id,
+        topic=topic,
+        db=db,
+        needed=DEFAULT_QUESTIONS_PER_TEST,
+        force_ai=False
+    )
+    
+    if not tasks:
+        await query.answer("Извините, произошла ошибка при подготовке теста. Пожалуйста, попробуйте позже.")
+        return
+    
+    context.user_data['tasks'] = tasks
+    
+    # Начинаем тест с первого вопроса
+    await ask_question(update, context)
 
 async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q_num = context.user_data['current_question']
     max_reached = context.user_data.get('max_reached_question', 0)
-    questions_data = context.user_data['questions'] # Список кортежей
+    questions_data = context.user_data['tasks'] # Список кортежей
     topic = context.user_data['current_topic']
 
     answered_questions_map = context.user_data.get('answered_questions', {})
@@ -417,8 +347,16 @@ def answers_equal(ans1: str, ans2: str) -> bool:
 
 async def check_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer() # Убираем "часики"
-
+    user_id = update.effective_user.id
+    
+    # Проверяем, активен ли пользователь
+    if not db.is_user_active(user_id):
+        await query.answer("Ваша сессия истекла. Пожалуйста, начните тест заново.")
+        return
+    
+    # Обновляем время последней активности
+    db.update_user_activity(user_id)
+    
     data_parts = query.data.split("_")
     answer_index = int(data_parts[1])
     q_num_answered = int(data_parts[2]) # Номер вопроса, на который ответили
@@ -437,7 +375,7 @@ async def check_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     q_num = context.user_data['current_question']
-    questions_data = context.user_data['questions']
+    questions_data = context.user_data['tasks']
     question_data = questions_data[q_num]
     question_text, correct_answer_text, explanation_text, ai_options = question_data
 
@@ -553,7 +491,7 @@ async def continue_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer() # Убираем "часики"
 
     current_q_index = context.user_data['current_question']
-    total_questions = len(context.user_data['questions'])
+    total_questions = len(context.user_data['tasks'])
 
     # Переходим к следующему вопросу
     context.user_data['current_question'] += 1
@@ -577,13 +515,13 @@ async def continue_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    if query:
-        await query.answer()
-
     user_id = update.effective_user.id
-    topic = context.user_data.get('current_topic', 'Неизвестная тема')
+    
+    # Делаем пользователя неактивным
+    db.set_user_inactive(user_id)
+    
     correct_answers = context.user_data.get('correct_answers', 0)
-    total_questions = len(context.user_data.get('questions', []))
+    total_questions = len(context.user_data.get('tasks', []))
     
     # Очищаем информацию о сообщении с объяснением от предыдущего просмотра результатов (если был)
     # Это гарантирует, что при первом запросе объяснения на ЭТОМ экране результатов будет создано новое сообщение
@@ -597,10 +535,10 @@ async def show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
         percentage = (correct_answers / total_questions) * 100
         # Сохраняем результат теста в базу данных
         # Передаем рассчитанный процент вместо количества правильных ответов
-        db.add_test_result(user_id, topic, percentage)
+        db.add_test_result(user_id, context.user_data['current_topic'], percentage)
 
         text = (
-            f"📊 <b>Результаты теста по теме \"{topic}\":</b>\n\n"
+            f"📊 <b>Результаты теста по теме \"{context.user_data['current_topic']}\":</b>\n\n"
             f"Правильных ответов: {correct_answers}/{total_questions}\n"
             f"Процент выполнения: {percentage:.1f}%\n"
         )
@@ -622,7 +560,7 @@ async def show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             text += "\n🎉 Отлично! Ошибок нет!"
         
-        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"topic_{TOPICS.index(topic)}")])
+        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"topic_{TOPICS.index(context.user_data['current_topic'])}")])
         buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
         reply_markup = InlineKeyboardMarkup(buttons)
 
@@ -645,62 +583,44 @@ async def show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=update.effective_chat.id, text=text, reply_markup=reply_markup, parse_mode="HTML")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     text = update.message.text
-    user_data = context.user_data
-
-    # ПРОВЕРКА: Если сессия не была начата через /start, предлагаем это сделать
-    if not user_data.get('session_started'):
+    
+    # Проверяем, не активен ли пользователь
+    if db.is_user_active(user_id):
         await update.message.reply_text(
-            "Привет! Чтобы начать, пожалуйста, отправь команду /start."
+            "Вы проходите тест. Чтобы выбрать другую опцию, пожалуйста, завершите текущий тест. "
+            "Для возврата к выбору тем без завершения теста, перейдите к первому вопросу теста."
         )
         return
-
-    # Проверяем, идет ли загрузка вопросов
-    if user_data.get('loading_questions'):
-        await update.message.reply_text(
-            "⏳ Пожалуйста, подождите, идет загрузка вопросов для теста...",
-            reply_markup=main_menu_markup # Можно оставить меню или убрать его временно
-        )
-        return
-
-    # Check if a test is actively in progress (questions loaded and not yet at results)
-    is_test_active_for_message_handling = (
-        user_data.get('questions') and
-        user_data.get('current_question') is not None and
-        # Check if current_question is a valid index for an ongoing question
-        user_data.get('current_question', float('inf')) < len(user_data['questions'])
-    )
-
+    
+    # Остальной код handle_message остается без изменений
     if text == "📚 Выбрать тему и начать":
-        if is_test_active_for_message_handling:
+        if db.is_user_active(user_id):
             await update.message.reply_text(
                 "Вы проходите тест. Чтобы выбрать другую опцию, пожалуйста, завершите текущий тест. "
                 "Для возврата к выбору тем без завершения теста, перейдите к первому вопросу теста.",
                 reply_markup=main_menu_markup
             )
         else:
-            # context.user_data.clear() # Пока уберем полный clear здесь
-            # Вместо этого, специфичные для теста данные очищаются в start_test и back_to_topics
             await show_topics_from_message(update, context)
     elif text == "📊 Мой прогресс":
-        if is_test_active_for_message_handling:
+        if db.is_user_active(user_id):
             await update.message.reply_text(
                 "Вы проходите тест. Чтобы выбрать другую опцию, пожалуйста, завершите текущий тест. "
                 "Для возврата к выбору тем без завершения теста, перейдите к первому вопросу теста.",
                 reply_markup=main_menu_markup
             )
         else:
-            # context.user_data.clear() # Пока уберем полный clear здесь
             await show_progress_from_message(update, context)
     elif text == "❓ Помощь":
-        if is_test_active_for_message_handling:
+        if db.is_user_active(user_id):
             await update.message.reply_text(
                 "Вы проходите тест. Чтобы выбрать другую опцию, пожалуйста, завершите текущий тест. "
                 "Для возврата к выбору тем без завершения теста, перейдите к первому вопросу теста.",
                 reply_markup=main_menu_markup
             )
         else:
-            # Current behavior is to clear user_data for help, keeping it consistent
             context.user_data.clear()
             await update.message.reply_text(HELP_TEXT, reply_markup=main_menu_markup)
     else:
