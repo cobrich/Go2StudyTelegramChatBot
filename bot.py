@@ -541,72 +541,57 @@ async def show_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = update.effective_user.id
     
+    # Сохраняем значения до очистки user_data
+    correct_answers = context.user_data.get('correct_answers', 0)
+    total_questions = len(context.user_data.get('tasks', []))
+    errors_list = context.user_data.get('errors', [])
+    current_topic = context.user_data.get('current_topic', '')
+    
     # Делаем пользователя неактивным
     db.set_user_inactive(user_id)
     
     # Очищаем user_data после завершения теста
     context.user_data.clear()
     
-    correct_answers = context.user_data.get('correct_answers', 0)
-    total_questions = len(context.user_data.get('tasks', []))
-    
-    # Очищаем информацию о сообщении с объяснением от предыдущего просмотра результатов (если был)
-    # Это гарантирует, что при первом запросе объяснения на ЭТОМ экране результатов будет создано новое сообщение
-    # или если старое было удалено, новое будет создано без попытки редактирования несуществующего.
-    context.user_data.pop('last_explanation_message_info_on_results', None)
-
     if total_questions == 0:
         text = "Вы еще не прошли ни одного вопроса в этом тесте."
         reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад к темам", callback_data="back_to_topics")]])
     else:
         percentage = (correct_answers / total_questions) * 100
-        # Сохраняем результат теста в базу данных
-        # Передаем рассчитанный процент вместо количества правильных ответов
-        db.add_test_result(user_id, context.user_data['current_topic'], percentage)
-
+        db.add_test_result(user_id, current_topic, percentage)
         text = (
-            f"📊 <b>Результаты теста по теме \"{context.user_data['current_topic']}\":</b>\n\n"
+            f"📊 <b>Результаты теста по теме \"{current_topic}\":</b>\n\n"
             f"Правильных ответов: {correct_answers}/{total_questions}\n"
             f"Процент выполнения: {percentage:.1f}%\n"
         )
-
-        errors_list = context.user_data.get('errors', [])
-        buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]] # main_menu возвращает к выбору тем/прогрессу
-                                                                                        # back_to_topics - это если мы из вопроса вышли
-        
+        buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]]
         if errors_list:
             text += "\n<b>Ошибки:</b>\n"
-            # Сортируем ошибки по номеру вопроса на всякий случай, хотя они должны добавляться по порядку
-            errors_list.sort(key=lambda e: e['q_num']) 
+            errors_list.sort(key=lambda e: e['q_num'])
             for i, err in enumerate(errors_list):
-                text += f"{i + 1}. Вопрос {err['q_num']}\n" # err['q_num'] уже 1-based
+                text += f"{i + 1}. Вопрос {err['q_num']}\n"
                 buttons.append([InlineKeyboardButton(
                     f"Показать объяснение к вопросу {err['q_num']}",
                     callback_data=f"show_expl_{err['q_num']}"
                 )])
         else:
             text += "\n🎉 Отлично! Ошибок нет!"
-        
-        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"topic_{TOPICS.index(context.user_data['current_topic'])}")])
+        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"topic_{TOPICS.index(current_topic)}")])
         buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
         reply_markup = InlineKeyboardMarkup(buttons)
-
-    if query: # Если это callback от кнопки (например, "Завершить тест" или "Продолжить" с последнего вопроса)
+    if query:
         try:
             await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode="HTML")
         except telegram.error.BadRequest as e:
             if "message is not modified" in str(e).lower():
                 logging.info(f"Message not modified in show_results for chat {query.message.chat.id}, no action needed.")
-                # Сообщение не изменилось, ничего не делаем
             else:
                 logging.warning(f"Failed to edit message in show_results (BadRequest), sending new: {e}")
-                # Используем query.message.chat.id вместо query.effective_chat.id
                 await context.bot.send_message(chat_id=query.message.chat.id, text=text, reply_markup=reply_markup, parse_mode="HTML")
         except Exception as e:
             logging.warning(f"Failed to edit message in show_results (Other Exception), sending new: {e}")
-            # Используем query.message.chat.id вместо query.effective_chat.id
             await context.bot.send_message(chat_id=query.message.chat.id, text=text, reply_markup=reply_markup, parse_mode="HTML")
-    else: # Если show_results вызывается не из callback (маловероятно в текущем потоке)
+    else:
         await context.bot.send_message(chat_id=update.effective_chat.id, text=text, reply_markup=reply_markup, parse_mode="HTML")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -755,7 +740,7 @@ def generate_ai_task_sync(topic):
         q_match = re.search(r"ВОПРОС:\s*(.*?)\s*ПРАВИЛЬНЫЙ ОТВЕТ:", response_text, re.DOTALL | re.IGNORECASE)
         correct_a_match = re.search(r"ПРАВИЛЬНЫЙ ОТВЕТ:\s*(.*?)(?=\s*НЕПРАВИЛЬНЫЙ ОТВЕТ 1:|\s*ОБЪЯСНЕНИЕ:)", response_text, re.DOTALL | re.IGNORECASE)
         q = q_match.group(1).strip() if q_match else None
-        correct_a = correct_a_match.group(1).strip() if correct_a_match else None
+        correct_a = clean_option_text(correct_a_match.group(1).strip()) if correct_a_match else None
         incorrect_options = []
         search_start_index = 0
         if correct_a_match:
@@ -765,7 +750,7 @@ def generate_ai_task_sync(topic):
         for match in re.finditer(r"НЕПРАВИЛЬНЫЙ ОТВЕТ \d+:\s*(.*?)(?=\s*НЕПРАВИЛЬНЫЙ ОТВЕТ \d+:|\s*ОБЪЯСНЕНИЕ:|$)", response_text[search_start_index:], re.DOTALL | re.IGNORECASE):
             option_text = match.group(1).strip()
             if option_text:
-                incorrect_options.append(option_text)
+                incorrect_options.append(clean_option_text(option_text))
         e_match = re.search(r"ОБЪЯСНЕНИЕ:\s*(.*)", response_text, re.DOTALL | re.IGNORECASE)
         e = e_match.group(1).strip() if e_match else None
         if not (q and correct_a and e and len(incorrect_options) >= 1):
@@ -929,10 +914,17 @@ async def show_explanation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             error_info = err
             break
 
+    question_text = None
+    explanation = None
     if error_info:
         question_text = error_info['question']
         explanation = error_info['explanation']
-        
+    
+    # Если объяснения нет, пробуем получить из базы по тексту вопроса
+    if not explanation and question_text:
+        explanation = db.get_explanation_by_question_text(question_text)
+
+    if error_info and explanation:
         full_explanation_text = (
             f"<b>Вопрос {q_num_to_show}:</b> {escape(question_text)}\n\n"
             f"<b>Объяснение:</b>\n{escape(explanation)}"
@@ -981,7 +973,6 @@ async def show_explanation(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.error(f"Failed to send new explanation message: {e}")
                 await query.answer("Не удалось показать объяснение.", show_alert=True)
-                
     else:
         await query.answer("Объяснение для этого вопроса не найдено.", show_alert=True)
 
@@ -1264,6 +1255,10 @@ def main():
 
     # Запускаем бота
     application.run_polling()
+
+def clean_option_text(text):
+    import re
+    return re.sub(r'(НЕПРАВИЛЬНЫЙ|ПРАВИЛЬНЫЙ|ВЕРНО|НЕВЕРНО|\\s*\\(.*?\\))', '', text, flags=re.IGNORECASE).strip()
 
 if __name__ == '__main__':
     main()

@@ -24,6 +24,17 @@ class Database:
             grade INTEGER
         )''')
         
+        # Таблица активных пользователей
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS active_users (
+            user_id INTEGER PRIMARY KEY,
+            current_topic TEXT,
+            current_question INTEGER,
+            start_time TIMESTAMP,
+            last_activity TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )''')
+        
         # Таблица истории тестов
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS test_history (
@@ -257,3 +268,73 @@ class Database:
         if self.conn:
             self.conn.close()
             logging.info("Соединение с базой данных закрыто.")
+
+    def set_user_active(self, user_id: int, topic: str, question_num: int = 0):
+        """Устанавливает пользователя как активного и обновляет его состояние"""
+        cursor = self.conn.cursor()
+        now = datetime.now()
+        cursor.execute('''
+        INSERT INTO active_users (user_id, current_topic, current_question, start_time, last_activity)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            current_topic = ?,
+            current_question = ?,
+            last_activity = ?
+        ''', (user_id, topic, question_num, now, now, topic, question_num, now))
+        self.conn.commit()
+
+    def update_user_activity(self, user_id: int, question_num: int = None):
+        """Обновляет время последней активности пользователя и текущий вопрос"""
+        cursor = self.conn.cursor()
+        now = datetime.now()
+        if question_num is not None:
+            cursor.execute('''
+            UPDATE active_users 
+            SET last_activity = ?, current_question = ?
+            WHERE user_id = ?
+            ''', (now, question_num, user_id))
+        else:
+            cursor.execute('''
+            UPDATE active_users 
+            SET last_activity = ?
+            WHERE user_id = ?
+            ''', (now, user_id))
+        self.conn.commit()
+
+    def set_user_inactive(self, user_id: int):
+        """Удаляет пользователя из списка активных"""
+        cursor = self.conn.cursor()
+        cursor.execute('DELETE FROM active_users WHERE user_id = ?', (user_id,))
+        self.conn.commit()
+
+    def get_active_users(self):
+        """Возвращает список активных пользователей"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+        SELECT user_id, current_topic, current_question, start_time, last_activity
+        FROM active_users
+        ORDER BY last_activity DESC
+        ''')
+        return cursor.fetchall()
+
+    def is_user_active(self, user_id: int) -> bool:
+        """Проверяет, активен ли пользователь"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT 1 FROM active_users WHERE user_id = ?', (user_id,))
+        return cursor.fetchone() is not None
+
+    def get_user_current_state(self, user_id: int):
+        """Возвращает текущее состояние пользователя"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+        SELECT current_topic, current_question, start_time, last_activity
+        FROM active_users
+        WHERE user_id = ?
+        ''', (user_id,))
+        return cursor.fetchone()
+
+    def get_explanation_by_question_text(self, question_text):
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT explanation FROM tasks WHERE question = ?', (question_text,))
+        row = cursor.fetchone()
+        return row[0] if row else None
