@@ -338,3 +338,16 @@ class Database:
         cursor.execute('SELECT explanation FROM tasks WHERE question = ?', (question_text,))
         row = cursor.fetchone()
         return row[0] if row else None
+
+    def get_explanation_fuzzy_by_question_text(self, question_text):
+        cursor = self.conn.cursor()
+        # Сначала пробуем точное совпадение
+        cursor.execute('SELECT explanation FROM tasks WHERE question = ?', (question_text,))
+        row = cursor.fetchone()
+        if row and row[0]:
+            return row[0]
+        # Если не найдено, ищем по началу вопроса (первые 50 символов)
+        prefix = question_text[:50]
+        cursor.execute('SELECT explanation FROM tasks WHERE question LIKE ? AND explanation IS NOT NULL AND explanation != "" LIMIT 1', (prefix + '%',))
+        row = cursor.fetchone()
+        return row[0] if row else None

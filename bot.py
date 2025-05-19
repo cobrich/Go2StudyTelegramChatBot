@@ -923,6 +923,10 @@ async def show_explanation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Если объяснения нет, пробуем получить из базы по тексту вопроса
     if not explanation and question_text:
         explanation = db.get_explanation_by_question_text(question_text)
+        if not explanation:
+            explanation = db.get_explanation_fuzzy_by_question_text(question_text)
+            if not explanation:
+                logging.warning(f"[show_explanation] Не найдено объяснение для вопроса: {question_text[:80]}")
 
     if error_info and explanation:
         full_explanation_text = (
