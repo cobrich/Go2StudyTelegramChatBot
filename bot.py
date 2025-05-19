@@ -1008,6 +1008,15 @@ async def show_explanation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.answer("Объяснение для этого вопроса не найдено.", show_alert=True)
 
+def clean_option_text(text):
+    import re
+    # Удаляем слова "ОТВЕТ", "ПРАВИЛЬНЫЙ", "НЕПРАВИЛЬНЫЙ", "ВЕРНО", "НЕВЕРНО" и их вариации
+    text = re.sub(r'(ОТВЕТ|ПРАВИЛЬНЫЙ|НЕПРАВИЛЬНЫЙ|ВЕРНО|НЕВЕРНО|НЕВОЗМОЖНО ОПРЕДЕЛИТЬ|НЕВОЗМОЖНО СКАЗАТЬ|НЕ МОГУ ОПРЕДЕЛИТЬ|НЕ МОГУ СКАЗАТЬ|НЕ УВЕРЕН|НЕ ЗНАЮ|ЗАТРУДНЯЮСЬ ОТВЕТИТЬ|СЛОЖНО СКАЗАТЬ|НУЖНО ПОДУМАТЬ|ПРОВЕРЮ ЕЩЕ РАЗ|ДРУГОЙ ВАРИАНТ|ЭТО НЕВЕРНО|НЕПРАВИЛЬНЫЙ ВАРИАНТ|ПРАВИЛЬНЫЙ ВАРИАНТ|ВЕРНЫЙ ОТВЕТ|НЕВЕРНЫЙ ОТВЕТ|\\s*\\(.*?\\))', '', text, flags=re.IGNORECASE)
+    # Удаляем множественные пробелы
+    text = re.sub(r'\s+', ' ', text)
+    # Удаляем пробелы в начале и конце
+    return text.strip()
+
 def generate_universal_options(correct_answer_str: str, db=None, topic=None) -> list[str]:
     """
     Генерирует 4 варианта ответа, включая правильный.
@@ -1038,30 +1047,29 @@ def generate_universal_options(correct_answer_str: str, db=None, topic=None) -> 
             # Генерация числовых дистракторов
             # Попробуем создать несколько вариантов, чтобы было из чего выбрать
             possible_distractors = set()
-            for i in range(10): # Сгенерируем побольше кандидатов
-                if len(options) + len(possible_distractors) >= 4 and i > 3: # Если уже набрали достаточно с правильным
+            for i in range(15): # Увеличиваем количество попыток генерации
+                if len(options) + len(possible_distractors) >= 4 and i > 5: # Если уже набрали достаточно с правильным
                     break
 
-                delta_abs = max(1, abs(num_val) * random.uniform(0.1, 0.5)) # Отклонение от 10% до 50%
-                if is_int_val:
-                    delta_abs = max(1, round(delta_abs))
+                # Разнообразные операции для генерации дистракторов
+                op_choice = random.choice([-1, 1, -2, 2, 3, 4]) # Добавляем больше вариантов операций
                 
-                op_choice = random.choice([-1, 1, -2, 2]) # Разные операции
-
-                if op_choice == 1 : # Сложение
+                if op_choice == 1: # Сложение
+                    delta_abs = max(1, abs(num_val) * random.uniform(0.1, 0.5))
                     dist_candidate_val = num_val + delta_abs * (1 + random.random())
                 elif op_choice == -1: # Вычитание
+                    delta_abs = max(1, abs(num_val) * random.uniform(0.1, 0.5))
                     dist_candidate_val = num_val - delta_abs * (1 + random.random())
-                elif op_choice == 2 and num_val != 0: # Умножение (если не 0)
-                    factor = random.choice([0.5, 1.5, 2, 0.75, 1.25])
+                elif op_choice == 2 and num_val != 0: # Умножение
+                    factor = random.choice([0.5, 1.5, 2, 0.75, 1.25, 1.75])
                     dist_candidate_val = num_val * factor
-                else: # Деление (если не 0) или альтернативное сложение/вычитание
-                    if num_val != 0 and random.choice([True, False]):
-                        factor = random.choice([2,3,4])
-                        dist_candidate_val = num_val / factor
-                    else: # еще одно смещение
-                         dist_candidate_val = num_val + delta_abs * random.choice([-1.5, 1.5])
-
+                elif op_choice == -2 and num_val != 0: # Деление
+                    factor = random.choice([2, 3, 4, 1.5])
+                    dist_candidate_val = num_val / factor
+                elif op_choice == 3: # Смещение вверх
+                    dist_candidate_val = num_val * (1 + random.uniform(0.1, 0.3))
+                else: # Смещение вниз
+                    dist_candidate_val = num_val * (1 - random.uniform(0.1, 0.3))
 
                 # Обработка и форматирование дистрактора
                 if is_int_val:
@@ -1071,16 +1079,19 @@ def generate_universal_options(correct_answer_str: str, db=None, topic=None) -> 
 
                 # Если исходное число положительное, стараемся делать дистракторы положительными
                 if num_val > 0 and dist_candidate_val <= 0:
-                    if num_val > 1 and is_int_val: # если было целое > 1, сделаем хотя бы 1
-                         dist_candidate_val = max(1, round(num_val * random.uniform(0.1,0.5)))
+                    if num_val > 1 and is_int_val:
+                        dist_candidate_val = max(1, round(num_val * random.uniform(0.1, 0.5)))
                     elif not is_int_val and num_val > 0.01:
-                         dist_candidate_val = round(max(0.01, num_val * random.uniform(0.1,0.5)),2)
-                    else: # если было маленькое, просто возьмем по модулю или чуть больше
+                        dist_candidate_val = round(max(0.01, num_val * random.uniform(0.1, 0.5)), 2)
+                    else:
                         dist_candidate_val = abs(dist_candidate_val) + (1 if is_int_val else 0.01)
 
+                # Форматируем строку с учетом единиц измерения
+                if unit:
+                    option_str = f"{dist_candidate_val} {unit}".strip()
+                else:
+                    option_str = str(dist_candidate_val)
 
-                option_str = f"{dist_candidate_val} {unit}".strip() if is_int_val else f"{dist_candidate_val:.2f} {unit}".strip()
-                
                 if option_str != correct_answer_str: # Не добавляем дистрактор, если он совпал с правильным
                     possible_distractors.add(option_str)
 
@@ -1091,46 +1102,60 @@ def generate_universal_options(correct_answer_str: str, db=None, topic=None) -> 
                 else:
                     break
             
-            if len(options) > 1 : # Если мы добавили хотя бы один числовой дистрактор
+            if len(options) > 1: # Если мы добавили хотя бы один числовой дистрактор
                 generated_numeric_options = True
 
         except ValueError:
-            # Если не удалось преобразовать число (маловероятно после regex), переходим к общим дистракторам
             pass # Логика ниже обработает заполнение до 4 опций
     
     # Если числовые дистракторы не были сгенерированы ИЛИ их не хватило
     if not generated_numeric_options or len(options) < 4:
-        generic_distractors_pool = [
-            "Не уверен", "Другой вариант", "Нужно подумать", "Сложно сказать",
-            "Проверю еще раз", "Затрудняюсь ответить", "Не знаю", "Это неверно"
-        ]
-        # Убедимся, что правильный ответ не похож на один из общих дистракторов
-        generic_distractors_pool = [d for d in generic_distractors_pool if d.lower() != correct_answer_str.lower()]
-        random.shuffle(generic_distractors_pool)
-        
-        idx = 0
-        while len(options) < 4 and idx < len(generic_distractors_pool):
-            options.add(generic_distractors_pool[idx])
-            idx += 1
+        # Для нечисловых ответов генерируем варианты на основе правильного ответа
+        if len(correct_answer_str) > 0:
+            # Пробуем создать варианты, изменяя правильный ответ
+            base_options = set()
+            for _ in range(10):  # Пробуем несколько раз
+                if len(base_options) >= 3:  # Нам нужно 3 неправильных варианта
+                    break
+                    
+                # Разные способы модификации ответа
+                if random.random() < 0.5:
+                    # Изменяем порядок слов или символов
+                    words = correct_answer_str.split()
+                    if len(words) > 1:
+                        random.shuffle(words)
+                        modified = ' '.join(words)
+                        if modified != correct_answer_str:
+                            base_options.add(modified)
+                else:
+                    # Добавляем или убираем слова/символы
+                    if len(correct_answer_str) > 3:
+                        pos = random.randint(0, len(correct_answer_str) - 1)
+                        modified = correct_answer_str[:pos] + correct_answer_str[pos + 1:]
+                        if modified != correct_answer_str:
+                            base_options.add(modified)
 
-    # Если все еще не хватает (крайне маловероятно), добавляем нумерованные заглушки
-    placeholder_idx = 1
-    while len(options) < 4:
-        options.add(f"Вариант {placeholder_idx + 100}") # +100 чтобы избежать случайных совпадений
-        placeholder_idx += 1
-        
+            # Добавляем сгенерированные варианты
+            for option in base_options:
+                if len(options) < 4:
+                    options.add(option)
+
+    # Если все еще не хватает вариантов, добавляем числовые варианты
+    if len(options) < 4:
+        placeholder_idx = 1
+        while len(options) < 4:
+            options.add(f"Вариант {placeholder_idx + 100}")
+            placeholder_idx += 1
+
     final_options_list = list(options)
-    # Убедимся, что правильный ответ точно есть, если вдруг set его как-то вытеснил (не должен)
+    # Убедимся, что правильный ответ точно есть
     if correct_answer_str not in final_options_list:
-        if len(final_options_list) == 4: # Заменяем последний, если уже 4
+        if len(final_options_list) == 4:
             final_options_list[-1] = correct_answer_str
-        else: # Добавляем, если меньше 4 (не должно быть по логике выше)
+        else:
             final_options_list.append(correct_answer_str)
 
-
     random.shuffle(final_options_list)
-    
-    # Гарантируем, что вернется ровно 4 варианта
     return final_options_list[:4]
 
 async def go_to_main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1287,10 +1312,6 @@ def main():
 
     # Запускаем бота
     application.run_polling()
-
-def clean_option_text(text):
-    import re
-    return re.sub(r'(НЕПРАВИЛЬНЫЙ|ПРАВИЛЬНЫЙ|ВЕРНО|НЕВЕРНО|\\s*\\(.*?\\))', '', text, flags=re.IGNORECASE).strip()
 
 if __name__ == '__main__':
     main()
