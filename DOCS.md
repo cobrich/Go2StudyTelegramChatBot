@@ -1,8 +1,123 @@
 # Go2Study Bot Documentation
 
+## Project Overview
+Go2Study Bot is a Telegram bot designed to help students learn mathematics through interactive tests and quizzes. The bot provides a structured learning experience with immediate feedback and explanations.
+
+## Project Structure
+```
+go2study_bot/
+├── src/
+│   ├── config/
+│   │   └── constants.py         # Configuration and constants
+│   ├── handlers/
+│   │   ├── base_handler.py     # Base handler class
+│   │   ├── command_handlers.py # Command handlers (/start, /stop)
+│   │   └── callback_handlers.py # Callback query handlers
+│   ├── services/
+│   │   ├── database.py         # Database operations
+│   │   ├── ai_service.py       # AI question generation
+│   │   └── question_service.py # Question management
+│   ├── utils/
+│   │   └── keyboards.py        # Keyboard utilities
+│   └── bot.py                  # Main bot file
+├── files/                      # Additional files
+├── question_images/           # Question-related images
+├── requirements.txt           # Project dependencies
+└── DOCS.md                    # This documentation file
+```
+
+## Features
+
+### User Management
+- User session tracking
+- Progress monitoring
+- Error tracking and analysis
+- Data persistence
+
+### Question Management
+- Dynamic question generation using AI
+- Topic-based question organization
+- Multiple-choice questions
+- Detailed explanations for answers
+
+### Test Flow
+1. User selects a topic
+2. Bot generates or retrieves questions
+3. User answers questions
+4. Immediate feedback provided
+5. Results and statistics shown
+6. Option to review incorrect answers
+
+### Database Schema
+- Users table: Tracks user sessions and activity
+- Test results table: Stores test outcomes
+- Questions table: Stores question bank
+- User errors table: Tracks user mistakes
+
+## Setup and Installation
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd go2study_bot
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Set up environment variables:
+```bash
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=your_gemini_model
+```
+
+4. Run the bot:
+```bash
+python src/bot.py
+```
+
 ## Recent Changes
 
-### PDF Processor Updates
+### Project Restructuring
+- Reorganized code into logical modules
+- Separated concerns into different services
+- Improved code maintainability
+- Enhanced error handling
+
+### New Features
+- Improved question generation using AI
+- Better error tracking and analysis
+- Enhanced user progress monitoring
+- More detailed explanations for answers
+
+### Technical Improvements
+- Modular architecture
+- Better separation of concerns
+- Improved error handling
+- Enhanced logging
+- More efficient database operations
+
+## Usage
+
+### Commands
+- `/start` - Start the bot and show main menu
+- `/stop` - Stop the bot and clear user data
+
+### Main Menu Options
+- 📚 Выбрать тему и начать - Start a new test
+- 📊 Мой прогресс - View progress statistics
+- ❓ Помощь - Show help information
+
+## Contributing
+Please read CONTRIBUTING.md for details on our code of conduct and the process for submitting pull requests.
+
+## License
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## PDF Processor Updates
 - Improved file path handling with `os.path.join` for better cross-platform compatibility
 - Enhanced language detection based on both filename and content
 - Updated question type detection patterns for both Russian and Kazakh
