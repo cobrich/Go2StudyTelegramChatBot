@@ -71,12 +71,9 @@ class Database:
             FOREIGN KEY (user_id) REFERENCES users (user_id)
         )''')
         
-        # Drop existing tasks table if it exists
-        cursor.execute('DROP TABLE IF EXISTS tasks')
-        
-        # Recreate tasks table with all required columns
+        # Create tasks table if it doesn't exist
         cursor.execute('''
-        CREATE TABLE tasks (
+        CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             question TEXT,
             answer TEXT,

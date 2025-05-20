@@ -1334,6 +1334,9 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 def main():
     # Создаем приложение
     application = Application.builder().token(os.getenv('TELEGRAM_BOT_TOKEN')).build()
+    
+    # Инициализируем бота
+    application.bot.initialize()
 
     # Добавляем обработчики
     application.add_handler(CommandHandler("start", start))
