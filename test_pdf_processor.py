@@ -3,12 +3,45 @@ import logging
 from pdf_processor import PDFProcessor
 from database import Database
 from constants import TOPICS
+import asyncio
+from dotenv import load_dotenv
+import google.generativeai as genai
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+# Load environment variables
+load_dotenv()
+
+genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+model = genai.GenerativeModel(os.getenv('GEMINI_MODEL'))
+
+async def determine_topic_with_ai(question_text: str) -> str:
+    """
+    Uses AI to determine the most appropriate topic for a question from our predefined list.
+    Returns the topic name or 'Математика' if no specific topic is determined.
+    """
+    prompt = f"""Ты - эксперт по математике для 5-6 классов. Твоя задача - определить, к какой из следующих тем относится вопрос:
+
+{', '.join(TOPICS)}
+
+Вопрос: {question_text}
+
+Ответь ТОЛЬКО названием темы из списка выше, без дополнительных слов или объяснений. Если вопрос не подходит ни к одной теме или подходит к нескольким, ответь 'Математика'."""
+    try:
+        response = model.generate_content(prompt)
+        determined_topic = response.text.strip()
+        if determined_topic in TOPICS:
+            return determined_topic
+        else:
+            logging.warning(f"AI returned invalid topic '{determined_topic}' for question: {question_text[:100]}...")
+            return "Математика"
+    except Exception as e:
+        logging.error(f"Error determining topic with AI: {e}")
+        return "Математика"
 
 def test_pdf_processing():
     # Initialize PDF processor and database
@@ -26,53 +59,6 @@ def test_pdf_processing():
     questions_with_images = 0
     total_images = 0
     language_stats = {"ru": 0, "kk": 0}
-    
-    # Map of keywords to topics
-    topic_keywords = {
-        "масштаб": "Масштаб",
-        "процент": "Проценты",
-        "процентная": "Проценты",
-        "процентное": "Проценты",
-        "пропорция": "Пропорции",
-        "пропорциональн": "Пропорции",
-        "уравнение": "Уравнения с одним неизвестным",
-        "координат": "Координатная прямая",
-        "площадь": "Площади фигур",
-        "периметр": "Периметр и площадь прямоугольника",
-        "треугольник": "Площадь треугольника",
-        "окружность": "Окружность и круг",
-        "круг": "Площадь круга",
-        "объем": "Объем прямоугольного параллелепипеда",
-        "геометрическ": "Геометрические построения",
-        "симметрия": "Симметрия",
-        "среднее": "Среднее арифметическое",
-        "движение": "Задачи на движение",
-        "смесь": "Задачи на смеси и сплавы",
-        "сплав": "Задачи на смеси и сплавы",
-        "деление с остатком": "Деление с остатком",
-        "римск": "Римские числа",
-        "диаграмм": "Работа с диаграммами и таблицами",
-        "таблиц": "Работа с диаграммами и таблицами",
-        "логическ": "Логические задачи",
-        "сложение": "Сложение и вычитание натуральных чисел",
-        "вычитание": "Сложение и вычитание натуральных чисел",
-        "умножение": "Умножение и деление натуральных чисел",
-        "деление": "Умножение и деление натуральных чисел",
-        "порядок действий": "Порядок действий",
-        "делимость": "Делимость чисел",
-        "простое число": "Простые и составные числа",
-        "составное число": "Простые и составные числа",
-        "дробь": "Дроби: сложение и вычитание",
-        "десятичная": "Десятичные дроби",
-        "сравнение дробей": "Сравнение дробей"
-    }
-    
-    def determine_topic(question_text):
-        question_text = question_text.lower()
-        for keyword, topic in topic_keywords.items():
-            if keyword in question_text:
-                return topic
-        return "Математика"  # Default topic if no specific topic is found
     
     for pdf_file, expected_language in pdf_files:
         try:
@@ -100,17 +86,18 @@ def test_pdf_processing():
             logging.info(f"Total images found: {file_total_images}")
             logging.info(f"Language distribution: {language_stats}")
             
-            # Save questions to database
+            # Save questions to database with AI-determined topics
             for question in questions:
                 try:
-                    # Determine topic based on question text
-                    topic = determine_topic(question['text'])
+                    # Get topic using AI
+                    topic = asyncio.run(determine_topic_with_ai(question['text']))
+                    logging.info(f"AI determined topic '{topic}' for question: {question['text'][:100]}...")
                     
                     db.add_task_with_image(
                         question=question['text'],
                         answer="",  # You'll need to provide correct answers
                         explanation="",  # You'll need to provide explanations
-                        topic=topic,  # Use determined topic
+                        topic=topic,  # Use AI-determined topic
                         level=1,
                         image_paths=question.get('image_paths', []),
                         question_type=question['type'],

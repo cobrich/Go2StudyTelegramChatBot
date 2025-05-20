@@ -190,4 +190,31 @@ Users can select their preferred language when starting the bot. The language ca
 - Добавлено автоматическое определение тем для вопросов из PDF файлов на основе ключевых слов
 - Вопросы теперь сохраняются с конкретными темами из constants.py вместо общей темы "Математика"
 - Добавлен словарь соответствия ключевых слов темам для более точной классификации
-- Если тема не определена, используется общая тема "Математика" 
+- Если тема не определена, используется общая тема "Математика"
+
+### [2024-06-09] Улучшение логики выбора вопросов для теста
+
+- Изменена логика выбора вопросов для теста:
+  1. Сначала берутся обычные вопросы из базы данных
+  2. Если у ученика есть неправильно отвеченные вопросы по теме, они добавляются к тесту
+  3. Если после этого не хватает вопросов, генерируются новые вопросы с помощью ИИ:
+     - Если есть неправильно отвеченные вопросы, ИИ генерирует похожие вопросы для лучшего освоения темы
+     - Если неправильно отвеченных вопросов нет, генерируются новые вопросы по теме
+- Это позволяет:
+  - Всегда иметь вопросы для теста, даже если нет ошибок
+  - Приоритизировать неправильно отвеченные вопросы
+  - Генерировать похожие вопросы для лучшего освоения проблемных тем
+  - Обеспечить разнообразие вопросов в тесте 
+
+### [2024-06-10] AI-based Topic Detection for PDF Questions
+- Replaced keyword-based topic detection in PDF processing with Gemini AI-based classification.
+- Now, when processing PDF files, each question is sent to Gemini, which selects the most appropriate topic from the predefined list (`constants.TOPICS`).
+- If the AI cannot determine a specific topic, it defaults to 'Математика'.
+- This ensures more accurate and robust topic categorization for all imported questions.
+
+#### Workflow
+- For each question extracted from a PDF, the system:
+    1. Sends the question text to Gemini with a prompt listing all available topics.
+    2. Receives the topic name from Gemini (or 'Математика' if ambiguous).
+    3. Saves the question to the database with the AI-determined topic.
+- This improves the reliability of topic assignment and reduces errors from manual or keyword-based methods. 
