@@ -45,7 +45,7 @@ class CallbackHandlers(BaseHandler):
         questions = await self.question_service.get_or_generate_tasks(
             user_id=user_id,
             topic=topic,
-            num_questions=DEFAULT_QUESTIONS_PER_TEST
+            needed=DEFAULT_QUESTIONS_PER_TEST
         )
         
         if not questions:

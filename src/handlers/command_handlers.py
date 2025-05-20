@@ -3,7 +3,7 @@ from telegram.ext import ContextTypes
 import logging
 from handlers.base_handler import BaseHandler
 from utils.keyboards import get_main_menu_markup, build_topic_selection_keyboard
-from config.constants import HELP_TEXT
+from config.constants import HELP_TEXT, TOPICS
 
 class CommandHandlers(BaseHandler):
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -120,6 +120,8 @@ class CommandHandlers(BaseHandler):
             )
         elif text == "📊 Мой прогресс":
             total_tests, avg_percentage = self.db.get_user_progress(user_id)
+            if avg_percentage is None:
+                avg_percentage = 0.0
             recent_topics = self.db.get_recent_topics(user_id, limit=5)
             error_topics = self.db.get_error_topics(user_id)
 
@@ -143,4 +145,23 @@ class CommandHandlers(BaseHandler):
         elif text == "❓ Помощь":
             await update.message.reply_text(HELP_TEXT, reply_markup=self.main_menu_markup)
         else:
-            await update.message.reply_text("Пожалуйста, выберите действие из меню.", reply_markup=self.main_menu_markup) 
+            await update.message.reply_text("Пожалуйста, выберите действие из меню.", reply_markup=self.main_menu_markup)
+
+    async def handle_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        topic_index = query.data.replace('topic_', '')
+        try:
+            topic_index = int(topic_index)
+            topic = TOPICS[topic_index]
+        except (ValueError, IndexError):
+            logging.error(f"Invalid topic selected: {topic_index}")
+            await query.message.edit_text(
+                "Произошла ошибка при выборе темы. Пожалуйста, попробуйте еще раз.",
+                reply_markup=build_topic_selection_keyboard()
+            )
+            return
+
+        # Handle topic selection
+        # ... (rest of the method remains unchanged)
+
+        # ... (rest of the method remains unchanged) 

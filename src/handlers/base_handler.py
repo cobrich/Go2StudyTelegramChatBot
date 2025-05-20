@@ -14,8 +14,9 @@ class BaseHandler:
     async def check_user_active(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
         """Check if user is active and handle accordingly."""
         user_id = update.effective_user.id
+        msg = update.effective_message
         if self.db.is_user_active(user_id):
-            await update.message.reply_text(
+            await msg.reply_text(
                 "Вы проходите тест. Чтобы выбрать другую опцию, пожалуйста, завершите текущий тест. "
                 "Для возврата к выбору тем без завершения теста, перейдите к первому вопросу теста.",
                 reply_markup=self.main_menu_markup
