@@ -328,3 +328,42 @@ Users can select their preferred language when starting the bot. The language ca
     2. Receives the topic name from Gemini (or 'Математика' if ambiguous).
     3. Saves the question to the database with the AI-determined topic.
 - This improves the reliability of topic assignment and reduces errors from manual or keyword-based methods. 
+
+## Changelog
+
+### [Date: YYYY-MM-DD] (replace with today's date)
+
+#### Major Fixes & Features
+
+- **Import Path Refactor:**  
+  All Python import paths were updated to work when running `bot.py` from the `src` directory. The `src.` prefix was removed from all internal imports.
+
+- **Menu Button Handling:**  
+  Added a text message handler to process menu button presses (ReplyKeyboardMarkup), enabling actions for options like "Мой прогресс".
+
+- **User Progress Statistics:**  
+  Implemented real user progress stats for the "Мой прогресс" menu option, including total tests, average score, recent topics, and error topics.
+
+- **Test Flow Improvements:**  
+  - Fixed topic selection logic and improved error handling.
+  - Enhanced test flow robustness, including Telegram API error handling.
+  - Added explanations for mistakes after tests and an option to repeat topics.
+
+- **Database & PDF Import:**  
+  - Improved `pdf_processor.py` to import questions from PDF into the database only if they don't already exist.
+  - Ensured all project components use the same `math_bot.db` file.
+
+- **Question Source Tracking:**  
+  - Added a feature to mark each question as coming from either the database or AI (Gemini).
+  - Displayed the source to users during tests and explanations.
+
+- **/stop Command Enhancement:**  
+  - `/stop` now always resets user state and activity, preventing stale sessions from blocking new tests.
+
+- **Documentation & Version Control:**  
+  - Updated `DOCS.md` after each major change.
+  - Committed all major changes to git for transparency and version tracking.
+
+---
+
+**The bot is now fully functional with robust error handling, clear user feedback, reliable question sourcing, and seamless PDF-to-database import.** 
