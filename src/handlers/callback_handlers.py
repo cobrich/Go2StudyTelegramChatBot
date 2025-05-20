@@ -14,20 +14,21 @@ class CallbackHandlers(BaseHandler):
     async def handle_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle topic selection callback."""
         query = update.callback_query
-        await query.answer()
-        
-        user_id = query.from_user.id
-        chat_id = query.message.chat_id
-        topic = query.data.replace('topic_', '')
-        
-        if topic not in TOPICS:
-            logging.error(f"Invalid topic selected: {topic}")
+        topic_index = query.data.replace('topic_', '')
+        try:
+            topic_index = int(topic_index)
+            topic = TOPICS[topic_index]
+        except (ValueError, IndexError):
+            logging.error(f"Invalid topic selected: {topic_index}")
             await query.message.edit_text(
                 "Произошла ошибка при выборе темы. Пожалуйста, попробуйте еще раз.",
                 reply_markup=build_topic_selection_keyboard()
             )
             return
-            
+        
+        user_id = query.from_user.id
+        chat_id = query.message.chat_id
+        
         # Check if user is already taking a test
         if await self.check_user_active(update, context):
             return
