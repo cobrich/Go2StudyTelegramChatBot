@@ -14,44 +14,56 @@ def test_pdf_processing():
     processor = PDFProcessor()
     db = Database()
     
-    # List of PDF files to process
+    # List of PDF files to process with their expected languages
     pdf_files = [
-        "files/Колич характ (рус).pdf",
-        "files/Математика,_10_вариантов,_на_русском.pdf",
-        "files/Абай рус.pdf"
+        ("files/Колич характ (рус).pdf", "ru"),
+        ("files/Математика,_10_вариантов,_на_русском.pdf", "ru"),
+        ("files/Абай рус.pdf", "ru"),
+        ("files/Математика, 10 нуска, казакша.pdf", "kk")
     ]
     
     total_questions = 0
     questions_with_images = 0
+    total_images = 0
+    language_stats = {"ru": 0, "kk": 0}
     
-    for pdf_file in pdf_files:
+    for pdf_file, expected_language in pdf_files:
         try:
-            logging.info(f"Processing {pdf_file}...")
+            logging.info(f"Processing {pdf_file} (expected language: {expected_language})...")
             questions = processor.process_pdf_file(pdf_file)
             
             # Log statistics
             file_questions = len(questions)
-            file_images = sum(1 for q in questions if 'image_path' in q)
+            file_images = sum(1 for q in questions if 'image_paths' in q)
+            file_total_images = sum(len(q.get('image_paths', [])) for q in questions)
             total_questions += file_questions
             questions_with_images += file_images
+            total_images += file_total_images
+            
+            # Count questions by language
+            for q in questions:
+                language_stats[q['language']] += 1
             
             logging.info(f"Found {file_questions} questions in {pdf_file}")
             logging.info(f"Questions with images: {file_images}")
+            logging.info(f"Total images found: {file_total_images}")
+            logging.info(f"Language distribution: {language_stats}")
             
             # Save questions to database
             for question in questions:
                 try:
                     db.add_task_with_image(
-                        question=question['question'],
+                        question=question['text'],
                         answer="",  # You'll need to provide correct answers
                         explanation="",  # You'll need to provide explanations
                         topic="Математика",  # You can customize the topic
                         level=1,
-                        image_path=question.get('image_path'),
+                        image_paths=question.get('image_paths', []),
                         question_type=question['type'],
-                        characteristic_a=question.get('characteristic_a'),
-                        characteristic_b=question.get('characteristic_b'),
-                        source_file=pdf_file
+                        characteristic_a=None,
+                        characteristic_b=None,
+                        source_file=pdf_file,
+                        language=question['language']
                     )
                 except Exception as e:
                     logging.error(f"Error saving question to database: {e}")
@@ -65,6 +77,8 @@ def test_pdf_processing():
     logging.info(f"Total questions found: {total_questions}")
     logging.info(f"Questions with images: {questions_with_images}")
     logging.info(f"Questions without images: {total_questions - questions_with_images}")
+    logging.info(f"Total images found: {total_images}")
+    logging.info(f"Language distribution: {language_stats}")
 
 if __name__ == "__main__":
     test_pdf_processing() 
