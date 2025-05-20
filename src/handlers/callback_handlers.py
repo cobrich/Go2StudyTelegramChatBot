@@ -20,10 +20,13 @@ class CallbackHandlers(BaseHandler):
             topic = TOPICS[topic_index]
         except (ValueError, IndexError):
             logging.error(f"Invalid topic selected: {topic_index}")
-            await query.message.edit_text(
-                "Произошла ошибка при выборе темы. Пожалуйста, попробуйте еще раз.",
-                reply_markup=build_topic_selection_keyboard()
-            )
+            try:
+                await query.message.edit_text(
+                    "Произошла ошибка при выборе темы. Пожалуйста, попробуйте еще раз.",
+                    reply_markup=build_topic_selection_keyboard()
+                )
+            except Exception:
+                pass
             return
         
         user_id = query.from_user.id
@@ -47,23 +50,30 @@ class CallbackHandlers(BaseHandler):
         
         if not questions:
             logging.error(f"Failed to get questions for topic {topic}")
-            await query.message.edit_text(
-                "Произошла ошибка при получении вопросов. Пожалуйста, попробуйте еще раз.",
-                reply_markup=build_topic_selection_keyboard()
-            )
+            try:
+                await query.message.edit_text(
+                    "Произошла ошибка при получении вопросов. Пожалуйста, попробуйте еще раз.",
+                    reply_markup=build_topic_selection_keyboard()
+                )
+            except Exception:
+                pass
             return
             
         # Store questions in context
         self.set_user_data(context, 'questions', questions)
+        self.set_user_data(context, 'answers', [q[1] for q in questions])
         
         # Display first question
         question = questions[0]
-        keyboard = build_question_keyboard(0, len(questions))
+        keyboard = build_question_keyboard(question[3], 0, 0, len(questions))
         
-        await query.message.edit_text(
-            f"Вопрос 1 из {len(questions)}:\n\n{question['question']}",
-            reply_markup=keyboard
-        )
+        try:
+            await query.message.edit_text(
+                f"Вопрос 1 из {len(questions)}:\n\n{question[0]}",
+                reply_markup=keyboard
+            )
+        except Exception:
+            pass
 
     async def handle_answer(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle answer selection callback."""
@@ -71,25 +81,30 @@ class CallbackHandlers(BaseHandler):
         await query.answer()
         
         user_id = query.from_user.id
-        chat_id = query.message.chat_id
-        
-        # Get current question data
         questions = self.get_user_data(context).get('questions', [])
         current_index = self.get_user_data(context).get('current_question_index', 0)
         
         if not questions or current_index >= len(questions):
             logging.error(f"No questions found for user {user_id}")
-            await query.message.edit_text(
-                "Произошла ошибка. Пожалуйста, начните тест заново.",
-                reply_markup=build_topic_selection_keyboard()
-            )
+            try:
+                await query.message.edit_text(
+                    "Произошла ошибка. Пожалуйста, начните тест заново.",
+                    reply_markup=build_topic_selection_keyboard()
+                )
+            except Exception:
+                pass
             return
             
         question = questions[current_index]
-        selected_answer = query.data.replace('answer_', '')
-        
-        # Check if answer is correct
-        is_correct = selected_answer == question['correct_answer']
+        # Получаем индекс выбранного ответа
+        try:
+            selected_index = int(query.data.replace('ans_', '').split('_')[0])
+        except Exception:
+            selected_index = -1
+        options = question[3]
+        correct_answer = question[1]
+        selected_answer = options[selected_index] if 0 <= selected_index < len(options) else None
+        is_correct = selected_answer == correct_answer
         
         # Store result
         self.db.add_test_result(
@@ -111,27 +126,36 @@ class CallbackHandlers(BaseHandler):
         # Show result
         result_text = (
             f"{'✅ Правильно!' if is_correct else '❌ Неправильно!'}\n\n"
-            f"Правильный ответ: {question['correct_answer']}\n"
-            f"Объяснение: {question['explanation']}"
+            f"Правильный ответ: {correct_answer}\n"
+            f"Объяснение: {question[2]}"
         )
         
         # If this was the last question, show final results
         if current_index == len(questions) - 1:
-            keyboard = build_results_keyboard()
-            await query.message.edit_text(
-                f"{result_text}\n\nТест завершен! Нажмите 'Показать результаты' для просмотра итогов.",
-                reply_markup=keyboard
-            )
+            # Тест завершён, сбрасываем активность
+            self.db.set_user_inactive(user_id)
+            self.clear_user_data(context)
+            keyboard = build_results_keyboard([], self.get_user_data(context).get('current_topic', ''))
+            try:
+                await query.message.edit_text(
+                    f"{result_text}\n\nТест завершен! Нажмите 'Показать результаты' для просмотра итогов.",
+                    reply_markup=keyboard
+                )
+            except Exception:
+                pass
         else:
             # Move to next question
             next_index = current_index + 1
             self.set_user_data(context, 'current_question_index', next_index)
             
             keyboard = build_continue_keyboard()
-            await query.message.edit_text(
-                f"{result_text}\n\nНажмите 'Продолжить' для следующего вопроса.",
-                reply_markup=keyboard
-            )
+            try:
+                await query.message.edit_text(
+                    f"{result_text}\n\nНажмите 'Продолжить' для следующего вопроса.",
+                    reply_markup=keyboard
+                )
+            except Exception:
+                pass
 
     async def handle_continue(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle continue button callback."""
@@ -143,19 +167,25 @@ class CallbackHandlers(BaseHandler):
         
         if not questions or current_index >= len(questions):
             logging.error("No questions found or invalid index")
-            await query.message.edit_text(
-                "Произошла ошибка. Пожалуйста, начните тест заново.",
-                reply_markup=build_topic_selection_keyboard()
-            )
+            try:
+                await query.message.edit_text(
+                    "Произошла ошибка. Пожалуйста, начните тест заново.",
+                    reply_markup=build_topic_selection_keyboard()
+                )
+            except Exception:
+                pass
             return
             
         question = questions[current_index]
-        keyboard = build_question_keyboard(current_index, len(questions))
+        keyboard = build_question_keyboard(question[3], current_index, current_index, len(questions))
         
-        await query.message.edit_text(
-            f"Вопрос {current_index + 1} из {len(questions)}:\n\n{question['question']}",
-            reply_markup=keyboard
-        )
+        try:
+            await query.message.edit_text(
+                f"Вопрос {current_index + 1} из {len(questions)}:\n\n{question[0]}",
+                reply_markup=keyboard
+            )
+        except Exception:
+            pass
 
     async def handle_show_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle show results callback."""
