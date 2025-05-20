@@ -70,7 +70,11 @@ class QuestionService:
         new_tasks = []
         
         # Generate tasks in parallel
-        generation_tasks = [self.ai_service.generate_task(topic) for _ in range(remaining)]
+        loop = asyncio.get_running_loop()
+        generation_tasks = [
+            loop.run_in_executor(None, self.ai_service.generate_task, topic)
+            for _ in range(remaining)
+        ]
         results = await asyncio.gather(*generation_tasks, return_exceptions=True)
         
         for result in results:
