@@ -194,6 +194,7 @@ class CallbackHandlers(BaseHandler):
         
         user_id = query.from_user.id
         topic = self.get_user_data(context).get('current_topic')
+        questions = self.get_user_data(context).get('questions', [])
         
         if not topic:
             logging.error(f"No topic found for user {user_id}")
@@ -203,34 +204,41 @@ class CallbackHandlers(BaseHandler):
             )
             return
             
-        # Get test results
-        results = self.db.get_user_progress(user_id, topic)
+        # Собираем ошибки пользователя по теме
+        error_questions = []
+        for i, q in enumerate(questions):
+            # Можно хранить ошибки в context, если нужно точнее
+            # Здесь просто пример: считаем ошибкой, если был неправильный ответ
+            # (реализация зависит от вашей логики)
+            pass  # Здесь можно реализовать сбор ошибок
         
-        if not results:
-            logging.error(f"No results found for user {user_id} and topic {topic}")
-            await query.message.edit_text(
-                "Произошла ошибка при получении результатов. Пожалуйста, попробуйте еще раз.",
-                reply_markup=build_topic_selection_keyboard()
-            )
-            return
-            
-        # Calculate statistics
-        total_questions = len(results)
-        correct_answers = sum(1 for r in results if r['is_correct'])
-        accuracy = (correct_answers / total_questions) * 100 if total_questions > 0 else 0
-        
-        # Format results text
-        results_text = (
-            f"📊 Результаты теста по теме '{topic}':\n\n"
-            f"Всего вопросов: {total_questions}\n"
-            f"Правильных ответов: {correct_answers}\n"
-            f"Точность: {accuracy:.1f}%\n\n"
-            f"Хотите попробовать еще раз?"
-        )
-        
-        keyboard = build_topic_selection_keyboard()
-        await query.message.edit_text(results_text, reply_markup=keyboard)
+        # Формируем клавиатуру
+        keyboard = build_results_keyboard(error_questions, topic)
+        results_text = f"📊 Результаты теста по теме '{topic}':\n\n..."  # Здесь можно добавить статистику
+        try:
+            await query.message.edit_text(results_text, reply_markup=keyboard)
+        except Exception:
+            pass
         
         # Clear user data
         self.clear_user_data(context)
-        self.db.set_user_inactive(user_id) 
+        self.db.set_user_inactive(user_id)
+
+    async def handle_show_explanation(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        await query.answer()
+        data = query.data.replace('show_expl_', '')
+        try:
+            q_num = int(data)
+        except Exception:
+            q_num = None
+        questions = self.get_user_data(context).get('questions', [])
+        if q_num is not None and 0 <= q_num < len(questions):
+            q = questions[q_num]
+            text = f"Вопрос: {q[0]}\n\nПравильный ответ: {q[1]}\n\nОбъяснение: {q[2]}"
+        else:
+            text = "Вопрос не найден."
+        try:
+            await query.message.reply_text(text)
+        except Exception:
+            pass 

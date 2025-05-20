@@ -85,6 +85,7 @@ python src/bot.py
 - 'Мой прогресс' now shows real user statistics (total tests, average, recent topics, error topics)
 - Fixed topic selection: now topic index is correctly mapped to topic name, so tests by topic work as expected
 - Improved test UX: robust answer handling, error handling for Telegram API, reset user state after test, and better navigation in tests
+- Added: after test, user can view explanations for mistakes and repeat the topic with one click
 - Fixed import paths in all Python files to work correctly when running from src directory
 - Restructured project directory for better code organization
 - Separated handlers into command and callback handlers

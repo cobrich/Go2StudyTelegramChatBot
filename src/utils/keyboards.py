@@ -46,9 +46,9 @@ def build_results_keyboard(errors_list: list, current_topic: str) -> InlineKeybo
     buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]]
     
     if errors_list:
-        for i, err in enumerate(errors_list):
+        for err in errors_list:
             buttons.append([InlineKeyboardButton(
-                f"Показать объяснение к вопросу {err['q_num']}",
+                f"Показать объяснение к вопросу {err['q_num']+1}",
                 callback_data=f"show_expl_{err['q_num']}"
             )])
     else:
