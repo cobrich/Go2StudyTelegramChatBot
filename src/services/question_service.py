@@ -35,7 +35,8 @@ class QuestionService:
                     task['question'],
                     task['answer'],
                     task['explanation'],
-                    task['incorrect_options'] or []
+                    task['incorrect_options'] or [],
+                    'db'  # источник: база данных
                 ))
                 existing_question_texts_to_exclude.add(task['question'])
                 if len(tasks) >= needed:
@@ -55,7 +56,8 @@ class QuestionService:
                         task['question'],
                         task['answer'],
                         task['explanation'],
-                        task['incorrect_options'] or []
+                        task['incorrect_options'] or [],
+                        'db'  # источник: база данных
                     ))
                     existing_question_texts_to_exclude.add(task['question'])
                     if len(tasks) >= needed:
@@ -84,7 +86,7 @@ class QuestionService:
             if result:
                 question, correct_answer, incorrect_options, explanation = result
                 if question not in existing_question_texts_to_exclude:
-                    new_tasks.append((question, correct_answer, explanation, incorrect_options))
+                    new_tasks.append((question, correct_answer, explanation, incorrect_options, 'ai'))
                     existing_question_texts_to_exclude.add(question)
         
         # Combine existing and new tasks

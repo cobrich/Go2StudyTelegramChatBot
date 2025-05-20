@@ -65,11 +65,13 @@ class CallbackHandlers(BaseHandler):
         
         # Display first question
         question = questions[0]
+        source = question[4] if len(question) > 4 else 'db'
+        source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         keyboard = build_question_keyboard(question[3], 0, 0, len(questions))
         
         try:
             await query.message.edit_text(
-                f"Вопрос 1 из {len(questions)}:\n\n{question[0]}",
+                f"Вопрос 1 из {len(questions)} {source_text}:\n\n{question[0]}",
                 reply_markup=keyboard
             )
         except Exception:
@@ -96,6 +98,8 @@ class CallbackHandlers(BaseHandler):
             return
             
         question = questions[current_index]
+        source = question[4] if len(question) > 4 else 'db'
+        source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         # Получаем индекс выбранного ответа
         try:
             selected_index = int(query.data.replace('ans_', '').split('_')[0])
@@ -127,7 +131,8 @@ class CallbackHandlers(BaseHandler):
         result_text = (
             f"{'✅ Правильно!' if is_correct else '❌ Неправильно!'}\n\n"
             f"Правильный ответ: {correct_answer}\n"
-            f"Объяснение: {question[2]}"
+            f"Объяснение: {question[2]}\n"
+            f"Источник: {source_text}"
         )
         
         # If this was the last question, show final results
@@ -177,11 +182,13 @@ class CallbackHandlers(BaseHandler):
             return
             
         question = questions[current_index]
+        source = question[4] if len(question) > 4 else 'db'
+        source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         keyboard = build_question_keyboard(question[3], current_index, current_index, len(questions))
         
         try:
             await query.message.edit_text(
-                f"Вопрос {current_index + 1} из {len(questions)}:\n\n{question[0]}",
+                f"Вопрос {current_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}",
                 reply_markup=keyboard
             )
         except Exception:
@@ -235,7 +242,9 @@ class CallbackHandlers(BaseHandler):
         questions = self.get_user_data(context).get('questions', [])
         if q_num is not None and 0 <= q_num < len(questions):
             q = questions[q_num]
-            text = f"Вопрос: {q[0]}\n\nПравильный ответ: {q[1]}\n\nОбъяснение: {q[2]}"
+            source = q[4] if len(q) > 4 else 'db'
+            source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
+            text = f"Вопрос: {q[0]}\n\nПравильный ответ: {q[1]}\n\nОбъяснение: {q[2]}\n\nИсточник: {source_text}"
         else:
             text = "Вопрос не найден."
         try:
