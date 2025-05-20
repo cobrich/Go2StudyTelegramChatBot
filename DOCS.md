@@ -171,4 +171,17 @@ Users can select their preferred language when starting the bot. The language ca
 - Performance analytics
 - Topic-based question organization
 - Support for additional languages
-- Better handling of mixed-language content 
+- Better handling of mixed-language content
+
+### [2024-06-09] Обновление списка обрабатываемых файлов
+
+- Удален файл Абай_рус.pdf из списка обрабатываемых PDF файлов
+- Теперь обрабатываются только основные математические тесты:
+  - Колич характ (рус).pdf
+  - Математика,_10_вариантов,_на_русском.pdf
+  - Математика, 10 нуска, казакша.pdf
+
+### [2024-06-09] Удаление лишних тестовых файлов
+
+- Удален файл test_pdf_processor_final2.py, так как он был дублирующим и больше не нужен
+- Оставлены только основные тестовые файлы для обработки PDF 

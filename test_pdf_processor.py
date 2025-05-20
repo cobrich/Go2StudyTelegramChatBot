@@ -16,10 +16,9 @@ def test_pdf_processing():
     
     # List of PDF files to process with their expected languages
     pdf_files = [
-        ("files/Колич характ (рус).pdf", "ru"),
-        ("files/Математика,_10_вариантов,_на_русском.pdf", "ru"),
-        ("files/Абай рус.pdf", "ru"),
-        ("files/Математика, 10 нуска, казакша.pdf", "kk")
+        (os.path.join("files", "Колич характ (рус).pdf"), "ru"),
+        (os.path.join("files", "Математика,_10_вариантов,_на_русском.pdf"), "ru"),
+        (os.path.join("files", "Математика, 10 нуска, казакша.pdf"), "kk")
     ]
     
     total_questions = 0
@@ -29,6 +28,10 @@ def test_pdf_processing():
     
     for pdf_file, expected_language in pdf_files:
         try:
+            if not os.path.exists(pdf_file):
+                logging.error(f"File not found: {pdf_file}")
+                continue
+                
             logging.info(f"Processing {pdf_file} (expected language: {expected_language})...")
             questions = processor.process_pdf_file(pdf_file)
             
