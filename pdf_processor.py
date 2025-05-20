@@ -1,178 +1,172 @@
 import os
 import logging
-from typing import List, Dict, Optional
 import fitz  # PyMuPDF
 import re
 from PIL import Image
-import io
+from typing import List, Dict
 
 class PDFProcessor:
     def __init__(self, output_dir: str = "question_images"):
         self.output_dir = output_dir
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Регулярные выражения для определения типа вопроса
-        self.test_question_patterns = {
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            
+        # Regular expressions for test questions
+        self.test_patterns = {
             'ru': [
-                r'Выберите правильный ответ',
-                r'Укажите правильный ответ',
-                r'Выберите верный ответ',
-                r'Какой ответ верный',
-                r'Какой из ответов правильный'
+                r'^\d+[\.\)]\s*[А-Я]',  # Russian numbering with letter
+                r'^\d+[\.\)]\s*[A-Z]',  # Russian numbering with Latin letter
+                r'^\d+[\.\)]\s*[а-я]',  # Russian numbering with lowercase letter
             ],
             'kk': [
-                r'Дұрыс жауапты таңдаңыз',
-                r'Дұрыс жауабын көрсетіңіз',
-                r'Дұрыс жауапты белгілеңіз',
-                r'Қай жауап дұрыс',
-                r'Қайсы жауап дұрыс'
+                r'^\d+[\.\)]\s*[А-Я]',  # Kazakh numbering with letter
+                r'^\d+[\.\)]\s*[A-Z]',  # Kazakh numbering with Latin letter
+                r'^\d+[\.\)]\s*[а-я]',  # Kazakh numbering with lowercase letter
             ]
         }
         
+        # Regular expressions for quantitative questions
         self.quantitative_patterns = {
             'ru': [
-                r'Сравните величины',
-                r'Какая величина больше',
-                r'Какая величина меньше',
-                r'Укажите соотношение'
+                r'[А-Я]\.\s*[А-Я]',  # Russian letter comparison
+                r'[A-Z]\.\s*[A-Z]',  # Latin letter comparison
             ],
             'kk': [
-                r'Шамаларды салыстырыңыз',
-                r'Қай шама үлкен',
-                r'Қай шама кіші',
-                r'Қатынасты көрсетіңіз'
+                r'[А-Я]\.\s*[А-Я]',  # Kazakh letter comparison
+                r'[A-Z]\.\s*[A-Z]',  # Latin letter comparison
             ]
         }
 
-    def detect_language(self, text: str) -> str:
-        """Определяет язык текста на основе кириллицы и казахских символов"""
-        kazakh_chars = set('әіңғүұқөһӘІҢҒҮҰҚӨҺ')
-        text_chars = set(text)
-        if kazakh_chars.intersection(text_chars):
+    def detect_language(self, text: str, filename: str) -> str:
+        """Detect language based on filename and content."""
+        # Check filename first
+        if any(keyword in filename.lower() for keyword in ['казакша', 'казахша', 'нуска']):
             return 'kk'
+            
+        # Check content for Kazakh characters
+        kazakh_chars = set('әіңғүұқөһӘІҢҒҮҰҚӨҺ')
+        if any(char in text for char in kazakh_chars):
+            return 'kk'
+            
         return 'ru'
 
     def is_test_question(self, text: str, language: str) -> bool:
-        """Определяет, является ли вопрос тестовым"""
-        patterns = self.test_question_patterns.get(language, [])
-        return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+        """Check if the text matches test question patterns."""
+        return any(re.match(pattern, text.strip()) for pattern in self.test_patterns[language])
 
     def is_quantitative_question(self, text: str, language: str) -> bool:
-        """Определяет, является ли вопрос количественным"""
-        patterns = self.quantitative_patterns.get(language, [])
-        return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+        """Check if the text matches quantitative question patterns."""
+        return any(re.search(pattern, text) for pattern in self.quantitative_patterns[language])
 
     def extract_questions_from_pdf(self, pdf_path: str) -> List[Dict]:
-        """Извлекает вопросы из PDF файла"""
+        """Extract questions from PDF file."""
         questions = []
-        doc = fitz.open(pdf_path)
-        
-        # Определяем язык документа по имени файла
-        filename = os.path.basename(pdf_path).lower()
-        language = 'kk' if 'казакша' in filename or 'казахша' in filename or 'нуска' in filename else 'ru'
-        
         current_question = None
-        current_text = []
+        language = 'ru'  # Default language
         
-        for page in doc:
-            text = page.get_text()
-            lines = text.split('\n')
-            
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
+        try:
+            doc = fitz.open(pdf_path)
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                text = page.get_text()
                 
-                # Проверяем, является ли строка началом нового вопроса
-                if re.match(r'^\d+[\.\)]', line) or re.match(r'^[А-Я]\.', line):
-                    if current_question:
-                        current_question['text'] = '\n'.join(current_text)
-                        questions.append(current_question)
-                    
-                    current_question = {
-                        'text': '',
-                        'type': 'unknown',
-                        'language': language,
-                        'page_number': page.number + 1,
-                        'image_paths': []
-                    }
-                    current_text = [line]
-                else:
-                    if current_question:
-                        current_text.append(line)
-        
-        # Добавляем последний вопрос
-        if current_question:
-            current_question['text'] = '\n'.join(current_text)
-            questions.append(current_question)
-        
-        # Определяем тип каждого вопроса
-        for question in questions:
-            text = question['text']
-            if self.is_test_question(text, language):
-                question['type'] = 'test'
-            elif self.is_quantitative_question(text, language):
-                question['type'] = 'quantitative'
-        
-        return questions
+                # Detect language from first page
+                if page_num == 0:
+                    language = self.detect_language(text, os.path.basename(pdf_path))
+                
+                # Split text into lines and process
+                lines = text.split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                        
+                    # Check if this is a new question
+                    if self.is_test_question(line, language) or self.is_quantitative_question(line, language):
+                        if current_question:
+                            questions.append(current_question)
+                        current_question = {
+                            'text': line,
+                            'type': 'quantitative' if self.is_quantitative_question(line, language) else 'test',
+                            'language': language,
+                            'image_paths': []
+                        }
+                    elif current_question:
+                        current_question['text'] += '\n' + line
+                        
+            # Add the last question if exists
+            if current_question:
+                questions.append(current_question)
+                
+            # Extract images for each question
+            for question in questions:
+                question['image_paths'] = self.extract_images_for_question(pdf_path, question)
+                
+            return questions
+            
+        except Exception as e:
+            logging.error(f"Error extracting questions from {pdf_path}: {e}")
+            return []
 
     def extract_images_for_question(self, pdf_path: str, question: Dict) -> List[str]:
-        """Извлекает изображения для вопроса"""
+        """Extract images associated with a question."""
         image_paths = []
-        doc = fitz.open(pdf_path)
-        page = doc[question['page_number'] - 1]
-        
-        # Получаем все изображения на странице
-        image_list = page.get_images()
-        
-        for img_index, img in enumerate(image_list):
-            xref = img[0]
-            base_image = doc.extract_image(xref)
-            image_bytes = base_image["image"]
+        try:
+            doc = fitz.open(pdf_path)
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                image_list = page.get_images()
+                
+                for img_index, img in enumerate(image_list):
+                    xref = img[0]
+                    base_image = doc.extract_image(xref)
+                    image_bytes = base_image["image"]
+                    
+                    # Generate unique filename
+                    image_filename = f"q_{len(image_paths)}_{os.path.basename(pdf_path)}_{page_num}_{img_index}.png"
+                    image_path = os.path.join(self.output_dir, image_filename)
+                    
+                    # Save image
+                    with open(image_path, "wb") as img_file:
+                        img_file.write(image_bytes)
+                        
+                    image_paths.append(image_path)
+                    
+            return image_paths
             
-            # Сохраняем изображение
-            image_filename = f"q_{len(image_paths)}_{os.path.basename(pdf_path)}.png"
-            image_path = os.path.join(self.output_dir, image_filename)
-            
-            with open(image_path, "wb") as image_file:
-                image_file.write(image_bytes)
-            
-            image_paths.append(image_path)
-        
-        return image_paths
+        except Exception as e:
+            logging.error(f"Error extracting images from {pdf_path}: {e}")
+            return []
 
     def process_pdf_file(self, pdf_path: str) -> List[Dict]:
-        """Обрабатывает PDF файл и извлекает вопросы с изображениями"""
-        questions = self.extract_questions_from_pdf(pdf_path)
-        
-        for question in questions:
-            try:
-                image_paths = self.extract_images_for_question(pdf_path, question)
-                question['image_paths'] = image_paths
-            except Exception as e:
-                logging.error(f"Error extracting images for question: {e}")
-                question['image_paths'] = []
-        
-        return questions
+        """Process a PDF file and extract questions with images."""
+        try:
+            if not os.path.exists(pdf_path):
+                raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+                
+            questions = self.extract_questions_from_pdf(pdf_path)
+            return questions
+            
+        except Exception as e:
+            logging.error(f"Error processing {pdf_path}: {e}")
+            return []
 
 def main():
-    # Пример использования
+    # Example usage
     processor = PDFProcessor()
     pdf_files = [
-        "files/Колич характ (рус).pdf",
-        "files/Математика,_10_вариантов,_на_русском.pdf",
-        "files/Абай рус.pdf",
-        "files/Математика, 10 нуска, казакша.pdf"
+        os.path.join("files", "Колич характ (рус).pdf"),
+        os.path.join("files", "Математика,_10_вариантов,_на_русском.pdf"),
+        os.path.join("files", "Абай рус.pdf"),
+        os.path.join("files", "Математика, 10 нуска, казакша.pdf")
     ]
     
     for pdf_file in pdf_files:
-        try:
+        if os.path.exists(pdf_file):
             questions = processor.process_pdf_file(pdf_file)
-            print(f"Processed {len(questions)} questions from {pdf_file}")
-            for q in questions:
-                print(f"Question type: {q['type']}, Language: {q['language']}, Images: {len(q['image_paths'])}")
-        except Exception as e:
-            print(f"Error processing {pdf_file}: {e}")
+            print(f"Processed {pdf_file}: {len(questions)} questions found")
+        else:
+            print(f"File not found: {pdf_file}")
 
 if __name__ == "__main__":
     main() 

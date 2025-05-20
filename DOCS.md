@@ -2,46 +2,84 @@
 
 ## Recent Changes
 
-### PDF Processor Updates (2024-03-XX)
-- Enhanced language detection for Kazakh and Russian files
-- Added support for Kazakh-specific question patterns
-- Improved file naming detection for language identification
-- Added language-specific statistics tracking
-- Updated test script to handle language-specific files
+### PDF Processor Updates
+- Improved file path handling with `os.path.join` for better cross-platform compatibility
+- Enhanced language detection based on both filename and content
+- Updated question type detection patterns for both Russian and Kazakh
+- Improved image extraction with unique filenames including page numbers
+- Added better error handling and logging
+- Fixed file path issues with spaces in filenames
 
 ### Language Support
-- The bot now correctly identifies and processes both Russian and Kazakh files
-- Language detection based on:
-  - Filename patterns (e.g., "казакша", "нуска" for Kazakh)
+- Enhanced detection of Kazakh language using:
+  - Filename keywords: 'казакша', 'казахша', 'нуска'
   - Content analysis for Kazakh characters
-  - Default to Russian if no Kazakh indicators found
-- Questions are properly categorized by language in the database
+- Improved Russian language detection for remaining files
 
-### Question Types
-- Test questions (multiple choice)
-- Quantitative questions (comparison-based)
-- Support for questions with images
-- Automatic categorization of questions by type
-- Language-specific pattern matching for question types
-
-### Test Modes
-1. Regular Test Mode
-   - Questions from the database
-   - Random selection
-   - Progress tracking
-   - Language-specific question delivery
-
-2. Error-Focused Test Mode
-   - Questions based on previous mistakes
-   - Topic-specific practice
-   - Performance analytics
-   - Language-specific error tracking
+### Question Type Detection
+- Updated patterns for test questions:
+  - Numbered questions with letters (both Russian and Latin)
+  - Case-sensitive pattern matching
+- Enhanced quantitative question detection:
+  - Letter comparison patterns
+  - Support for both languages
 
 ### Image Handling
+- Improved image extraction with unique filenames
+- Added page number to image filenames for better organization
+- Enhanced error handling for image processing
+
+## Features
+
+### Language Support
+- Support for Russian ('ru') and Kazakh ('kk') languages
+- Automatic language detection based on:
+  - Filename analysis
+  - Content analysis
+  - Character set detection
+
+### Question Types
+- Test questions:
+  - Numbered questions with letter options
+  - Support for both Russian and Latin letters
+- Quantitative questions:
+  - Letter comparison questions
+  - Support for both languages
+
+### Image Processing
 - Automatic extraction of images from PDFs
-- Storage of image paths in database
-- Support for questions with and without images
-- Language-specific image association
+- Unique image filenames including:
+  - Question number
+  - Original PDF filename
+  - Page number
+  - Image index
+- Organized storage in `question_images` directory
+
+## Usage
+
+### Processing PDF Files
+```python
+processor = PDFProcessor()
+questions = processor.process_pdf_file("path/to/file.pdf")
+```
+
+### Language Detection
+```python
+language = processor.detect_language(text, filename)
+```
+
+### Question Type Detection
+```python
+is_test = processor.is_test_question(text, language)
+is_quantitative = processor.is_quantitative_question(text, language)
+```
+
+## Future Improvements
+- Add support for more question types
+- Enhance language detection accuracy
+- Improve image quality and processing
+- Add support for more file formats
+- Implement parallel processing for large files
 
 ## Database Schema
 
