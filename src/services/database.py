@@ -3,7 +3,7 @@ import logging
 from typing import List, Dict, Any, Optional, Tuple
 
 class Database:
-    def __init__(self, db_path: str = "/home/bekzat/Documents/works/go2study_bot/math_bot.db"):
+    def __init__(self, db_path: str = "../../math_bot.db"):
         self.db_path = db_path
         self._init_db()
 
