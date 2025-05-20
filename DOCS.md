@@ -1,3 +1,12 @@
+# Go2Study Bot Documentation
+
+## Recent Changes
+
+### Database Schema Update (2024-05-20)
+- Recreated the tasks table to ensure proper support for image-based questions
+- Added support for storing image paths and quantitative characteristics
+- Fixed issue with missing image_path column in tasks table
+
 ## Новые типы вопросов и поддержка изображений
 
 ### Добавлена поддержка двух типов вопросов:

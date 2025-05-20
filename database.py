@@ -71,9 +71,12 @@ class Database:
             FOREIGN KEY (user_id) REFERENCES users (user_id)
         )''')
         
-        # Обновленная таблица задач с поддержкой изображений и количественных характеристик
+        # Drop existing tasks table if it exists
+        cursor.execute('DROP TABLE IF EXISTS tasks')
+        
+        # Recreate tasks table with all required columns
         cursor.execute('''
-        CREATE TABLE IF NOT EXISTS tasks (
+        CREATE TABLE tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             question TEXT,
             answer TEXT,
