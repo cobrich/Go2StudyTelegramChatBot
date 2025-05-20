@@ -112,16 +112,34 @@ class CommandHandlers(BaseHandler):
 
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         text = update.message.text.strip()
+        user_id = update.effective_user.id
         if text == "📚 Выбрать тему и начать":
             await update.message.reply_text(
                 "Выберите тему:",
                 reply_markup=build_topic_selection_keyboard()
             )
         elif text == "📊 Мой прогресс":
-            await update.message.reply_text(
-                "Пока функция прогресса не реализована.",
-                reply_markup=self.main_menu_markup
-            )
+            total_tests, avg_percentage = self.db.get_user_progress(user_id)
+            recent_topics = self.db.get_recent_topics(user_id, limit=5)
+            error_topics = self.db.get_error_topics(user_id)
+
+            progress_text = f"📊 Ваш прогресс:\n\n"
+            progress_text += f"Всего тестов: {total_tests}\n"
+            progress_text += f"Средний результат: {avg_percentage:.1f}%\n\n"
+
+            if recent_topics:
+                progress_text += "Последние темы и результаты:\n"
+                for topic, percent, timestamp in recent_topics:
+                    progress_text += f"- {topic}: {percent:.1f}% ({timestamp})\n"
+                progress_text += "\n"
+            if error_topics:
+                progress_text += "Темы с ошибками:\n"
+                for topic, count in error_topics:
+                    progress_text += f"- {topic}: {count} ошибок\n"
+            else:
+                progress_text += "Ошибок не найдено!\n"
+
+            await update.message.reply_text(progress_text, reply_markup=self.main_menu_markup)
         elif text == "❓ Помощь":
             await update.message.reply_text(HELP_TEXT, reply_markup=self.main_menu_markup)
         else:
