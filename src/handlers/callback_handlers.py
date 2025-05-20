@@ -71,7 +71,7 @@ class CallbackHandlers(BaseHandler):
         
         try:
             await query.message.edit_text(
-                f"Вопрос 1 из {len(questions)} {source_text}:\n\n{question[0]}",
+                f"Тема: {topic}\nВопрос 1 из {len(questions)} {source_text}:\n\n{question[0]}",
                 reply_markup=keyboard
             )
         except Exception:
@@ -188,7 +188,7 @@ class CallbackHandlers(BaseHandler):
         
         try:
             await query.message.edit_text(
-                f"Вопрос {current_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}",
+                f"Тема: {question['topic']}\nВопрос {current_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}",
                 reply_markup=keyboard
             )
         except Exception:
