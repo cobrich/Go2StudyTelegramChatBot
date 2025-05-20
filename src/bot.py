@@ -38,6 +38,9 @@ def main() -> None:
     # Add command handlers
     application.add_handler(CommandHandler("start", command_handlers.start))
     application.add_handler(CommandHandler("stop", command_handlers.stop))
+
+    # Add text message handler for ReplyKeyboardMarkup
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, command_handlers.handle_text))
     
     # Add callback query handlers
     application.add_handler(CallbackQueryHandler(

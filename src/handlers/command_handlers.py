@@ -2,7 +2,8 @@ from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 import logging
 from handlers.base_handler import BaseHandler
-from utils.keyboards import get_main_menu_markup
+from utils.keyboards import get_main_menu_markup, build_topic_selection_keyboard
+from config.constants import HELP_TEXT
 
 class CommandHandlers(BaseHandler):
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -107,4 +108,21 @@ class CommandHandlers(BaseHandler):
             await context.bot.send_message(
                 chat_id=chat_id,
                 text="Произошла ошибка при удалении ваших данных. Пожалуйста, попробуйте еще раз или свяжитесь с администратором, если проблема сохранится."
-            ) 
+            )
+
+    async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        text = update.message.text.strip()
+        if text == "📚 Выбрать тему и начать":
+            await update.message.reply_text(
+                "Выберите тему:",
+                reply_markup=build_topic_selection_keyboard()
+            )
+        elif text == "📊 Мой прогресс":
+            await update.message.reply_text(
+                "Пока функция прогресса не реализована.",
+                reply_markup=self.main_menu_markup
+            )
+        elif text == "❓ Помощь":
+            await update.message.reply_text(HELP_TEXT, reply_markup=self.main_menu_markup)
+        else:
+            await update.message.reply_text("Пожалуйста, выберите действие из меню.", reply_markup=self.main_menu_markup) 

@@ -81,6 +81,7 @@ python src/bot.py
 
 ## Recent Changes
 - Added missing Update import in bot.py for proper telegram updates handling
+- Added text message handler (handle_text) for ReplyKeyboardMarkup main menu buttons, so menu actions now work as expected
 - Fixed import paths in all Python files to work correctly when running from src directory
 - Restructured project directory for better code organization
 - Separated handlers into command and callback handlers
