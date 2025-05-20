@@ -4,26 +4,26 @@
 Go2Study Bot is a Telegram bot designed to help students learn mathematics through interactive tests and quizzes. The bot provides a structured learning experience with immediate feedback and explanations.
 
 ## Project Structure
+The project follows a modular architecture with clear separation of concerns:
+
 ```
 go2study_bot/
 ├── src/
+│   ├── bot.py                 # Main bot entry point
 │   ├── config/
-│   │   └── constants.py         # Configuration and constants
+│   │   └── constants.py       # Configuration constants
 │   ├── handlers/
-│   │   ├── base_handler.py     # Base handler class
-│   │   ├── command_handlers.py # Command handlers (/start, /stop)
-│   │   └── callback_handlers.py # Callback query handlers
+│   │   ├── base_handler.py    # Base handler class
+│   │   ├── callback_handlers.py # Callback query handlers
+│   │   └── command_handlers.py # Command handlers
 │   ├── services/
-│   │   ├── database.py         # Database operations
-│   │   ├── ai_service.py       # AI question generation
-│   │   └── question_service.py # Question management
-│   ├── utils/
-│   │   └── keyboards.py        # Keyboard utilities
-│   └── bot.py                  # Main bot file
-├── files/                      # Additional files
-├── question_images/           # Question-related images
-├── requirements.txt           # Project dependencies
-└── DOCS.md                    # This documentation file
+│   │   ├── ai_service.py      # AI question generation service
+│   │   ├── database.py        # Database management
+│   │   └── question_service.py # Question management service
+│   └── utils/
+│       └── keyboards.py       # Keyboard utilities
+├── question_images/           # Directory for question images
+└── DOCS.md                   # Project documentation
 ```
 
 ## Features
@@ -80,25 +80,12 @@ python src/bot.py
 ```
 
 ## Recent Changes
-
-### Project Restructuring
-- Reorganized code into logical modules
-- Separated concerns into different services
-- Improved code maintainability
-- Enhanced error handling
-
-### New Features
-- Improved question generation using AI
-- Better error tracking and analysis
-- Enhanced user progress monitoring
-- More detailed explanations for answers
-
-### Technical Improvements
-- Modular architecture
-- Better separation of concerns
-- Improved error handling
-- Enhanced logging
-- More efficient database operations
+- Restructured project directory for better code organization
+- Separated handlers into command and callback handlers
+- Created dedicated services for AI, database, and question management
+- Added keyboard utilities for better user interaction
+- Implemented configuration management
+- Added comprehensive documentation
 
 ## Usage
 
@@ -112,7 +99,7 @@ python src/bot.py
 - ❓ Помощь - Show help information
 
 ## Contributing
-Please read CONTRIBUTING.md for details on our code of conduct and the process for submitting pull requests.
+Please follow the established project structure when adding new features or making changes.
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.
