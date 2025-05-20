@@ -4,6 +4,9 @@ import fitz  # PyMuPDF
 import re
 from PIL import Image
 from typing import List, Dict
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+from services.database import Database
 
 class PDFProcessor:
     def __init__(self, output_dir: str = "question_images"):
@@ -151,20 +154,66 @@ class PDFProcessor:
             logging.error(f"Error processing {pdf_path}: {e}")
             return []
 
+def add_questions_to_db(questions: List[Dict], db: Database, topic: str):
+    """Добавить вопросы в базу данных, если их там ещё нет (по тексту)."""
+    with open('added_questions.log', 'a', encoding='utf-8') as logf:
+        for q in questions:
+            question_text = q['text'].strip()
+            # Проверка на уникальность по тексту
+            exists = db.get_explanation_by_question_text(question_text)
+            if exists:
+                continue
+            db_path = db.db_path if hasattr(db, 'db_path') else 'math_bot.db'
+            # answer, explanation, incorrect_options можно доработать вручную или парсить из PDF
+            db_question = {
+                'topic': topic,
+                'question': question_text,
+                'answer': '',  # TODO: заполнить вручную или парсить
+                'explanation': '',  # TODO: заполнить вручную или парсить
+                'incorrect_options': '',  # TODO: заполнить вручную или парсить
+                'question_type': q.get('type', 'standard')
+            }
+            with db_conn(db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO questions (topic, question, answer, explanation, incorrect_options, question_type)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (db_question['topic'], db_question['question'], db_question['answer'], db_question['explanation'], db_question['incorrect_options'], db_question['question_type']))
+                conn.commit()
+            logf.write(f"Added: {question_text}\n")
+
+def db_conn(db_path):
+    import sqlite3
+    return sqlite3.connect(db_path)
+
 def main():
-    # Example usage
     processor = PDFProcessor()
+    db = Database()
     pdf_files = [
         os.path.join("files", "Колич характ (рус).pdf"),
         os.path.join("files", "Математика,_10_вариантов,_на_русском.pdf"),
-        os.path.join("files", "Абай рус.pdf"),
         os.path.join("files", "Математика, 10 нуска, казакша.pdf")
     ]
-    
     for pdf_file in pdf_files:
         if os.path.exists(pdf_file):
             questions = processor.process_pdf_file(pdf_file)
             print(f"Processed {pdf_file}: {len(questions)} questions found")
+            # Определяем тему по имени файла или вручную
+            if 'дроб' in pdf_file.lower():
+                topic = 'Дроби'
+            elif 'процент' in pdf_file.lower():
+                topic = 'Проценты'
+            elif 'пропорц' in pdf_file.lower():
+                topic = 'Пропорции'
+            elif 'уравн' in pdf_file.lower():
+                topic = 'Уравнения'
+            elif 'геом' in pdf_file.lower():
+                topic = 'Геометрия'
+            elif 'логик' in pdf_file.lower():
+                topic = 'Логика'
+            else:
+                topic = 'Математика'
+            add_questions_to_db(questions, db, topic)
         else:
             print(f"File not found: {pdf_file}")
 
