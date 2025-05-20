@@ -71,7 +71,7 @@ class Database:
             FOREIGN KEY (user_id) REFERENCES users (user_id)
         )''')
         
-        # Таблица задач
+        # Обновленная таблица задач с поддержкой изображений и количественных характеристик
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,7 +80,12 @@ class Database:
             explanation TEXT,
             topic TEXT,
             level INTEGER,
-            incorrect_options TEXT DEFAULT NULL 
+            incorrect_options TEXT DEFAULT NULL,
+            question_type TEXT DEFAULT 'standard',  -- 'standard' или 'quantitative'
+            image_path TEXT DEFAULT NULL,  -- путь к изображению вопроса
+            characteristic_a TEXT DEFAULT NULL,  -- для количественных характеристик
+            characteristic_b TEXT DEFAULT NULL,  -- для количественных характеристик
+            source_file TEXT DEFAULT NULL  -- исходный файл, откуда взят вопрос
         )''')
         
         self.conn.commit()
@@ -168,7 +173,7 @@ class Database:
     def get_tasks_for_topic(self, topic, limit=10):
         cursor = self.conn.cursor()
         cursor.execute('''
-        SELECT question, answer, explanation, incorrect_options
+        SELECT question, answer, explanation, incorrect_options, question_type, image_path, characteristic_a, characteristic_b
         FROM tasks
         WHERE topic = ?
         ORDER BY RANDOM()
@@ -177,15 +182,25 @@ class Database:
         
         tasks_with_options = []
         for row in cursor.fetchall():
-            question, answer, explanation, incorrect_options_json = row
+            question, answer, explanation, incorrect_options_json, question_type, image_path, characteristic_a, characteristic_b = row
             incorrect_options_list = None
             if incorrect_options_json:
                 try:
                     incorrect_options_list = json.loads(incorrect_options_json)
                 except json.JSONDecodeError:
-                    # Если JSON некорректный, оставляем None или пустой список
-                    incorrect_options_list = [] 
-            tasks_with_options.append((question, answer, explanation, incorrect_options_list))
+                    incorrect_options_list = []
+            
+            task_data = {
+                'question': question,
+                'answer': answer,
+                'explanation': explanation,
+                'incorrect_options': incorrect_options_list,
+                'question_type': question_type,
+                'image_path': image_path,
+                'characteristic_a': characteristic_a,
+                'characteristic_b': characteristic_b
+            }
+            tasks_with_options.append(task_data)
         return tasks_with_options
 
     def add_task(self, question, answer, explanation, topic, level=1):
@@ -351,3 +366,14 @@ class Database:
         cursor.execute('SELECT explanation FROM tasks WHERE question LIKE ? AND explanation IS NOT NULL AND explanation != "" LIMIT 1', (prefix + '%',))
         row = cursor.fetchone()
         return row[0] if row else None
+
+    def add_task_with_image(self, question, answer, explanation, topic, level, image_path, question_type='standard', characteristic_a=None, characteristic_b=None, source_file=None):
+        """Добавляет задачу с изображением в базу данных"""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            '''INSERT INTO tasks 
+               (question, answer, explanation, topic, level, image_path, question_type, characteristic_a, characteristic_b, source_file) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (question, answer, explanation, topic, level, image_path, question_type, characteristic_a, characteristic_b, source_file)
+        )
+        self.conn.commit()

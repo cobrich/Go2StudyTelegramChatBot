@@ -32,7 +32,7 @@ model = genai.GenerativeModel(os.getenv('GEMINI_MODEL'))
 DEFAULT_QUESTIONS_PER_TEST = 10 # Определяем желаемое количество вопросов в тесте
 MAX_EXPLANATION_PREVIEW_LENGTH = 700 # Макс. длина объяснения для немедленного показа
 MAX_QUESTIONS_PER_TEST = 10 # Убедимся, что эта константа есть, или используем DEFAULT_QUESTIONS_PER_TEST
-MAX_OPTION_LENGTH = 45  # Максимальная длина текста варианта ответа
+MAX_OPTION_LENGTH = 40  # Максимальная длина текста варианта ответа
 
 # ГЛАВНОЕ МЕНЮ - ReplyKeyboardMarkup
 MAIN_MENU_KEYBOARD = [
@@ -208,7 +208,7 @@ async def continue_start_test(update, context, user_id, topic):
 async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q_num = context.user_data['current_question']
     max_reached = context.user_data.get('max_reached_question', 0)
-    questions_data = context.user_data['tasks'] # Список кортежей
+    questions_data = context.user_data['tasks']
     topic = context.user_data['current_topic']
 
     answered_questions_map = context.user_data.get('answered_questions', {})
@@ -218,13 +218,33 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Question has been answered, show feedback instead of asking again
             answer_details = answered_questions_map[q_num]
             original_question_data = questions_data[q_num]
-            question_text, correct_answer_text, explanation_text, _ = original_question_data
+            
+            # Получаем данные вопроса в зависимости от типа
+            if isinstance(original_question_data, dict):
+                question_text = original_question_data['question']
+                correct_answer_text = original_question_data['answer']
+                explanation_text = original_question_data['explanation']
+                question_type = original_question_data.get('question_type', 'standard')
+                image_path = original_question_data.get('image_path')
+                characteristic_a = original_question_data.get('characteristic_a')
+                characteristic_b = original_question_data.get('characteristic_b')
+            else:
+                question_text, correct_answer_text, explanation_text, _ = original_question_data
+                question_type = 'standard'
+                image_path = None
+                characteristic_a = None
+                characteristic_b = None
             
             selected_option_text = answer_details['selected_option_text']
             user_answer_correct = answer_details['is_correct']
 
             feedback_text = f"<b>Тема: {escape(topic)}</b>\n"
             feedback_text += f"<b>Вопрос {q_num + 1}/{len(questions_data)} (уже отвечен):</b>\n{escape(question_text)}\n\n"
+            
+            if question_type == 'quantitative':
+                feedback_text += f"А: {escape(characteristic_a)}\n"
+                feedback_text += f"Б: {escape(characteristic_b)}\n\n"
+            
             feedback_text += f"Ваш ответ: <i>{escape(selected_option_text)}</i>\n\n"
 
             if user_answer_correct:
@@ -250,7 +270,6 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if navigation_buttons_list:
                 keyboard_layout.append(navigation_buttons_list)
             
-            # Эта кнопка остается всегда для уже отвеченных вопросов при навигации
             keyboard_layout.append([InlineKeyboardButton("⬅️ Назад к темам", callback_data="back_to_topics")])
             reply_markup = InlineKeyboardMarkup(keyboard_layout)
 
@@ -263,7 +282,7 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                 except telegram.error.BadRequest as e:
                     if "message is not modified" in str(e).lower():
-                        await update.callback_query.answer() # Silently acknowledge if message is identical
+                        await update.callback_query.answer()
                     else:
                         logging.warning(f"Failed to edit message in ask_question (answered view), sending new: {e}")
                         await context.bot.send_message(
@@ -287,28 +306,45 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=reply_markup,
                     parse_mode="HTML"
                 )
-            return # Important: exit after showing feedback for an answered question
+            return
 
         # Original logic for unanswered questions starts here
-        question, correct_answer, explanation, ai_incorrect_options = questions_data[q_num]
+        question_data = questions_data[q_num]
         
-        all_answers = []
-        if ai_incorrect_options and len(ai_incorrect_options) > 0:
-            all_answers = list(ai_incorrect_options) + [correct_answer] # Создаем копию списка
-            random.shuffle(all_answers)
-            logging.info(f"Using AI-generated options for Q: {question[:30]}...")
+        # Получаем данные вопроса в зависимости от типа
+        if isinstance(question_data, dict):
+            question = question_data['question']
+            correct_answer = question_data['answer']
+            explanation = question_data['explanation']
+            question_type = question_data.get('question_type', 'standard')
+            image_path = question_data.get('image_path')
+            characteristic_a = question_data.get('characteristic_a')
+            characteristic_b = question_data.get('characteristic_b')
+            ai_incorrect_options = question_data.get('incorrect_options', [])
         else:
-            logging.warning(f"Using universal options for Q: {question[:30]} (AI options missing or empty). CA: {correct_answer}")
-            all_answers = generate_universal_options(correct_answer)
+            question, correct_answer, explanation, ai_incorrect_options = question_data
+            question_type = 'standard'
+            image_path = None
+            characteristic_a = None
+            characteristic_b = None
 
-        # Убедимся, что у нас всегда 4 варианта, даже если generate_universal_options вернула меньше (маловероятно)
-        # или если AI дал меньше. Дополним заглушками, если нужно.
-        # Это больше подстраховка, т.к. generate_universal_options должна давать 4.
-        # А AI мы просим 3 неверных + 1 верный.
-        while len(all_answers) < 4:
-            all_answers.append(f"Доп. вариант {len(all_answers) + 1}")
-        all_answers = all_answers[:4] # Берем только первые 4, если вдруг оказалось больше
-        random.shuffle(all_answers)
+        all_answers = []
+        if question_type == 'quantitative':
+            # Для количественных характеристик используем фиксированные варианты
+            all_answers = ['A', 'B', 'C', 'D']
+        else:
+            if ai_incorrect_options and len(ai_incorrect_options) > 0:
+                all_answers = list(ai_incorrect_options) + [correct_answer]
+                random.shuffle(all_answers)
+                logging.info(f"Using AI-generated options for Q: {question[:30]}...")
+            else:
+                logging.warning(f"Using universal options for Q: {question[:30]} (AI options missing or empty). CA: {correct_answer}")
+                all_answers = generate_universal_options(correct_answer)
+
+            while len(all_answers) < 4:
+                all_answers.append(f"Доп. вариант {len(all_answers) + 1}")
+            all_answers = all_answers[:4]
+            random.shuffle(all_answers)
 
         keyboard = [
             [InlineKeyboardButton(ans, callback_data=f"ans_{i}_{q_num}")]
@@ -319,46 +355,82 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if q_num > 0:
             navigation_buttons.append(InlineKeyboardButton("⬅️ Предыдущий", callback_data="prev_question"))
         
-        # Кнопка "Следующий" для навигации/пропуска, если уже были дальше
-        # Не показываем "Следующий", если это последний вопрос в тесте
         if q_num < max_reached and q_num < len(questions_data) - 1:
             navigation_buttons.append(InlineKeyboardButton("➡️ Следующий", callback_data="next_question"))
 
-        if navigation_buttons: # Добавляем строку с кнопками навигации, если они есть
+        if navigation_buttons:
             keyboard.append(navigation_buttons)
         
-        # ИЗМЕНЕНИЕ: Кнопка "Назад к темам" только для первого вопроса (когда он еще не отвечен)
-        if q_num == 0: 
+        if q_num == 0:
             keyboard.append([InlineKeyboardButton("⬅️ Назад к темам", callback_data="back_to_topics")])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         text = f"<b>Тема: {topic}</b>\n<b>Вопрос {q_num + 1}/{len(questions_data)}:</b>\n\n{question}"
         
-        # Определяем, как отправлять сообщение: редактировать существующее или отправить новое
-        if update.callback_query:
+        if question_type == 'quantitative':
+            text += f"\n\nА: {characteristic_a}\nБ: {characteristic_b}"
+        
+        # Отправляем изображение, если оно есть
+        if image_path and os.path.exists(image_path):
             try:
-                await update.callback_query.edit_message_text(
-                    text,
-                    reply_markup=reply_markup,
-                    parse_mode="HTML"
-                )
-            except Exception as e: # Если не удалось отредактировать (например, сообщение слишком старое)
-                logging.warning(f"Failed to edit message in ask_question, sending new: {e}")
+                with open(image_path, 'rb') as photo:
+                    await context.bot.send_photo(
+                        chat_id=update.effective_chat.id,
+                        photo=photo,
+                        caption=text,
+                        reply_markup=reply_markup,
+                        parse_mode="HTML"
+                    )
+            except Exception as e:
+                logging.error(f"Error sending photo: {e}")
+                # Если не удалось отправить фото, отправляем текст
+                if update.callback_query:
+                    try:
+                        await update.callback_query.edit_message_text(
+                            text=text,
+                            reply_markup=reply_markup,
+                            parse_mode="HTML"
+                        )
+                    except Exception as e:
+                        logging.warning(f"Failed to edit message in ask_question, sending new: {e}")
+                        await context.bot.send_message(
+                            chat_id=update.effective_chat.id,
+                            text=text,
+                            reply_markup=reply_markup,
+                            parse_mode="HTML"
+                        )
+                else:
+                    await context.bot.send_message(
+                        chat_id=update.effective_chat.id,
+                        text=text,
+                        reply_markup=reply_markup,
+                        parse_mode="HTML"
+                    )
+        else:
+            # Если нет изображения, отправляем только текст
+            if update.callback_query:
+                try:
+                    await update.callback_query.edit_message_text(
+                        text=text,
+                        reply_markup=reply_markup,
+                        parse_mode="HTML"
+                    )
+                except Exception as e:
+                    logging.warning(f"Failed to edit message in ask_question, sending new: {e}")
+                    await context.bot.send_message(
+                        chat_id=update.effective_chat.id,
+                        text=text,
+                        reply_markup=reply_markup,
+                        parse_mode="HTML"
+                    )
+            else:
                 await context.bot.send_message(
                     chat_id=update.effective_chat.id,
                     text=text,
                     reply_markup=reply_markup,
                     parse_mode="HTML"
                 )
-        else: # Если нет callback_query (например, первый вызов из команды /start) - невозможно, т.к. start_test вызывается по кнопке
-             # Этот else маловероятен для ask_question в текущей логике, но оставим для полноты
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=text,
-                reply_markup=reply_markup,
-                parse_mode="HTML"
-            )
     else:
         await show_results(update, context)
 
