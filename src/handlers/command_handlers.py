@@ -48,6 +48,13 @@ class CommandHandlers(BaseHandler):
         """Handle /stop command."""
         user = update.effective_user
         chat_id = update.effective_chat.id
+        user_id = user.id if user else None
+
+        # Всегда сбрасываем активность и очищаем user_data
+        if user_id:
+            self.db.set_user_inactive(user_id)
+            self.clear_user_data(context)
+            self.db.delete_all_user_data(user_id)
 
         if not user:
             logging.warning("stop_command received update without effective_user.")
@@ -58,57 +65,26 @@ class CommandHandlers(BaseHandler):
                 )
             return
 
-        user_id = user.id
-
-        # Check if session was started
-        if not self.get_user_data(context).get('session_started'):
-            logging.info(f"User {user_id} ({user.username}) executed /stop before starting a session in chat {chat_id}.")
+        response_text = (
+            f"🗑️ Все ваши данные были удалены из моей памяти, {user.mention_html()}.
+\n"
+            "Я не могу удалить историю этого чата самостоятельно, но вы можете сделать это вручную, если хотите.\n\n"
+            "Если вы захотите начать заново, просто отправьте /start."
+        )
+        try:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=(
-                    "Бот еще не был активирован командой /start. "
-                    "Для вас нет сохраненных данных. Чтобы начать, отправьте /start."
-                )
+                text="💬",
+                reply_markup=ReplyKeyboardRemove()
             )
-            return
+        except Exception as e_remove_keyboard:
+            logging.warning(f"Could not remove reply keyboard for user {user_id} during /stop: {e_remove_keyboard}")
 
-        # If session was started, continue with data deletion
-        logging.info(f"User {user_id} ({user.username}) executed /stop command in chat {chat_id} (session was active).")
-
-        # Delete all user data
-        self.db.set_user_inactive(user_id)
-        success = self.db.delete_all_user_data(user_id)
-
-        if success:
-            logging.info(f"Successfully deleted all data for user {user_id} from the database.")
-            self.clear_user_data(context)
-            logging.info(f"Cleared context.user_data for user {user_id}.")
-            
-            response_text = (
-                f"🗑️ Все ваши данные были удалены из моей памяти, {user.mention_html()}.\n\n"
-                "Я не могу удалить историю этого чата самостоятельно, но вы можете сделать это вручную, если хотите.\n\n"
-                "Если вы захотите начать заново, просто отправьте /start."
-            )
-            try:
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text="💬",
-                    reply_markup=ReplyKeyboardRemove()
-                )
-            except Exception as e_remove_keyboard:
-                logging.warning(f"Could not remove reply keyboard for user {user_id} during /stop: {e_remove_keyboard}")
-
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=response_text,
-                parse_mode='HTML'
-            )
-        else:
-            logging.error(f"Failed to delete data for user {user_id} from the database.")
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="Произошла ошибка при удалении ваших данных. Пожалуйста, попробуйте еще раз или свяжитесь с администратором, если проблема сохранится."
-            )
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=response_text,
+            parse_mode='HTML'
+        )
 
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         text = update.message.text.strip()
