@@ -1,5 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
-from src.config.constants import TOPICS, MAIN_MENU_KEYBOARD
+from config.constants import TOPICS, MAIN_MENU_KEYBOARD
 
 def build_topic_selection_keyboard() -> InlineKeyboardMarkup:
     """Create InlineKeyboardMarkup for topic selection, including 'Back to main menu' button."""

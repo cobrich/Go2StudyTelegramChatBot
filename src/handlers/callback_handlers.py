@@ -1,14 +1,14 @@
 from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 import logging
-from src.handlers.base_handler import BaseHandler
-from src.utils.keyboards import (
+from handlers.base_handler import BaseHandler
+from utils.keyboards import (
     build_topic_selection_keyboard,
     build_question_keyboard,
     build_results_keyboard,
     build_continue_keyboard
 )
-from src.config.constants import TOPICS, DEFAULT_QUESTIONS_PER_TEST
+from config.constants import TOPICS, DEFAULT_QUESTIONS_PER_TEST
 
 class CallbackHandlers(BaseHandler):
     async def handle_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

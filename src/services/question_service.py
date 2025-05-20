@@ -2,9 +2,9 @@ import logging
 import asyncio
 import random
 from typing import List, Dict, Any, Set, Optional
-from src.services.database import Database
-from src.services.ai_service import AIService
-from src.config.constants import DEFAULT_QUESTIONS_PER_TEST, MAX_OPTION_LENGTH
+from services.database import Database
+from services.ai_service import AIService
+from config.constants import DEFAULT_QUESTIONS_PER_TEST, MAX_OPTION_LENGTH
 
 class QuestionService:
     def __init__(self, db: Database, ai_service: AIService):

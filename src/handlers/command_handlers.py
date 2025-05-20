@@ -1,8 +1,8 @@
 from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 import logging
-from src.handlers.base_handler import BaseHandler
-from src.utils.keyboards import get_main_menu_markup
+from handlers.base_handler import BaseHandler
+from utils.keyboards import get_main_menu_markup
 
 class CommandHandlers(BaseHandler):
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
