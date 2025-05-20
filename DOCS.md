@@ -80,6 +80,7 @@ python src/bot.py
 ```
 
 ## Recent Changes
+- Fixed import paths in bot.py to work correctly when running from src directory
 - Restructured project directory for better code organization
 - Separated handlers into command and callback handlers
 - Created dedicated services for AI, database, and question management

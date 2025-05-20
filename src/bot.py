@@ -6,12 +6,12 @@ from telegram.ext import (
     MessageHandler,
     filters
 )
-from src.config.constants import TELEGRAM_BOT_TOKEN
-from src.services.database import Database
-from src.services.question_service import QuestionService
-from src.services.ai_service import AIService
-from src.handlers.command_handlers import CommandHandlers
-from src.handlers.callback_handlers import CallbackHandlers
+from config.constants import TELEGRAM_BOT_TOKEN
+from services.database import Database
+from services.question_service import QuestionService
+from services.ai_service import AIService
+from handlers.command_handlers import CommandHandlers
+from handlers.callback_handlers import CallbackHandlers
 
 # Configure logging
 logging.basicConfig(
