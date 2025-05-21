@@ -19,19 +19,14 @@ class QuestionService:
         force_ai: bool = False,
         existing_question_texts_to_exclude: Optional[Set[str]] = None
     ) -> List[tuple]:
-        """Get tasks from DB or generate new ones if needed."""
+        """Get tasks for test: сначала ошибки пользователя, потом обычные вопросы, потом ИИ."""
         if existing_question_texts_to_exclude is None:
             existing_question_texts_to_exclude = set()
-        
         tasks = []
-        
-        # First get regular tasks from database
-        db_tasks_pool_raw = self.db.get_tasks_for_topic(topic, limit=needed * 2)
-        
-        # Filter out excluded questions and convert to list of tuples
-        for task in db_tasks_pool_raw:
+        # 1. Сначала ошибки пользователя
+        error_tasks = self.db.get_error_tasks_for_user(user_id, topic, limit=needed)
+        for task in error_tasks:
             if task['question'] not in existing_question_texts_to_exclude:
-                # Формируем список опций: правильный + неправильные
                 options = [task['answer']]
                 if task['incorrect_options']:
                     options += [opt for opt in task['incorrect_options'].split('\n') if opt.strip()]
@@ -41,51 +36,40 @@ class QuestionService:
                     task['answer'],
                     task['explanation'],
                     options,
-                    'db',  # источник: база данных
-                    task.get('image_path')  # Add image path
+                    'db',
+                    task.get('image_path')
                 ))
                 existing_question_texts_to_exclude.add(task['question'])
                 if len(tasks) >= needed:
-                    break
-        
-        # If we have enough tasks, return them
-        if len(tasks) >= needed:
-            return tasks[:needed]
-        
-        # If not enough tasks, try to get error tasks
-        error_tasks = self.db.get_error_tasks_for_user(user_id, topic, limit=needed)
-        if error_tasks:
-            logging.info(f"Found {len(error_tasks)} error tasks for user {user_id}, topic '{topic}'.")
-            for task in error_tasks:
-                if task['question'] not in existing_question_texts_to_exclude:
-                    tasks.append((
-                        task['question'],
-                        task['answer'],
-                        task['explanation'],
-                        task['incorrect_options'] or [],
-                        'db',  # источник: база данных
-                        task.get('image_path')  # Add image path
-                    ))
-                    existing_question_texts_to_exclude.add(task['question'])
-                    if len(tasks) >= needed:
-                        break
-        
-        # If we have enough tasks now, return them
-        if len(tasks) >= needed:
-            return tasks[:needed]
-        
-        # If still not enough tasks, generate new ones
+                    return tasks[:needed]
+        # 2. Обычные вопросы из базы
+        db_tasks_pool_raw = self.db.get_tasks_for_topic(topic, limit=needed * 2)
+        for task in db_tasks_pool_raw:
+            if task['question'] not in existing_question_texts_to_exclude:
+                options = [task['answer']]
+                if task['incorrect_options']:
+                    options += [opt for opt in task['incorrect_options'].split('\n') if opt.strip()]
+                random.shuffle(options)
+                tasks.append((
+                    task['question'],
+                    task['answer'],
+                    task['explanation'],
+                    options,
+                    'db',
+                    task.get('image_path')
+                ))
+                existing_question_texts_to_exclude.add(task['question'])
+                if len(tasks) >= needed:
+                    return tasks[:needed]
+        # 3. Генерация новых вопросов
         remaining = needed - len(tasks)
         new_tasks = []
-        
-        # Generate tasks in parallel
         loop = asyncio.get_running_loop()
         generation_tasks = [
             loop.run_in_executor(None, self.ai_service.generate_task, topic)
             for _ in range(remaining)
         ]
         results = await asyncio.gather(*generation_tasks, return_exceptions=True)
-        
         for result in results:
             if isinstance(result, Exception):
                 logging.error(f"Error generating task: {result}")
@@ -94,19 +78,15 @@ class QuestionService:
                 question, correct_answer, incorrect_options, explanation = result
                 if question not in existing_question_texts_to_exclude:
                     new_tasks.append((
-                        question, 
-                        correct_answer, 
-                        explanation, 
-                        incorrect_options, 
+                        question,
+                        correct_answer,
+                        explanation,
+                        incorrect_options,
                         'ai',
-                        None  # No image for AI-generated questions
+                        None
                     ))
                     existing_question_texts_to_exclude.add(question)
-        
-        # Combine existing and new tasks
         all_tasks = tasks + new_tasks
-        
-        # If still not enough tasks, try one more time
         if len(all_tasks) < needed:
             logging.warning(f"Could only generate {len(all_tasks)} tasks out of {needed} needed. Trying one more time...")
             final_tasks = await self.get_or_generate_tasks(
@@ -115,7 +95,6 @@ class QuestionService:
                 existing_question_texts_to_exclude=existing_question_texts_to_exclude
             )
             return final_tasks
-        
         return all_tasks[:needed]
 
     @staticmethod
