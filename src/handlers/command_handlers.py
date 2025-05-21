@@ -116,7 +116,7 @@ class CommandHandlers(BaseHandler):
             if recent_topics:
                 progress_text += "Недавние темы: " + ", ".join([t[0] for t in recent_topics]) + "\n"
             if error_topics:
-                progress_text += "Темы с ошибками: " + ", ".join(error_topics) + "\n"
+                progress_text += "Темы с ошибками: " + ", ".join([f"{t[0]} ({t[1]})" for t in error_topics]) + "\n"
 
             await update.message.reply_text(progress_text)
         elif text == "❓ Помощь":
