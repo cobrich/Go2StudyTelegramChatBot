@@ -31,11 +31,16 @@ class QuestionService:
         # Filter out excluded questions and convert to list of tuples
         for task in db_tasks_pool_raw:
             if task['question'] not in existing_question_texts_to_exclude:
+                # Формируем список опций: правильный + неправильные
+                options = [task['answer']]
+                if task['incorrect_options']:
+                    options += [opt for opt in task['incorrect_options'].split('\n') if opt.strip()]
+                random.shuffle(options)
                 tasks.append((
                     task['question'],
                     task['answer'],
                     task['explanation'],
-                    task['incorrect_options'] or [],
+                    options,
                     'db'  # источник: база данных
                 ))
                 existing_question_texts_to_exclude.add(task['question'])
