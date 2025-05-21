@@ -254,4 +254,21 @@ class Database:
                 INSERT OR IGNORE INTO users (user_id, username)
                 VALUES (?, ?)
             ''', (user_id, username))
+            conn.commit()
+
+    def add_question(self, question: dict) -> None:
+        """Add a new question to the database."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO questions (topic, question, answer, explanation, incorrect_options, question_type)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                question['topic'],
+                question['question'],
+                question['answer'],
+                question['explanation'],
+                question['incorrect_options'],
+                question.get('question_type', 'standard')
+            ))
             conn.commit() 
