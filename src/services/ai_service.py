@@ -83,3 +83,38 @@ class AIService:
         text = re.sub(r'\s+', ' ', text)
         # Remove leading and trailing spaces
         return text.strip() 
+
+    def normalize_question_via_gemini(self, raw_text: str) -> Optional[dict]:
+        """
+        Отправляет сырой текст вопроса в Gemini и возвращает структурированный результат (dict) с полями:
+        question, options, answer, explanation
+        """
+        prompt = (
+            "Извлеки из следующего текста:\n"
+            "- Чистый текст вопроса\n"
+            "- Варианты ответа (A, B, C, D)\n"
+            "- Правильный ответ (буква)\n"
+            "- Краткое объяснение\n"
+            "\nВерни результат в формате JSON строго такого вида:\n"
+            "{\n  'question': '...',\n  'options': ['A) ...', 'B) ...', 'C) ...', 'D) ...'],\n  'answer': 'B',\n  'explanation': '...'\n}\n"
+            "\nТекст:\n" + raw_text
+        )
+        try:
+            response = self.model.generate_content(prompt).text
+            # Попробуем найти JSON в ответе
+            import json
+            import re
+            match = re.search(r'\{.*\}', response, re.DOTALL)
+            if not match:
+                return None
+            json_str = match.group(0)
+            # Заменим одинарные кавычки на двойные для парсинга
+            json_str = json_str.replace("'", '"')
+            data = json.loads(json_str)
+            # Проверим наличие всех ключей
+            if not all(k in data for k in ("question", "options", "answer", "explanation")):
+                return None
+            return data
+        except Exception as e:
+            logging.error(f"Gemini normalization error: {e}")
+            return None 

@@ -244,4 +244,14 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('UPDATE users SET is_active = 0, current_topic = NULL')
+            conn.commit()
+
+    def register_user(self, user_id: int, username: str) -> None:
+        """Register a user if not exists."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR IGNORE INTO users (user_id, username)
+                VALUES (?, ?)
+            ''', (user_id, username))
             conn.commit() 

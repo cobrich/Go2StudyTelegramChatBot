@@ -4,7 +4,10 @@ import fitz  # PyMuPDF
 import re
 from PIL import Image
 from typing import List, Dict, Optional
+import sqlite3  # <--- добавлено для работы с БД
 from .database import Database
+from .ai_service import AIService
+from src.config.constants import TOPICS
 
 class PDFProcessor:
     def __init__(self, output_dir: str = "question_images"):
@@ -55,20 +58,10 @@ class PDFProcessor:
         return any(re.search(pattern, text) for pattern in self.quantitative_patterns[language])
 
     def extract_topic_from_text(self, text: str) -> Optional[str]:
-        """Extract topic from text if it's a topic header."""
-        # Look for common topic patterns
-        topic_patterns = [
-            r'^[А-Я][А-Я\s]+:',  # Russian topic with colon
-            r'^[А-Я][А-Я\s]+$',  # Russian topic without colon
-            r'^[А-Я][а-яА-Я\s]+:',  # Russian topic with mixed case
-            r'^[А-Я][а-яА-Я\s]+$',  # Russian topic with mixed case without colon
-        ]
-        
-        for pattern in topic_patterns:
-            match = re.match(pattern, text.strip())
-            if match:
-                # Clean up the topic text
-                topic = match.group(0).strip(':').strip()
+        """Extract topic from text if it's a topic header (строго из TOPICS)."""
+        clean = text.strip().lower()
+        for topic in TOPICS:
+            if clean == topic.strip().lower():
                 return topic
         return None
 
@@ -78,30 +71,37 @@ class PDFProcessor:
         current_question = None
         current_topic = None
         language = 'ru'  # Default language
-        
+        found_first_topic = False
         try:
             doc = fitz.open(pdf_path)
             for page_num in range(len(doc)):
                 page = doc[page_num]
                 text = page.get_text()
-                
-                # Detect language from first page
                 if page_num == 0:
                     language = self.detect_language(text)
-                
-                # Split text into lines and process
                 lines = text.split('\n')
                 for line in lines:
                     line = line.strip()
                     if not line:
                         continue
-                    
-                    # Check if this is a topic header
+                    # Явно ищем первую тему из TOPICS
+                    if not found_first_topic:
+                        topic = self.extract_topic_from_text(line)
+                        if topic:
+                            current_topic = topic
+                            found_first_topic = True
+                        continue
+                    # После первой темы ищем только новые темы
                     topic = self.extract_topic_from_text(line)
                     if topic:
                         current_topic = topic
                         continue
-                        
+                    # Игнорируем служебные строки (например, "Рецензент")
+                    if line.lower().startswith('рецензент'):
+                        continue
+                    # Если нет текущей темы — не сохраняем вопрос
+                    if not current_topic:
+                        continue
                     # Check if this is a new question
                     if self.is_test_question(line, language) or self.is_quantitative_question(line, language):
                         if current_question:
@@ -110,22 +110,16 @@ class PDFProcessor:
                             'text': line,
                             'type': 'quantitative' if self.is_quantitative_question(line, language) else 'test',
                             'language': language,
-                            'topic': current_topic or 'Общие вопросы',  # Use current topic or default
+                            'topic': current_topic,
                             'image_paths': []
                         }
                     elif current_question:
                         current_question['text'] += '\n' + line
-                        
-            # Add the last question if exists
             if current_question:
                 questions.append(current_question)
-                
-            # Extract images for each question
             for question in questions:
                 question['image_paths'] = self.extract_images_for_question(pdf_path, question)
-                
             return questions
-            
         except Exception as e:
             logging.error(f"Error extracting questions from {pdf_path}: {e}")
             return []
@@ -175,45 +169,71 @@ class PDFProcessor:
 
 def add_questions_to_db(questions: List[Dict], db: Database):
     """Add questions to database if they don't exist (by text)."""
+    import time
+    ai = AIService()
+    total = len(questions)
+    print(f"[LOG] Начинаю добавление {total} вопросов в базу...")
+    saved_count = 0
     with open('added_questions.log', 'a', encoding='utf-8') as logf:
-        for q in questions:
+        for idx, q in enumerate(questions, 1):
             question_text = q['text'].strip()
+            topic = q.get('topic', 'Общие вопросы')
             # Check for uniqueness by text
             exists = db.get_explanation_by_question_text(question_text)
             if exists:
                 continue
-                
-            # answer, explanation, incorrect_options can be filled manually or parsed from PDF
-            db_question = {
-                'topic': q.get('topic', 'Общие вопросы'),
-                'question': question_text,
-                'answer': '',  # TODO: fill manually or parse
-                'explanation': '',  # TODO: fill manually or parse
-                'incorrect_options': '',  # TODO: fill manually or parse
-                'question_type': q.get('type', 'standard')
-            }
-            
-            with sqlite3.connect(db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO questions (topic, question, answer, explanation, incorrect_options, question_type)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (db_question['topic'], db_question['question'], db_question['answer'], 
-                     db_question['explanation'], db_question['incorrect_options'], db_question['question_type']))
-                conn.commit()
-            logf.write(f"Added: {question_text}\n")
+            short_text = question_text[:50].replace('\n', ' ')
+            print(f"[LOG][{idx}/{total}] Нормализация вопроса (тема: {topic}): {short_text}...")
+            norm = ai.normalize_question_via_gemini(question_text)
+            if norm and norm.get('answer') and norm.get('explanation') and norm.get('question') and norm.get('options'):
+                answer_letter = norm['answer']
+                if isinstance(answer_letter, str) and answer_letter.upper() in 'ABCD':
+                    answer_idx = ord(answer_letter.upper()) - ord('A')
+                    if 0 <= answer_idx < len(norm['options']):
+                        db_question = {
+                            'topic': topic,
+                            'question': norm['question'],
+                            'answer': norm['options'][answer_idx],
+                            'explanation': norm['explanation'],
+                            'incorrect_options': '\n'.join([opt for i,opt in enumerate(norm['options']) if i != answer_idx]),
+                            'question_type': q.get('type', 'standard')
+                        }
+                        print(f"[LOG][{idx}] Gemini OK: {norm['question'][:40]}... [Ответ: {norm['answer']}]" )
+                        with sqlite3.connect(db.db_path) as conn:
+                            cursor = conn.cursor()
+                            cursor.execute('''
+                                INSERT INTO questions (topic, question, answer, explanation, incorrect_options, question_type)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                            ''', (db_question['topic'], db_question['question'], db_question['answer'], 
+                                 db_question['explanation'], db_question['incorrect_options'], db_question['question_type']))
+                            conn.commit()
+                        logf.write(f"Added: {db_question['question']}\n")
+                        saved_count += 1
+                    else:
+                        print(f"[LOG][{idx}] Gemini FAIL: некорректный индекс ответа!")
+                else:
+                    print(f"[LOG][{idx}] Gemini FAIL: некорректная буква ответа!")
+            else:
+                print(f"[LOG][{idx}] Gemini FAIL: не удалось структурировать вопрос или отсутствует ответ/объяснение!")
+            if idx % 10 == 0 or idx == total:
+                print(f"[LOG] Добавлено {saved_count}/{total} вопросов...")
+    print(f"[LOG] Все вопросы обработаны!")
+    print(f"[LOG] Всего вопросов в файле: {total}")
+    print(f"[LOG] Сохранено в базу: {saved_count}")
 
 def main():
+    print("[LOG] Запуск обработки PDF...")
     processor = PDFProcessor()
     db = Database()
     pdf_file = os.path.join("files", "NIS.pdf")
     
     if os.path.exists(pdf_file):
+        print(f"[LOG] Обработка файла: {pdf_file}")
         questions = processor.process_pdf_file(pdf_file)
-        print(f"Processed {pdf_file}: {len(questions)} questions found")
+        print(f"[LOG] Найдено {len(questions)} вопросов. Начинаю добавление в базу...")
         add_questions_to_db(questions, db)
     else:
-        print(f"File not found: {pdf_file}")
+        print(f"[LOG] Файл не найден: {pdf_file}")
 
 if __name__ == "__main__":
     main() 

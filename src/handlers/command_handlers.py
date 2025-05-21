@@ -11,6 +11,9 @@ class CommandHandlers(BaseHandler):
         user = update.effective_user
         chat_id = update.effective_chat.id
 
+        # Регистрируем пользователя в базе, если его нет
+        self.db.register_user(user.id, user.username)
+
         # Clear previous session data
         self.clear_user_data(context)
         logging.info(f"User {user.id} ({user.username}) executed /start. User data cleared for chat {chat_id}.")
