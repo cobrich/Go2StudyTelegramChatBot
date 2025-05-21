@@ -105,6 +105,11 @@ class CommandHandlers(BaseHandler):
                 "Выберите тему:",
                 reply_markup=build_topic_selection_keyboard()
             )
+            # Убираем обычную клавиатуру, чтобы скрыть главные кнопки
+            await update.message.reply_text(
+                " ",
+                reply_markup=ReplyKeyboardRemove()
+            )
         elif text == "📊 Мой прогресс":
             total_tests, avg_percentage = self.db.get_user_progress(user_id)
             if avg_percentage is None:

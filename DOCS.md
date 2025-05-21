@@ -448,3 +448,5 @@ The processor will:
 ## 2024-05-21
 - Теперь пользователь регистрируется в базе данных при /start, включая username.
 - Добавлен метод `register_user` в `Database` и вызов в `CommandHandlers.start`. 
+
+- Теперь при выборе темы главная клавиатура скрывается (ReplyKeyboardRemove), чтобы пользователь видел только inline-кнопки выбора темы. 
