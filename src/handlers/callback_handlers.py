@@ -203,7 +203,6 @@ class CallbackHandlers(BaseHandler):
             logging.error(f"[handle_continue] Exception in edit_text: {e}")
 
     async def handle_show_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle show results callback."""
         query = update.callback_query
         await query.answer()
         user_id = query.from_user.id
@@ -225,16 +224,22 @@ class CallbackHandlers(BaseHandler):
             results_text += "Ошибки:\n"
             for err in errors:
                 results_text += (
-                    f"\nВопрос {err['q_num']+1}: {err['question'][:80]}...\n"
-                    f"Ваш ответ: {err['user_answer']}\n"
-                    f"Правильный ответ: {err['correct_answer']}\n"
-                    f"Объяснение: {err['explanation'][:200]}\n"
+                    f"Вопрос {err['q_num']+1}: Ваш ответ: {err['user_answer']} | Правильный: {err['correct_answer']}\n"
                 )
         else:
             results_text += "Поздравляем! Все ответы верны!\n"
-        keyboard = build_results_keyboard([
-            {'q_num': err['q_num']} for err in errors
-        ], topic)
+        # Формируем кнопки только для ошибочных вопросов
+        buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]]
+        for err in errors:
+            buttons.append([
+                InlineKeyboardButton(
+                    f"Показать объяснение к вопросу {err['q_num']+1}",
+                    callback_data=f"show_expl_{err['q_num']}"
+                )
+            ])
+        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"topic_{TOPICS.index(topic)}")])
+        buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
+        keyboard = InlineKeyboardMarkup(buttons)
         try:
             await query.message.edit_text(results_text, reply_markup=keyboard)
         except Exception:
@@ -251,12 +256,16 @@ class CallbackHandlers(BaseHandler):
             q_num = int(data)
         except Exception:
             q_num = None
-        questions = self.get_user_data(context).get('questions', [])
-        if q_num is not None and 0 <= q_num < len(questions):
-            q = questions[q_num]
-            source = q[4] if len(q) > 4 else 'db'
-            source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
-            text = f"Вопрос: {q[0]}\n\nПравильный ответ: {q[1]}\n\nОбъяснение: {q[2]}\n\nИсточник: {source_text}"
+        user_results = context.user_data.get('user_results', [])
+        # Ищем объяснение в user_results, если есть
+        explanation = None
+        for r in user_results:
+            if r['q_num'] == q_num:
+                explanation = r
+                break
+        if explanation:
+            source_text = explanation['source']
+            text = f"Вопрос: {explanation['question']}\n\nПравильный ответ: {explanation['correct_answer']}\n\nОбъяснение: {explanation['explanation']}\n\nИсточник: {source_text}"
         else:
             text = "Вопрос не найден."
         try:
