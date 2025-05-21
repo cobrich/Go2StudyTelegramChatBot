@@ -103,7 +103,7 @@ class CallbackHandlers(BaseHandler):
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         # Получаем индекс выбранного ответа
         try:
-            selected_index = int(query.data.replace('ans_', '').split('_')[0])
+            selected_index = int(query.data.replace('answer_', '').split('_')[0])
         except Exception:
             selected_index = -1
         options = question[3]
@@ -184,9 +184,10 @@ class CallbackHandlers(BaseHandler):
         source = question[4] if len(question) > 4 else 'db'
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         keyboard = build_question_keyboard(question[3], current_index, current_index, len(questions))
+        topic = self.get_user_data(context).get('current_topic', '')
         try:
             await query.message.edit_text(
-                f"Тема: {question['topic']}\nВопрос {current_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}",
+                f"Тема: {topic}\nВопрос {current_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}",
                 reply_markup=keyboard
             )
         except Exception as e:
