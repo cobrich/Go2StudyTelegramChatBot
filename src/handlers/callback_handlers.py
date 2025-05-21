@@ -114,18 +114,19 @@ class CallbackHandlers(BaseHandler):
         # Store result
         self.db.add_test_result(
             user_id=user_id,
-            topic=question['topic'],
-            question_id=question['id'],
-            is_correct=is_correct,
-            selected_answer=selected_answer
+            topic=self.get_user_data(context).get('current_topic'),
+            percentage=100.0 if is_correct else 0.0  # или ваша логика
         )
         
         # If incorrect, store as error
         if not is_correct:
             self.db.add_user_error(
                 user_id=user_id,
-                topic=question['topic'],
-                question_id=question['id']
+                topic=self.get_user_data(context).get('current_topic'),
+                question_text=question[0],
+                user_answer_text=selected_answer,
+                correct_answer_text=correct_answer,
+                explanation_text=question[2]
             )
         
         # Show result
