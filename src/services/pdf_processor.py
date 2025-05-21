@@ -174,6 +174,7 @@ def add_questions_to_db(questions: List[Dict], db: Database):
     total = len(questions)
     print(f"[LOG] Начинаю добавление {total} вопросов в базу...")
     saved_count = 0
+    allowed_vars = set('xyабcde')
     with open('added_questions.log', 'a', encoding='utf-8') as logf:
         for idx, q in enumerate(questions, 1):
             question_text = q['text'].strip()
@@ -185,41 +186,33 @@ def add_questions_to_db(questions: List[Dict], db: Database):
             short_text = question_text[:50].replace('\n', ' ')
             print(f"[LOG][{idx}/{total}] Нормализация вопроса (тема: {topic}): {short_text}...")
             norm = ai.normalize_question_via_gemini(question_text)
-            if norm and norm.get('answer') and norm.get('explanation') and norm.get('question') and norm.get('options'):
-                answer_letter = norm['answer']
-                if isinstance(answer_letter, str) and answer_letter.upper() in 'ABCD':
-                    answer_idx = ord(answer_letter.upper()) - ord('A')
-                    if 0 <= answer_idx < len(norm['options']):
-                        db_question = {
-                            'topic': topic,
-                            'question': norm['question'],
-                            'answer': norm['options'][answer_idx],
-                            'explanation': norm['explanation'],
-                            'incorrect_options': '\n'.join([opt for i,opt in enumerate(norm['options']) if i != answer_idx]),
-                            'question_type': q.get('type', 'standard')
-                        }
-                        print(f"[LOG][{idx}] Gemini OK: {norm['question'][:40]}... [Ответ: {norm['answer']}]" )
-                        with sqlite3.connect(db.db_path) as conn:
-                            cursor = conn.cursor()
-                            cursor.execute('''
-                                INSERT INTO questions (topic, question, answer, explanation, incorrect_options, question_type)
-                                VALUES (?, ?, ?, ?, ?, ?)
-                            ''', (db_question['topic'], db_question['question'], db_question['answer'], 
-                                 db_question['explanation'], db_question['incorrect_options'], db_question['question_type']))
-                            conn.commit()
-                        logf.write(f"Added: {db_question['question']}\n")
-                        saved_count += 1
-                    else:
-                        print(f"[LOG][{idx}] Gemini FAIL: некорректный индекс ответа!")
-                else:
-                    print(f"[LOG][{idx}] Gemini FAIL: некорректная буква ответа!")
-            else:
-                print(f"[LOG][{idx}] Gemini FAIL: не удалось структурировать вопрос или отсутствует ответ/объяснение!")
-            if idx % 10 == 0 or idx == total:
-                print(f"[LOG] Добавлено {saved_count}/{total} вопросов...")
-    print(f"[LOG] Все вопросы обработаны!")
-    print(f"[LOG] Всего вопросов в файле: {total}")
-    print(f"[LOG] Сохранено в базу: {saved_count}")
+            # --- Фильтрация ---
+            if not norm or not norm.get('question') or not norm.get('options') or not norm.get('answer') or not norm.get('explanation'):
+                print(f"[SKIP] Gemini вернул пустой или некорректный JSON для вопроса: {short_text}")
+                continue
+            # Вопрос должен содержать переменные или числа
+            qtext = norm['question']
+            has_var = any(v in qtext.lower() for v in allowed_vars)
+            has_digit = any(c.isdigit() for c in qtext)
+            if not (has_var or has_digit):
+                print(f"[SKIP] Вопрос не содержит переменных или чисел: {qtext}")
+                continue
+            answer_letter = norm['answer']
+            if isinstance(answer_letter, str) and answer_letter.upper() in 'ABCD':
+                answer_idx = ord(answer_letter.upper()) - ord('A')
+                if 0 <= answer_idx < len(norm['options']):
+                    db_question = {
+                        'topic': topic,
+                        'question': norm['question'],
+                        'answer': norm['options'][answer_idx],
+                        'explanation': norm['explanation'],
+                        'incorrect_options': '\n'.join([opt for i,opt in enumerate(norm['options']) if i != answer_idx]),
+                        'question_type': q.get('type', 'standard')
+                    }
+                    db.add_question(db_question)
+                    logf.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} | {topic} | {norm['question']}\n")
+                    saved_count += 1
+    print(f"[LOG] Добавлено {saved_count} новых вопросов в базу.")
 
 def main():
     print("[LOG] Запуск обработки PDF...")
