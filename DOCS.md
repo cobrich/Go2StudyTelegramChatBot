@@ -39,11 +39,12 @@ go2study_bot/
 - Topic-based question organization
 - Multiple-choice questions
 - Detailed explanations for answers
+- Support for questions with images and function graphs
 
 ### Test Flow
 1. User selects a topic
 2. Bot generates or retrieves questions
-3. User answers questions
+3. User answers questions (with support for image-based questions)
 4. Immediate feedback provided
 5. Results and statistics shown
 6. Option to review incorrect answers
@@ -51,7 +52,7 @@ go2study_bot/
 ### Database Schema
 - Users table: Tracks user sessions and activity
 - Test results table: Stores test outcomes
-- Questions table: Stores question bank
+- Questions table: Stores question bank (including image paths for visual questions)
 - User errors table: Tracks user mistakes
 
 ## Setup and Installation
@@ -462,3 +463,5 @@ The processor will:
 - Улучшен промпт для ИИ при нормализации вопросов из PDF — теперь ИИ фильтрует мусорные вопросы, восстанавливает переменные, не добавляет нечитабельные задачи. Добавлена фильтрация: в базу не попадают вопросы без переменных/чисел или с пустым JSON от Gemini.
 
 - Добавлен метод add_question в Database для корректного добавления вопросов в базу из PDF/ИИ.
+
+- Исправлена работа кнопки 'В главное меню' — теперь она возвращает пользователя в главное меню из любого места, сбрасывая состояние.

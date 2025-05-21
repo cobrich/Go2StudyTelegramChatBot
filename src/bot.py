@@ -75,6 +75,10 @@ def main() -> None:
         callback_handlers.handle_next_question,
         pattern="^next_question$"
     ))
+    application.add_handler(CallbackQueryHandler(
+        callback_handlers.handle_main_menu,
+        pattern="^main_menu$"
+    ))
     
     # Start the Bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)

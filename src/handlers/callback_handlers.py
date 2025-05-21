@@ -71,11 +71,21 @@ class CallbackHandlers(BaseHandler):
         keyboard = build_question_keyboard(question[3], 0, 0, len(questions))
         
         try:
-            await query.message.edit_text(
-                f"Тема: {topic}\nВопрос 1 из {len(questions)} {source_text}:\n\n{question[0]}",
-                reply_markup=keyboard
-            )
-        except Exception:
+            # If question has an image, send it first
+            if len(question) > 5 and question[5]:  # question[5] is image_path
+                await context.bot.send_photo(
+                    chat_id=query.message.chat_id,
+                    photo=open(question[5], 'rb'),
+                    caption=f"Тема: {topic}\nВопрос 1 из {len(questions)} {source_text}:\n\n{question[0]}",
+                    reply_markup=keyboard
+                )
+            else:
+                await query.message.edit_text(
+                    f"Тема: {topic}\nВопрос 1 из {len(questions)} {source_text}:\n\n{question[0]}",
+                    reply_markup=keyboard
+                )
+        except Exception as e:
+            logging.error(f"Error displaying question: {e}")
             pass
 
     async def handle_answer(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -303,6 +313,20 @@ class CallbackHandlers(BaseHandler):
             await query.message.edit_text(
                 f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {next_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}",
                 reply_markup=keyboard
+            )
+        except Exception:
+            pass
+
+    async def handle_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        await query.answer()
+        user_id = query.from_user.id
+        self.db.set_user_inactive(user_id)
+        self.clear_user_data(context)
+        try:
+            await query.message.edit_text(
+                "Выберите действие:",
+                reply_markup=get_main_menu_markup()
             )
         except Exception:
             pass 

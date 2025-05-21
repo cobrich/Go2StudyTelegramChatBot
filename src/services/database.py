@@ -50,7 +50,8 @@ class Database:
                     answer TEXT,
                     explanation TEXT,
                     incorrect_options TEXT,
-                    question_type TEXT DEFAULT 'standard'
+                    question_type TEXT DEFAULT 'standard',
+                    image_path TEXT
                 )
             ''')
             
