@@ -103,7 +103,7 @@ class CommandHandlers(BaseHandler):
         if text == "📚 Выбрать тему и начать":
             # Сначала убираем обычную клавиатуру
             await update.message.reply_text(
-                " ",
+                "Пожалуйста, выберите тему ниже:",
                 reply_markup=ReplyKeyboardRemove()
             )
             # Затем отправляем сообщение с inline-кнопками
