@@ -16,6 +16,8 @@ class CommandHandlers(BaseHandler):
         logging.info(f"User {user.id} ({user.username}) executed /start. User data cleared for chat {chat_id}.")
         self.set_user_data(context, 'session_started', True)
 
+        self.db.set_all_users_inactive()
+
         welcome_text = f"👋 Привет, {user.mention_html()}! Я бот для изучения математики. Выбери действие:"
 
         try:

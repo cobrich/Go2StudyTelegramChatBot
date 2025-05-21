@@ -6,7 +6,8 @@ from utils.keyboards import (
     build_topic_selection_keyboard,
     build_question_keyboard,
     build_results_keyboard,
-    build_continue_keyboard
+    build_continue_keyboard,
+    get_main_menu_markup
 )
 from config.constants import TOPICS, DEFAULT_QUESTIONS_PER_TEST
 
@@ -249,5 +250,19 @@ class CallbackHandlers(BaseHandler):
             text = "Вопрос не найден."
         try:
             await query.message.reply_text(text)
+        except Exception:
+            pass
+
+    async def handle_back_to_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        await query.answer()
+        user_id = query.from_user.id
+        self.db.set_user_inactive(user_id)
+        self.clear_user_data(context)
+        try:
+            await query.message.edit_text(
+                "Выберите действие:",
+                reply_markup=get_main_menu_markup()
+            )
         except Exception:
             pass 

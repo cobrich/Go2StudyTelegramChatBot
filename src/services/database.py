@@ -232,4 +232,10 @@ class Database:
             return True
         except Exception as e:
             logging.error(f"Error deleting user data: {e}")
-            return False 
+            return False
+
+    def set_all_users_inactive(self):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('UPDATE users SET is_active = 0, current_topic = NULL')
+            conn.commit() 
