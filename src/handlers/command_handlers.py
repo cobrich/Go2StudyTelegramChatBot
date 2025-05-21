@@ -123,7 +123,22 @@ class CommandHandlers(BaseHandler):
             progress_text += f"Средний результат: {avg_percentage:.1f}%\n\n"
 
             if recent_topics:
-                progress_text += "Недавние темы: " + ", ".join([t[0] for t in recent_topics]) + "\n"
+                # Группируем подряд идущие одинаковые темы с количеством
+                grouped = []
+                last_topic = None
+                count = 0
+                for t in recent_topics:
+                    topic = t[0]
+                    if topic == last_topic:
+                        count += 1
+                    else:
+                        if last_topic is not None:
+                            grouped.append(f"{last_topic} ({count})")
+                        last_topic = topic
+                        count = 1
+                if last_topic is not None:
+                    grouped.append(f"{last_topic} ({count})")
+                progress_text += "Недавние темы: " + ", ".join(grouped[:5]) + "\n"
             if error_topics:
                 progress_text += "Темы с ошибками: " + ", ".join([f"{t[0]} ({t[1]})" for t in error_topics]) + "\n"
 
