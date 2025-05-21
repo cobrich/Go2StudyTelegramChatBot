@@ -90,6 +90,13 @@ class CommandHandlers(BaseHandler):
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         text = update.message.text.strip()
         user_id = update.effective_user.id
+        # If user is in a test, block main menu actions
+        if self.db.is_user_active(user_id):
+            await update.message.reply_text(
+                "Вы проходите тест. Для выбора других опций завершите тест или вернитесь к темам через кнопку 'Назад к темам' в тесте.",
+                reply_markup=None
+            )
+            return
         if text == "📚 Выбрать тему и начать":
             await update.message.reply_text(
                 "Выберите тему:",
@@ -107,20 +114,13 @@ class CommandHandlers(BaseHandler):
             progress_text += f"Средний результат: {avg_percentage:.1f}%\n\n"
 
             if recent_topics:
-                progress_text += "Последние темы и результаты:\n"
-                for topic, percent, timestamp in recent_topics:
-                    progress_text += f"- {topic}: {percent:.1f}% ({timestamp})\n"
-                progress_text += "\n"
+                progress_text += "Недавние темы: " + ", ".join([t[0] for t in recent_topics]) + "\n"
             if error_topics:
-                progress_text += "Темы с ошибками:\n"
-                for topic, count in error_topics:
-                    progress_text += f"- {topic}: {count} ошибок\n"
-            else:
-                progress_text += "Ошибок не найдено!\n"
+                progress_text += "Темы с ошибками: " + ", ".join(error_topics) + "\n"
 
-            await update.message.reply_text(progress_text, reply_markup=self.main_menu_markup)
+            await update.message.reply_text(progress_text)
         elif text == "❓ Помощь":
-            await update.message.reply_text(HELP_TEXT, reply_markup=self.main_menu_markup)
+            await update.message.reply_text(HELP_TEXT)
         else:
             await update.message.reply_text("Пожалуйста, выберите действие из меню.", reply_markup=self.main_menu_markup)
 

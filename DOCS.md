@@ -372,3 +372,8 @@ Users can select their preferred language when starting the bot. The language ca
 - Added missing callback query handlers for 'prev_question', 'next_question', and 'continue_test' in bot.py.
 - Implemented `handle_prev_question` and `handle_next_question` in `CallbackHandlers` to allow users to move between questions during a test.
 - Now, the navigation buttons work as expected during the test flow. 
+
+## [UX] Main menu buttons disabled during test
+- Теперь во время прохождения теста кнопки главного меню неактивны.
+- Если пользователь пытается нажать на "Мой прогресс" или "Помощь" во время теста, он получает сообщение, что нужно завершить тест или вернуться к темам.
+- Это предотвращает наложение меню и теста, и делает UX чище. 
