@@ -5,8 +5,8 @@ import re
 from PIL import Image
 from typing import List, Dict, Optional
 import sqlite3  # <--- добавлено для работы с БД
-from .database import Database
-from .ai_service import AIService
+from src.services.database import Database
+from src.services.ai_service import AIService
 from src.config.constants import TOPICS
 
 class PDFProcessor:
