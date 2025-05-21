@@ -6,7 +6,7 @@ from PIL import Image
 from typing import List, Dict
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-from services.database import Database
+from src.services.database import Database
 
 class PDFProcessor:
     def __init__(self, output_dir: str = "question_images"):

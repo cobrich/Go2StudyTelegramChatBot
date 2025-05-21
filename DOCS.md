@@ -367,3 +367,8 @@ Users can select their preferred language when starting the bot. The language ca
 ---
 
 **The bot is now fully functional with robust error handling, clear user feedback, reliable question sourcing, and seamless PDF-to-database import.** 
+
+## [FIX] Navigation Buttons (Продолжить, Предыдущий, Следующий)
+- Added missing callback query handlers for 'prev_question', 'next_question', and 'continue_test' in bot.py.
+- Implemented `handle_prev_question` and `handle_next_question` in `CallbackHandlers` to allow users to move between questions during a test.
+- Now, the navigation buttons work as expected during the test flow. 

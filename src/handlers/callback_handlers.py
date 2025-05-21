@@ -266,4 +266,46 @@ class CallbackHandlers(BaseHandler):
                 reply_markup=get_main_menu_markup()
             )
         except Exception:
+            pass
+
+    async def handle_prev_question(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        await query.answer()
+        questions = self.get_user_data(context).get('questions', [])
+        current_index = self.get_user_data(context).get('current_question_index', 0)
+        if not questions or current_index <= 0:
+            return
+        prev_index = current_index - 1
+        self.set_user_data(context, 'current_question_index', prev_index)
+        question = questions[prev_index]
+        source = question[4] if len(question) > 4 else 'db'
+        source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
+        keyboard = build_question_keyboard(question[3], prev_index, max(prev_index, current_index), len(questions))
+        try:
+            await query.message.edit_text(
+                f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {prev_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}",
+                reply_markup=keyboard
+            )
+        except Exception:
+            pass
+
+    async def handle_next_question(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        await query.answer()
+        questions = self.get_user_data(context).get('questions', [])
+        current_index = self.get_user_data(context).get('current_question_index', 0)
+        if not questions or current_index >= len(questions) - 1:
+            return
+        next_index = current_index + 1
+        self.set_user_data(context, 'current_question_index', next_index)
+        question = questions[next_index]
+        source = question[4] if len(question) > 4 else 'db'
+        source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
+        keyboard = build_question_keyboard(question[3], next_index, next_index, len(questions))
+        try:
+            await query.message.edit_text(
+                f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {next_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}",
+                reply_markup=keyboard
+            )
+        except Exception:
             pass 

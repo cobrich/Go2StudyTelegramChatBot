@@ -53,7 +53,7 @@ def main() -> None:
     ))
     application.add_handler(CallbackQueryHandler(
         callback_handlers.handle_continue,
-        pattern="^continue$"
+        pattern="^continue_test$"
     ))
     application.add_handler(CallbackQueryHandler(
         callback_handlers.handle_show_results,
@@ -66,6 +66,14 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(
         callback_handlers.handle_back_to_topics,
         pattern="^back_to_topics$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        callback_handlers.handle_prev_question,
+        pattern="^prev_question$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        callback_handlers.handle_next_question,
+        pattern="^next_question$"
     ))
     
     # Start the Bot
