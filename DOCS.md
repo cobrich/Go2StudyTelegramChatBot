@@ -384,3 +384,31 @@ Users can select their preferred language when starting the bot. The language ca
 ## [BUGFIX] Test flow: 'Продолжить' button
 - Исправлено: теперь данные пользователя очищаются только после показа результатов теста, а не после каждого ответа.
 - Кнопка 'Продолжить' теперь работает корректно, вопросы не теряются между переходами. 
+
+## PDF Processing Updates (2024-03-21)
+
+### Changes Made:
+1. Moved PDF processor to `src/services/pdf_processor.py` for better code organization
+2. Modified PDF processor to focus on processing only NIS.pdf file
+3. Added topic extraction from PDF content
+4. Improved question extraction with topic association
+5. Updated database integration to store topics from PDF
+
+### New Features:
+- Automatic topic detection from PDF headers
+- Questions are now associated with their respective topics from the PDF
+- Improved language detection for Russian and Kazakh content
+- Better error handling and logging
+
+### Usage:
+To process NIS.pdf and add questions to the database:
+```bash
+python -m src.services.pdf_processor
+```
+
+The processor will:
+1. Extract questions from NIS.pdf
+2. Detect topics from PDF headers
+3. Associate questions with their topics
+4. Save questions to the database
+5. Log added questions to added_questions.log 
