@@ -141,7 +141,6 @@ class CallbackHandlers(BaseHandler):
         if current_index == len(questions) - 1:
             # Тест завершён, сбрасываем активность
             self.db.set_user_inactive(user_id)
-            self.clear_user_data(context)
             keyboard = build_results_keyboard([], self.get_user_data(context).get('current_topic', ''))
             try:
                 await query.message.edit_text(
@@ -150,11 +149,11 @@ class CallbackHandlers(BaseHandler):
                 )
             except Exception:
                 pass
+            self.clear_user_data(context)
         else:
             # Move to next question
             next_index = current_index + 1
             self.set_user_data(context, 'current_question_index', next_index)
-            
             keyboard = build_continue_keyboard()
             try:
                 await query.message.edit_text(
@@ -168,33 +167,30 @@ class CallbackHandlers(BaseHandler):
         """Handle continue button callback."""
         query = update.callback_query
         await query.answer()
-        
         questions = self.get_user_data(context).get('questions', [])
         current_index = self.get_user_data(context).get('current_question_index', 0)
-        
+        logging.info(f"[handle_continue] current_index={current_index}, questions_len={len(questions)}")
         if not questions or current_index >= len(questions):
-            logging.error("No questions found or invalid index")
+            logging.error(f"[handle_continue] No questions found or invalid index: current_index={current_index}, questions_len={len(questions)}")
             try:
                 await query.message.edit_text(
                     "Произошла ошибка. Пожалуйста, начните тест заново.",
                     reply_markup=build_topic_selection_keyboard()
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logging.error(f"[handle_continue] Exception in error message: {e}")
             return
-            
         question = questions[current_index]
         source = question[4] if len(question) > 4 else 'db'
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         keyboard = build_question_keyboard(question[3], current_index, current_index, len(questions))
-        
         try:
             await query.message.edit_text(
                 f"Тема: {question['topic']}\nВопрос {current_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}",
                 reply_markup=keyboard
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logging.error(f"[handle_continue] Exception in edit_text: {e}")
 
     async def handle_show_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle show results callback."""
