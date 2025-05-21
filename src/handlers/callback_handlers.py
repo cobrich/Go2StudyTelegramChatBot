@@ -332,7 +332,7 @@ class CallbackHandlers(BaseHandler):
             # Отправляем новое сообщение с главным меню (обычная клавиатура)
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
-                text="Выберите действие:",
+                text="Тема не выбрана. Пожалуйста, выберите действие из меню.",
                 reply_markup=get_main_menu_markup()
             )
         except Exception:
