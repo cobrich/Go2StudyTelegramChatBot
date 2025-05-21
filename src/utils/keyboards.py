@@ -22,7 +22,7 @@ def get_main_menu_markup() -> ReplyKeyboardMarkup:
 def build_question_keyboard(options: list, q_num: int, max_reached: int, total_questions: int) -> InlineKeyboardMarkup:
     """Build keyboard for question display with navigation buttons."""
     keyboard = [
-        [InlineKeyboardButton(ans, callback_data=f"ans_{i}_{q_num}")]
+        [InlineKeyboardButton(ans, callback_data=f"answer_{i}_{q_num}")]
         for i, ans in enumerate(options)
     ]
     
