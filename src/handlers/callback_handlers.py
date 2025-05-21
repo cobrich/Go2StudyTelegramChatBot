@@ -37,6 +37,8 @@ class CallbackHandlers(BaseHandler):
         if await self.check_user_active(update, context):
             return
             
+        # Очищаем user_data при выборе новой темы
+        self.clear_user_data(context)
         # Set user as active and store topic
         self.db.set_user_active(user_id, topic)
         self.set_user_data(context, 'current_topic', topic)
@@ -228,7 +230,6 @@ class CallbackHandlers(BaseHandler):
                 )
         else:
             results_text += "Поздравляем! Все ответы верны!\n"
-        # Формируем кнопки только для ошибочных вопросов
         buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]]
         for err in errors:
             buttons.append([
@@ -244,9 +245,7 @@ class CallbackHandlers(BaseHandler):
             await query.message.edit_text(results_text, reply_markup=keyboard)
         except Exception:
             pass
-        # Очищаем user_data после показа итогов
-        self.clear_user_data(context)
-        self.db.set_user_inactive(user_id)
+        # user_data теперь очищается только при возврате в меню или выборе новой темы
 
     async def handle_show_explanation(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
