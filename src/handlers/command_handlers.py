@@ -101,14 +101,15 @@ class CommandHandlers(BaseHandler):
             )
             return
         if text == "📚 Выбрать тему и начать":
-            await update.message.reply_text(
-                "Выберите тему:",
-                reply_markup=build_topic_selection_keyboard()
-            )
-            # Убираем обычную клавиатуру, чтобы скрыть главные кнопки
+            # Сначала убираем обычную клавиатуру
             await update.message.reply_text(
                 " ",
                 reply_markup=ReplyKeyboardRemove()
+            )
+            # Затем отправляем сообщение с inline-кнопками
+            await update.message.reply_text(
+                "Выберите тему:",
+                reply_markup=build_topic_selection_keyboard()
             )
         elif text == "📊 Мой прогресс":
             total_tests, avg_percentage = self.db.get_user_progress(user_id)
