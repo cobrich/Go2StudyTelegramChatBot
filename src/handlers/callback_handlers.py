@@ -324,8 +324,15 @@ class CallbackHandlers(BaseHandler):
         self.db.set_user_inactive(user_id)
         self.clear_user_data(context)
         try:
-            await query.message.edit_text(
-                "Выберите действие:",
+            # Удаляем inline-клавиатуру у старого сообщения
+            await query.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        try:
+            # Отправляем новое сообщение с главным меню (обычная клавиатура)
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="Выберите действие:",
                 reply_markup=get_main_menu_markup()
             )
         except Exception:
