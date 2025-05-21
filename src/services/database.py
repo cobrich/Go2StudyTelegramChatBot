@@ -4,7 +4,11 @@ import os
 from typing import List, Dict, Any, Optional, Tuple
 
 class Database:
-    def __init__(self, db_path: str = "math_bot.db"):
+    def __init__(self, db_path: str = None):
+        # Всегда использовать базу в корне проекта
+        if db_path is None:
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            db_path = os.path.join(project_root, "math_bot.db")
         self.db_path = db_path
         print(f"[LOG] Используется база данных: {os.path.abspath(self.db_path)}")
         self._init_db()
