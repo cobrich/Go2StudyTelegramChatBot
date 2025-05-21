@@ -1,10 +1,12 @@
 import sqlite3
 import logging
+import os
 from typing import List, Dict, Any, Optional, Tuple
 
 class Database:
-    def __init__(self, db_path: str = "../../math_bot.db"):
+    def __init__(self, db_path: str = "math_bot.db"):
         self.db_path = db_path
+        print(f"[LOG] Используется база данных: {os.path.abspath(self.db_path)}")
         self._init_db()
 
     def _init_db(self):
