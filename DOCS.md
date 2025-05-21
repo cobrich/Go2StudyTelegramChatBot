@@ -412,3 +412,35 @@ The processor will:
 3. Associate questions with their topics
 4. Save questions to the database
 5. Log added questions to added_questions.log 
+
+## [2024-03-21] Topics Update
+
+### Changes Made:
+1. Updated topics list in `constants.py` to match NIS.pdf content:
+   - Added new topics: АЛГЕБРА, ТРИГОНОМЕТРИЯ, СТЕРЕОМЕТРИЯ, КОМБИНАТОРИКА, ТЕОРИЯ ВЕРОЯТНОСТЕЙ, СТАТИСТИКА, МАТЕМАТИЧЕСКИЙ АНАЛИЗ
+   - Removed old topics: Дроби, Проценты, Пропорции, Уравнения
+   - Kept existing topics: ГЕОМЕТРИЯ, ЛОГИКА
+2. Topics are now in uppercase to match the PDF format
+3. Topics are more comprehensive and aligned with the NIS curriculum
+
+### Impact:
+- Better alignment with NIS curriculum
+- More accurate topic categorization for questions
+- Improved user experience with standardized topic names 
+
+## [2024-06-11] Темы обновлены по содержанию NIS.pdf
+
+### Изменения:
+- Список TOPICS в constants.py теперь соответствует темам из содержания NIS.pdf:
+  1. Соотношение и пропорция
+  2. Масштаб и процент
+  3. Арифметика, модуль числа и уравнения
+  4. Система уравнений
+  5. Текстовые задачи
+  6. Выражения
+  7. Неравенства
+  8. Логические задачи
+  9. Функция
+  10. Круг и окружность
+- Старые темы удалены.
+- Теперь вопросы будут категоризироваться строго по этим темам. 
