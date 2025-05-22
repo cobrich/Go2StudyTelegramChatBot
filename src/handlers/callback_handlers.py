@@ -23,12 +23,12 @@ class CallbackHandlers(BaseHandler):
             await query.message.edit_reply_markup(reply_markup=None)
         except Exception:
             pass
-        # Отправляем сообщение о формировании вопросов
-        await query.message.reply_text("Формируются вопросы, подождите...")
         # Check if this is a retake
         if topic_data.startswith('retake_'):
             is_retake = True
             topic_index = topic_data.replace('retake_', '')
+            # Только для ретейка показываем сообщение
+            await query.message.reply_text("Формируются вопросы, подождите...")
         else:
             topic_index = topic_data
         logging.info(f"[handle_topic_selection] after retake check: is_retake={is_retake}, topic_index={topic_index}")
