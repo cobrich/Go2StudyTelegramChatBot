@@ -19,9 +19,11 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            # Add source column if it doesn't exist
+            # Add source column if it doesn't exist and set default value for existing records
             try:
                 cursor.execute('ALTER TABLE questions ADD COLUMN source TEXT DEFAULT "db"')
+                # Update existing records to have 'db' as source
+                cursor.execute('UPDATE questions SET source = "db" WHERE source IS NULL')
                 conn.commit()
             except sqlite3.OperationalError:
                 # Column already exists
