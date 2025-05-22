@@ -17,17 +17,18 @@ class CallbackHandlers(BaseHandler):
         query = update.callback_query
         topic_data = query.data.replace('topic_', '')
         is_retake = False
-        
+        logging.info(f"[handle_topic_selection] query.data={query.data}, topic_data={topic_data}, is_retake={is_retake}")
         # Check if this is a retake
         if topic_data.startswith('retake_'):
             is_retake = True
             topic_index = topic_data.replace('retake_', '')
         else:
             topic_index = topic_data
-            
+        logging.info(f"[handle_topic_selection] after retake check: is_retake={is_retake}, topic_index={topic_index}")
         try:
             topic_index = int(topic_index)
             topic = TOPICS[topic_index]
+            logging.info(f"[handle_topic_selection] topic_index={topic_index}, topic={topic}")
         except (ValueError, IndexError):
             logging.error(f"Invalid topic selected: {topic_index}")
             try:
