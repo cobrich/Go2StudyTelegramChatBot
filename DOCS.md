@@ -81,6 +81,7 @@ python src/bot.py
 ```
 
 ## Recent Changes
+- Updated help text with more detailed and child-friendly instructions, including emojis and clear explanations for 5-6 grade students
 - Added question validation functionality in AI service for checking answer correctness
 - Added new validate_questions.py script for batch validation of all questions in the database
 - Fixed import path in database.py for better module organization
