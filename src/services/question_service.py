@@ -77,6 +77,16 @@ class QuestionService:
             if result:
                 question, correct_answer, incorrect_options, explanation = result
                 if question not in existing_question_texts_to_exclude:
+                    # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
+                    if not self.db.get_explanation_by_question_text(question):
+                        self.db.add_question({
+                            'topic': topic,
+                            'question': question,
+                            'answer': correct_answer,
+                            'explanation': explanation,
+                            'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
+                            'question_type': 'ai'
+                        })
                     new_tasks.append((
                         question,
                         correct_answer,
