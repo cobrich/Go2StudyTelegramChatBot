@@ -120,7 +120,7 @@ class QuestionService:
                         task['answer'],
                         task['explanation'],
                         options,
-                        'db',
+                        task.get('source', 'db'),
                         task.get('image_path')
                     ))
                     existing_question_texts_to_exclude.add(task['question'])
