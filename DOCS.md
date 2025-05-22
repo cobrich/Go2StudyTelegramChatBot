@@ -92,6 +92,7 @@ python src/bot.py
 ```
 
 ## Recent Changes
+- Added detailed logging to get_or_generate_tasks: now logs all stages of question selection, reasons for skipping, and final question list for each test session
 - Fixed retake functionality: Now during retakes, the bot will always generate AI questions based on previous errors, even if there are enough error tasks in the database
 - Added migration to update question_type from 'ai' to 'test' for all questions
 - Added database migration to add source column to questions table with default value 'db' for existing records

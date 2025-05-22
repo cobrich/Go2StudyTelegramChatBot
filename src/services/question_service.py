@@ -21,12 +21,14 @@ class QuestionService:
         is_retake: bool = False
     ) -> List[tuple]:
         """Get tasks for test: сначала ошибки пользователя, потом обычные вопросы, потом ИИ."""
+        logging.info(f"[get_or_generate_tasks] user_id={user_id}, topic={topic}, needed={needed}, is_retake={is_retake}, force_ai={force_ai}")
         if existing_question_texts_to_exclude is None:
             existing_question_texts_to_exclude = set()
         tasks = []
         
         # 1. Сначала ошибки пользователя
         error_tasks = self.db.get_error_tasks_for_user(user_id, topic, limit=needed)
+        logging.info(f"[get_or_generate_tasks] error_tasks found: {len(error_tasks)}")
         error_questions = []  # Store error questions for AI generation
         for task in error_tasks:
             if task['question'] not in existing_question_texts_to_exclude:
@@ -44,10 +46,16 @@ class QuestionService:
                 ))
                 error_questions.append(task['question'])  # Add to error questions list
                 existing_question_texts_to_exclude.add(task['question'])
+                logging.info(f"[get_or_generate_tasks] Added error_task: {task['question']}")
+            else:
+                logging.info(f"[get_or_generate_tasks] Skipped duplicate error_task: {task['question']}")
+
+        logging.info(f"[get_or_generate_tasks] Total error_tasks added: {len(tasks)}")
 
         # If this is a retake and we have some error tasks, generate additional questions to reach needed count
         if is_retake and error_questions:
             remaining = needed - len(tasks)
+            logging.info(f"[get_or_generate_tasks][retake] Need to generate {remaining} AI questions based on errors")
             if remaining > 0:
                 new_tasks = []
                 loop = asyncio.get_running_loop()
@@ -56,7 +64,7 @@ class QuestionService:
                 for error_question in error_questions:
                     if len(generation_tasks) >= remaining:
                         break
-                    # Generate a similar question for each error question
+                    logging.info(f"[get_or_generate_tasks][retake] Scheduling AI generation for error_question: {error_question}")
                     generation_tasks.append(
                         loop.run_in_executor(
                             None,
@@ -67,26 +75,27 @@ class QuestionService:
                     )
                 # If we still need more questions, generate regular ones
                 if len(generation_tasks) < remaining:
+                    logging.info(f"[get_or_generate_tasks][retake] Not enough error_questions, scheduling {remaining - len(generation_tasks)} regular AI generations")
                     generation_tasks.extend([
                         loop.run_in_executor(None, self.ai_service.generate_task, topic)
                         for _ in range(remaining - len(generation_tasks))
                     ])
                 results = await asyncio.gather(*generation_tasks, return_exceptions=True)
                 for result in results:
-                    logging.info(f"[DEBUG][retake][AI generation result]: {result}")
+                    logging.info(f"[get_or_generate_tasks][retake][AI generation result]: {result}")
                     if isinstance(result, Exception):
-                        logging.error(f"Error generating task: {result}")
+                        logging.error(f"[get_or_generate_tasks][retake][AI generation] Error generating task: {result}")
                         continue
                     if not result:
-                        logging.warning(f"[DEBUG][retake][AI generation]: Empty or invalid result from Gemini")
+                        logging.warning(f"[get_or_generate_tasks][retake][AI generation] Empty or invalid result from Gemini")
                         continue
                     if isinstance(result, tuple) and len(result) >= 4:
                         question, correct_answer, incorrect_options, explanation = result
                         if not question:
-                            logging.warning(f"[DEBUG][retake][AI generation]: No question text in result: {result}")
+                            logging.warning(f"[get_or_generate_tasks][retake][AI generation] No question text in result: {result}")
                             continue
                         if question in existing_question_texts_to_exclude:
-                            logging.info(f"[DEBUG][retake][AI generation]: Duplicate question skipped: {question}")
+                            logging.info(f"[get_or_generate_tasks][retake][AI generation] Duplicate question skipped: {question}")
                             continue
                         # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
                         if not self.db.get_explanation_by_question_text(question):
@@ -99,6 +108,7 @@ class QuestionService:
                                 'question_type': 'standard',
                                 'source': 'ai'
                             })
+                            logging.info(f"[get_or_generate_tasks][retake][AI generation] Saved new AI question to DB: {question}")
                         new_tasks.append((
                             question,
                             correct_answer,
@@ -108,16 +118,19 @@ class QuestionService:
                             None
                         ))
                         existing_question_texts_to_exclude.add(question)
+                        logging.info(f"[get_or_generate_tasks][retake][AI generation] Added AI question: {question}")
                     else:
-                        logging.warning(f"[DEBUG][retake][AI generation]: Unexpected result format: {result}")
-                logging.info(f"[DEBUG][retake][AI generation]: Total new AI tasks added: {len(new_tasks)}")
+                        logging.warning(f"[get_or_generate_tasks][retake][AI generation] Unexpected result format: {result}")
+                logging.info(f"[get_or_generate_tasks][retake][AI generation] Total new AI tasks added: {len(new_tasks)}")
                 tasks.extend(new_tasks)
                 if len(tasks) >= needed:
+                    logging.info(f"[get_or_generate_tasks][retake] Returning {len(tasks)} tasks (errors + AI)")
                     return tasks[:needed]
 
         # 2. Обычные вопросы из базы (только если это не ретейк или нет ошибок)
         if not is_retake or not tasks:
             db_tasks_pool_raw = self.db.get_tasks_for_topic(topic, limit=needed * 2)
+            logging.info(f"[get_or_generate_tasks] db_tasks_pool_raw found: {len(db_tasks_pool_raw)}")
             for task in db_tasks_pool_raw:
                 if task['question'] not in existing_question_texts_to_exclude:
                     options = [task['answer']]
@@ -133,11 +146,16 @@ class QuestionService:
                         task['image_path'] if 'image_path' in task else None
                     ))
                     existing_question_texts_to_exclude.add(task['question'])
+                    logging.info(f"[get_or_generate_tasks] Added db_task: {task['question']}")
                     if len(tasks) >= needed:
+                        logging.info(f"[get_or_generate_tasks] Returning {len(tasks)} tasks (errors + db)")
                         return tasks[:needed]
+                else:
+                    logging.info(f"[get_or_generate_tasks] Skipped duplicate db_task: {task['question']}")
 
         # 3. Генерация новых вопросов
         remaining = needed - len(tasks)
+        logging.info(f"[get_or_generate_tasks] Need to generate {remaining} new AI questions (final stage)")
         new_tasks = []
         loop = asyncio.get_running_loop()
         generation_tasks = [
@@ -146,8 +164,9 @@ class QuestionService:
         ]
         results = await asyncio.gather(*generation_tasks, return_exceptions=True)
         for result in results:
+            logging.info(f"[get_or_generate_tasks][final AI generation result]: {result}")
             if isinstance(result, Exception):
-                logging.error(f"Error generating task: {result}")
+                logging.error(f"[get_or_generate_tasks][final AI generation] Error generating task: {result}")
                 continue
             if result:
                 question, correct_answer, incorrect_options, explanation = result
@@ -163,6 +182,7 @@ class QuestionService:
                             'question_type': 'standard',
                             'source': 'ai'
                         })
+                        logging.info(f"[get_or_generate_tasks][final AI generation] Saved new AI question to DB: {question}")
                     new_tasks.append((
                         question,
                         correct_answer,
@@ -172,9 +192,13 @@ class QuestionService:
                         None
                     ))
                     existing_question_texts_to_exclude.add(question)
+                    logging.info(f"[get_or_generate_tasks][final AI generation] Added AI question: {question}")
+                else:
+                    logging.info(f"[get_or_generate_tasks][final AI generation] Skipped duplicate AI question: {question}")
         all_tasks = tasks + new_tasks
+        logging.info(f"[get_or_generate_tasks] Total tasks after all stages: {len(all_tasks)}")
         if len(all_tasks) < needed:
-            logging.warning(f"Could only generate {len(all_tasks)} tasks out of {needed} needed. Trying one more time...")
+            logging.warning(f"[get_or_generate_tasks] Could only generate {len(all_tasks)} tasks out of {needed} needed. Trying one more time...")
             final_tasks = await self.get_or_generate_tasks(
                 user_id, topic, needed, 
                 force_ai=True,
@@ -182,6 +206,9 @@ class QuestionService:
                 is_retake=is_retake
             )
             return final_tasks
+        # Лог финального списка вопросов
+        for idx, q in enumerate(all_tasks[:needed]):
+            logging.info(f"[get_or_generate_tasks] Final task {idx+1}: {q[0][:80]}... (source: {q[4]})")
         return all_tasks[:needed]
 
     @staticmethod
