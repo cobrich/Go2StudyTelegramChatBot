@@ -80,6 +80,8 @@ class CallbackHandlers(BaseHandler):
         question = questions[0]
         source = question[5] if len(question) > 5 else 'db'
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
+        logging.info(f"[DEBUG] question tuple: {question}")
+        logging.info(f"[DEBUG] source: {source}, source_text: {source_text}")
         keyboard = build_question_keyboard(question[3], 0, 0, len(questions))
         
         try:
