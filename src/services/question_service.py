@@ -44,11 +44,9 @@ class QuestionService:
                 ))
                 error_questions.append(task['question'])  # Add to error questions list
                 existing_question_texts_to_exclude.add(task['question'])
-                if len(tasks) >= needed:
-                    return tasks[:needed]
 
         # If this is a retake and we have some error tasks, generate additional questions to reach needed count
-        if is_retake and tasks:
+        if is_retake and error_questions:
             remaining = needed - len(tasks)
             if remaining > 0:
                 new_tasks = []
@@ -114,7 +112,8 @@ class QuestionService:
                         logging.warning(f"[DEBUG][retake][AI generation]: Unexpected result format: {result}")
                 logging.info(f"[DEBUG][retake][AI generation]: Total new AI tasks added: {len(new_tasks)}")
                 tasks.extend(new_tasks)
-                return tasks[:needed]
+                if len(tasks) >= needed:
+                    return tasks[:needed]
 
         # 2. Обычные вопросы из базы (только если это не ретейк или нет ошибок)
         if not is_retake or not tasks:

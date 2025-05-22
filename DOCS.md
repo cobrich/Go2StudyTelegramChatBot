@@ -92,6 +92,7 @@ python src/bot.py
 ```
 
 ## Recent Changes
+- Fixed retake functionality: Now during retakes, the bot will always generate AI questions based on previous errors, even if there are enough error tasks in the database
 - Added migration to update question_type from 'ai' to 'test' for all questions
 - Added database migration to add source column to questions table with default value 'db' for existing records
 - Updated help text with more detailed and child-friendly instructions, including emojis and clear explanations for 5-6 grade students
