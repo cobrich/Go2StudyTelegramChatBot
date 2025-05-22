@@ -2,6 +2,7 @@ import sqlite3
 import logging
 import os
 from typing import List, Dict, Any, Optional, Tuple
+from src.config.constants import TOPICS
 
 class Database:
     def __init__(self, db_path: str = None):
@@ -65,6 +66,7 @@ class Database:
                     user_answer TEXT,
                     correct_answer TEXT,
                     explanation TEXT,
+                    error_count INTEGER DEFAULT 1,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
@@ -162,15 +164,50 @@ class Database:
     def add_user_error(self, user_id: int, topic: str, question_text: str,
                       user_answer_text: str, correct_answer_text: str,
                       explanation_text: str) -> None:
-        """Add a user's error to the database."""
+        """Add a user's error to the database or increment error count if exists."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            # Check if error already exists
+            cursor.execute('''
+                SELECT id, error_count FROM user_errors 
+                WHERE user_id = ? AND question_text = ?
+            ''', (user_id, question_text))
+            result = cursor.fetchone()
+            
+            if result:
+                # Update existing error
+                error_id, current_count = result
+                cursor.execute('''
+                    UPDATE user_errors 
+                    SET error_count = error_count + 1,
+                        timestamp = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (error_id,))
+            else:
+                # Insert new error
+                cursor.execute('''
+                    INSERT INTO user_errors 
+                    (user_id, topic, question_text, user_answer, correct_answer, explanation)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (user_id, topic, question_text, user_answer_text,
+                     correct_answer_text, explanation_text))
+            conn.commit()
+
+    def decrement_error_count(self, user_id: int, question_text: str) -> None:
+        """Decrement error count for a question and remove if reaches 0."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO user_errors 
-                (user_id, topic, question_text, user_answer, correct_answer, explanation)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_id, topic, question_text, user_answer_text,
-                 correct_answer_text, explanation_text))
+                UPDATE user_errors 
+                SET error_count = error_count - 1
+                WHERE user_id = ? AND question_text = ?
+            ''', (user_id, question_text))
+            
+            # Remove if count reaches 0
+            cursor.execute('''
+                DELETE FROM user_errors 
+                WHERE user_id = ? AND question_text = ? AND error_count <= 0
+            ''', (user_id, question_text))
             conn.commit()
 
     def get_tasks_for_topic(self, topic: str, limit: int = 20) -> List[Dict[str, Any]]:
@@ -192,14 +229,14 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT DISTINCT q.question, q.answer, q.explanation, q.incorrect_options
+                SELECT DISTINCT q.question, q.answer, q.explanation, q.incorrect_options, ue.error_count
                 FROM questions q
                 JOIN user_errors ue ON q.question = ue.question_text
                 WHERE ue.user_id = ? AND ue.topic = ?
-                ORDER BY ue.timestamp DESC
+                ORDER BY ue.error_count DESC, ue.timestamp DESC
                 LIMIT ?
             ''', (user_id, topic, limit))
-            columns = ['question', 'answer', 'explanation', 'incorrect_options']
+            columns = ['question', 'answer', 'explanation', 'incorrect_options', 'error_count']
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     def get_explanation_by_question_text(self, question_text: str) -> Optional[str]:
@@ -272,4 +309,26 @@ class Database:
                 question['incorrect_options'],
                 question.get('question_type', 'standard')
             ))
-            conn.commit() 
+            conn.commit()
+
+    def update_question(self, question_text: str, new_answer: str, new_explanation: str) -> None:
+        """Update a question's answer and explanation."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE questions 
+                SET answer = ?, explanation = ?
+                WHERE question = ?
+            ''', (new_answer, new_explanation, question_text))
+            conn.commit()
+
+    def get_all_questions(self) -> List[Dict[str, Any]]:
+        """Get all questions from the database."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT question, answer, explanation, topic
+                FROM questions
+            ''')
+            columns = ['question', 'answer', 'explanation', 'topic']
+            return [dict(zip(columns, row)) for row in cursor.fetchall()] 

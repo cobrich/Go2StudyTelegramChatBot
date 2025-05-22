@@ -158,12 +158,29 @@ class CallbackHandlers(BaseHandler):
                 correct_answer_text=correct_answer,
                 explanation_text=question[2]
             )
+            # Decrement error count if this was previously an error
+            self.db.decrement_error_count(user_id, question[0])
+        else:
+            # Decrement error count if this was previously an error
+            self.db.decrement_error_count(user_id, question[0])
+
+        # Get error count for display
+        error_count = 0
+        if not is_correct:
+            error_tasks = self.db.get_error_tasks_for_user(user_id, self.get_user_data(context).get('current_topic'), limit=1)
+            for task in error_tasks:
+                if task['question'] == question[0]:
+                    error_count = task['error_count']
+                    break
+
         result_text = (
             f"{'✅ Правильно!' if is_correct else '❌ Неправильно!'}\n\n"
             f"Правильный ответ: {correct_answer}\n"
             f"Объяснение: {question[2]}\n"
             f"Источник: {source_text}"
         )
+        if error_count > 0:
+            result_text += f"\n\nКоличество ошибок в этом вопросе: {error_count}"
         if current_index == len(questions) - 1:
             self.db.set_user_inactive(user_id)
             # Показываем только кнопку 'Показать результаты'

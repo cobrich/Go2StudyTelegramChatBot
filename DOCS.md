@@ -506,3 +506,44 @@ This change helps users:
 - Focus on improving their knowledge in areas where they made mistakes
 - Practice similar types of questions to better understand the concepts
 - Get a complete test experience with a mix of error-focused and new questions
+
+## [2024-06-11] Question Validation System
+
+### Changes Made:
+1. Added new AI-based question validation system to check and fix incorrect answers
+2. Created `validate_question_answer` method in `AIService` to validate questions using Gemini AI
+3. Added database methods to update questions with corrected answers
+4. Created validation script `validate_questions.py` to check all questions in the database
+
+### Features:
+- Automatic validation of all questions in the database
+- AI-powered answer and explanation correction
+- Detailed logging of changes made
+- Topic-based validation tracking
+
+### Usage:
+To validate and fix all questions in the database:
+```bash
+python -m src.validate_questions
+```
+
+The script will:
+1. Load all questions from the database
+2. Validate each question's answer and explanation using AI
+3. Update incorrect answers and explanations
+4. Log all changes made
+
+## Error Tracking System
+
+The bot now includes an enhanced error tracking system that helps users focus on questions they struggle with:
+
+- Each incorrect answer increments an error counter for that question
+- Each correct answer decrements the error counter
+- Questions are automatically removed from the error list when the counter reaches 0
+- Questions with higher error counts are prioritized in practice sessions
+- Users can see their error count for each question after answering
+
+This system helps users:
+1. Focus on questions they find most challenging
+2. Track their progress in mastering difficult questions
+3. Gradually remove questions from their error list as they improve
