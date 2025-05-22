@@ -45,7 +45,7 @@ def main() -> None:
     # Add callback query handlers
     application.add_handler(CallbackQueryHandler(
         callback_handlers.handle_topic_selection,
-        pattern="^topic_"
+        pattern=r'^(topic_|retake_)'
     ))
     application.add_handler(CallbackQueryHandler(
         callback_handlers.handle_answer,
