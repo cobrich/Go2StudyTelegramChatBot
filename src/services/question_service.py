@@ -67,42 +67,52 @@ class QuestionService:
                             error_question
                         )
                     )
-                
                 # If we still need more questions, generate regular ones
                 if len(generation_tasks) < remaining:
                     generation_tasks.extend([
                         loop.run_in_executor(None, self.ai_service.generate_task, topic)
                         for _ in range(remaining - len(generation_tasks))
                     ])
-                
                 results = await asyncio.gather(*generation_tasks, return_exceptions=True)
                 for result in results:
+                    logging.info(f"[DEBUG][retake][AI generation result]: {result}")
                     if isinstance(result, Exception):
                         logging.error(f"Error generating task: {result}")
                         continue
-                    if result:
+                    if not result:
+                        logging.warning(f"[DEBUG][retake][AI generation]: Empty or invalid result from Gemini")
+                        continue
+                    if isinstance(result, tuple) and len(result) >= 4:
                         question, correct_answer, incorrect_options, explanation = result
-                        if question not in existing_question_texts_to_exclude:
-                            # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
-                            if not self.db.get_explanation_by_question_text(question):
-                                self.db.add_question({
-                                    'topic': topic,
-                                    'question': question,
-                                    'answer': correct_answer,
-                                    'explanation': explanation,
-                                    'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
-                                    'question_type': 'standard',
-                                    'source': 'ai'
-                                })
-                            new_tasks.append((
-                                question,
-                                correct_answer,
-                                explanation,
-                                incorrect_options,
-                                'ai',
-                                None
-                            ))
-                            existing_question_texts_to_exclude.add(question)
+                        if not question:
+                            logging.warning(f"[DEBUG][retake][AI generation]: No question text in result: {result}")
+                            continue
+                        if question in existing_question_texts_to_exclude:
+                            logging.info(f"[DEBUG][retake][AI generation]: Duplicate question skipped: {question}")
+                            continue
+                        # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
+                        if not self.db.get_explanation_by_question_text(question):
+                            self.db.add_question({
+                                'topic': topic,
+                                'question': question,
+                                'answer': correct_answer,
+                                'explanation': explanation,
+                                'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
+                                'question_type': 'standard',
+                                'source': 'ai'
+                            })
+                        new_tasks.append((
+                            question,
+                            correct_answer,
+                            explanation,
+                            incorrect_options,
+                            'ai',
+                            None
+                        ))
+                        existing_question_texts_to_exclude.add(question)
+                    else:
+                        logging.warning(f"[DEBUG][retake][AI generation]: Unexpected result format: {result}")
+                logging.info(f"[DEBUG][retake][AI generation]: Total new AI tasks added: {len(new_tasks)}")
                 tasks.extend(new_tasks)
                 return tasks[:needed]
 
