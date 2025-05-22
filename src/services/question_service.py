@@ -109,11 +109,19 @@ class QuestionService:
                                 'source': 'ai'
                             })
                             logging.info(f"[get_or_generate_tasks][retake][AI generation] Saved new AI question to DB: {question}")
+                        # Формируем варианты: правильный + неправильные, гарантируем наличие правильного
+                        options = [correct_answer]
+                        if incorrect_options:
+                            options += [opt for opt in incorrect_options if opt.strip()]
+                        if correct_answer not in options:
+                            options.append(correct_answer)
+                        options = list(dict.fromkeys(options))  # remove duplicates, preserve order
+                        random.shuffle(options)
                         new_tasks.append((
                             question,
                             correct_answer,
                             explanation,
-                            incorrect_options,
+                            options,
                             'ai',
                             None
                         ))
@@ -183,11 +191,19 @@ class QuestionService:
                             'source': 'ai'
                         })
                         logging.info(f"[get_or_generate_tasks][final AI generation] Saved new AI question to DB: {question}")
+                    # Формируем варианты: правильный + неправильные, гарантируем наличие правильного
+                    options = [correct_answer]
+                    if incorrect_options:
+                        options += [opt for opt in incorrect_options if opt.strip()]
+                    if correct_answer not in options:
+                        options.append(correct_answer)
+                    options = list(dict.fromkeys(options))  # remove duplicates, preserve order
+                    random.shuffle(options)
                     new_tasks.append((
                         question,
                         correct_answer,
                         explanation,
-                        incorrect_options,
+                        options,
                         'ai',
                         None
                     ))

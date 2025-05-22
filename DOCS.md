@@ -117,7 +117,8 @@ python src/bot.py
 - Added processing of errors for all Telegram API requests (query.answer and others) to prevent bot from crashing during timeouts and network errors
 - Added source field to questions table to properly track AI-generated questions
 - Updated question handling to use source field instead of question_type for determining question origin
-- Fixed question source display in UI (🟢 for database questions, 🟣 for AI-generated)
+- Fixed question source display in UI (🟢 for database questions, �� for AI-generated)
+- Fixed: For all AI-generated questions, the correct answer is now always included in the answer options shown to the user (even if Gemini or the database missed it)
 
 ## Usage
 
