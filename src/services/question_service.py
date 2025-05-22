@@ -91,7 +91,8 @@ class QuestionService:
                                     'answer': correct_answer,
                                     'explanation': explanation,
                                     'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
-                                    'question_type': 'ai'
+                                    'question_type': 'standard',
+                                    'source': 'ai'
                                 })
                             new_tasks.append((
                                 question,
@@ -150,7 +151,8 @@ class QuestionService:
                             'answer': correct_answer,
                             'explanation': explanation,
                             'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
-                            'question_type': 'ai'
+                            'question_type': 'standard',
+                            'source': 'ai'
                         })
                     new_tasks.append((
                         question,

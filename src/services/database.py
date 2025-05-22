@@ -19,6 +19,14 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
+            # Add source column if it doesn't exist
+            try:
+                cursor.execute('ALTER TABLE questions ADD COLUMN source TEXT DEFAULT "db"')
+                conn.commit()
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+            
             # Users table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
@@ -52,6 +60,7 @@ class Database:
                     explanation TEXT,
                     incorrect_options TEXT,
                     question_type TEXT DEFAULT 'standard',
+                    source TEXT DEFAULT 'db',
                     image_path TEXT
                 )
             ''')
@@ -215,13 +224,13 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT question, answer, explanation, incorrect_options, question_type
+                SELECT question, answer, explanation, incorrect_options, question_type, source
                 FROM questions
                 WHERE topic = ?
                 ORDER BY RANDOM()
                 LIMIT ?
             ''', (topic, limit))
-            columns = ['question', 'answer', 'explanation', 'incorrect_options', 'question_type']
+            columns = ['question', 'answer', 'explanation', 'incorrect_options', 'question_type', 'source']
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     def get_error_tasks_for_user(self, user_id: int, topic: str, limit: int = 10) -> List[Dict[str, Any]]:
@@ -299,15 +308,16 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO questions (topic, question, answer, explanation, incorrect_options, question_type)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO questions (topic, question, answer, explanation, incorrect_options, question_type, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 question['topic'],
                 question['question'],
                 question['answer'],
                 question['explanation'],
                 question['incorrect_options'],
-                question.get('question_type', 'standard')
+                question.get('question_type', 'standard'),
+                question.get('source', 'db')
             ))
             conn.commit()
 

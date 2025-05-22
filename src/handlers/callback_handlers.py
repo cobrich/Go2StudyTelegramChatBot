@@ -78,7 +78,7 @@ class CallbackHandlers(BaseHandler):
         
         # Display first question
         question = questions[0]
-        source = question[4] if len(question) > 4 else 'db'
+        source = question[5] if len(question) > 5 else 'db'
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         keyboard = build_question_keyboard(question[3], 0, 0, len(questions))
         
@@ -122,7 +122,7 @@ class CallbackHandlers(BaseHandler):
                 pass
             return
         question = questions[current_index]
-        source = question[4] if len(question) > 4 else 'db'
+        source = question[5] if len(question) > 5 else 'db'
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         try:
             selected_index = int(query.data.replace('answer_', '').split('_')[0])
@@ -226,7 +226,7 @@ class CallbackHandlers(BaseHandler):
                 logging.error(f"[handle_continue] Exception in error message: {e}")
             return
         question = questions[current_index]
-        source = question[4] if len(question) > 4 else 'db'
+        source = question[5] if len(question) > 5 else 'db'
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         keyboard = build_question_keyboard(question[3], current_index, current_index, len(questions))
         topic = self.get_user_data(context).get('current_topic', '')
@@ -401,7 +401,7 @@ class CallbackHandlers(BaseHandler):
         prev_index = current_index - 1
         self.set_user_data(context, 'current_question_index', prev_index)
         question = questions[prev_index]
-        source = question[4] if len(question) > 4 else 'db'
+        source = question[5] if len(question) > 5 else 'db'
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         user_results = context.user_data.get('user_results', [])
         user_answer = None
@@ -447,7 +447,7 @@ class CallbackHandlers(BaseHandler):
         next_index = current_index + 1
         self.set_user_data(context, 'current_question_index', next_index)
         question = questions[next_index]
-        source = question[4] if len(question) > 4 else 'db'
+        source = question[5] if len(question) > 5 else 'db'
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         user_results = context.user_data.get('user_results', [])
         user_answer = None

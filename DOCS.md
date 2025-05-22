@@ -55,6 +55,17 @@ go2study_bot/
 - Questions table: Stores question bank (including image paths for visual questions)
 - User errors table: Tracks user mistakes
 
+### Questions Table
+- id: Primary key
+- topic: Question topic
+- question: The actual question text
+- answer: Correct answer
+- explanation: Detailed explanation
+- incorrect_options: List of incorrect options
+- question_type: Type of question (standard, etc.)
+- source: Source of the question ('db' for database, 'ai' for AI-generated)
+- image_path: Path to question image if any
+
 ## Setup and Installation
 
 1. Clone the repository:
@@ -100,6 +111,9 @@ python src/bot.py
 - Implemented configuration management
 - Added comprehensive documentation
 - Added processing of errors for all Telegram API requests (query.answer and others) to prevent bot from crashing during timeouts and network errors
+- Added source field to questions table to properly track AI-generated questions
+- Updated question handling to use source field instead of question_type for determining question origin
+- Fixed question source display in UI (🟢 for database questions, �� for AI-generated)
 
 ## Usage
 
