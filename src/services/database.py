@@ -2,7 +2,7 @@ import sqlite3
 import logging
 import os
 from typing import List, Dict, Any, Optional, Tuple
-from src.config.constants import TOPICS
+from config.constants import TOPICS
 
 class Database:
     def __init__(self, db_path: str = None):

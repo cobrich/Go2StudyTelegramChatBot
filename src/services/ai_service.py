@@ -163,3 +163,38 @@ class AIService:
         except Exception as e:
             logging.error(f"Error generating similar task: {e}")
             return None 
+
+    def validate_question_answer(self, question: str, answer: str, explanation: str) -> Optional[tuple]:
+        """Validate a question's answer and explanation using AI."""
+        try:
+            prompt = f"""Проверь правильность ответа на следующий вопрос:
+            Вопрос: {question}
+            Ответ: {answer}
+            Объяснение: {explanation}
+            
+            Верни результат в формате JSON:
+            {{
+                "is_correct": true/false,
+                "correct_answer": "правильный ответ",
+                "explanation": "правильное объяснение"
+            }}
+            
+            Если ответ верный, верни тот же ответ и объяснение.
+            Если ответ неверный, укажи правильный ответ и объяснение.
+            """
+            
+            response = self.model.generate_content(prompt)
+            response_text = response.text
+            
+            # Extract JSON from response
+            json_str = response_text[response_text.find('{'):response_text.rfind('}')+1]
+            data = json.loads(json_str)
+            
+            if data['is_correct']:
+                return None  # No changes needed
+            else:
+                return (data['correct_answer'], data['explanation'])
+                
+        except Exception as e:
+            logging.error(f"Error validating question: {e}")
+            return None 

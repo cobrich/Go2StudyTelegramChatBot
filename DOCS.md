@@ -81,6 +81,9 @@ python src/bot.py
 ```
 
 ## Recent Changes
+- Added question validation functionality in AI service for checking answer correctness
+- Added new validate_questions.py script for batch validation of all questions in the database
+- Fixed import path in database.py for better module organization
 - Added missing Update import in bot.py for proper telegram updates handling
 - Added text message handler (handle_text) for ReplyKeyboardMarkup main menu buttons, so menu actions now work as expected
 - 'Мой прогресс' now shows real user statistics (total tests, average, recent topics, error topics)
