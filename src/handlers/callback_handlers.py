@@ -354,12 +354,27 @@ class CallbackHandlers(BaseHandler):
         question = questions[prev_index]
         source = question[4] if len(question) > 4 else 'db'
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
+        
+        # Получаем сохраненный ответ пользователя для этого вопроса
+        user_results = context.user_data.get('user_results', [])
+        user_answer = None
+        explanation = None
+        for result in user_results:
+            if result['q_num'] == prev_index:
+                user_answer = result['user_answer']
+                explanation = result['explanation']
+                break
+        
+        # Формируем текст вопроса с ответом пользователя, если есть
+        question_text = f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {prev_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}"
+        if user_answer:
+            question_text += f"\n\nВаш ответ: {user_answer}"
+            if explanation:
+                question_text += f"\n\nОбъяснение: {explanation}"
+        
         keyboard = build_question_keyboard(question[3], prev_index, max(prev_index, current_index), len(questions))
         try:
-            await query.message.edit_text(
-                f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {prev_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}",
-                reply_markup=keyboard
-            )
+            await query.message.edit_text(question_text, reply_markup=keyboard)
         except Exception:
             pass
 
@@ -375,12 +390,27 @@ class CallbackHandlers(BaseHandler):
         question = questions[next_index]
         source = question[4] if len(question) > 4 else 'db'
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
+        
+        # Получаем сохраненный ответ пользователя для этого вопроса
+        user_results = context.user_data.get('user_results', [])
+        user_answer = None
+        explanation = None
+        for result in user_results:
+            if result['q_num'] == next_index:
+                user_answer = result['user_answer']
+                explanation = result['explanation']
+                break
+        
+        # Формируем текст вопроса с ответом пользователя, если есть
+        question_text = f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {next_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}"
+        if user_answer:
+            question_text += f"\n\nВаш ответ: {user_answer}"
+            if explanation:
+                question_text += f"\n\nОбъяснение: {explanation}"
+        
         keyboard = build_question_keyboard(question[3], next_index, next_index, len(questions))
         try:
-            await query.message.edit_text(
-                f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {next_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}",
-                reply_markup=keyboard
-            )
+            await query.message.edit_text(question_text, reply_markup=keyboard)
         except Exception:
             pass
 
