@@ -376,25 +376,32 @@ class CallbackHandlers(BaseHandler):
         question = questions[prev_index]
         source = question[4] if len(question) > 4 else 'db'
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
-        
-        # Получаем сохраненный ответ пользователя для этого вопроса
         user_results = context.user_data.get('user_results', [])
         user_answer = None
+        correct_answer = question[1]
         explanation = None
         for result in user_results:
             if result['q_num'] == prev_index:
                 user_answer = result['user_answer']
                 explanation = result['explanation']
                 break
-        
-        # Формируем текст вопроса с ответом пользователя, если есть
         question_text = f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {prev_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}"
-        if user_answer:
-            question_text += f"\n\nВаш ответ: {user_answer}"
+        if user_answer is not None:
+            question_text += f"\n\nВаш ответ: {user_answer}\nПравильный ответ: {correct_answer}"
             if explanation:
                 question_text += f"\n\nОбъяснение: {explanation}"
-        
-        keyboard = build_question_keyboard(question[3], prev_index, max(prev_index, current_index), len(questions))
+            # Только навигация
+            nav_buttons = []
+            if prev_index > 0:
+                nav_buttons.append(InlineKeyboardButton("⬅️ Предыдущий", callback_data="prev_question"))
+            if prev_index < len(questions) - 1:
+                nav_buttons.append(InlineKeyboardButton("➡️ Следующий", callback_data="next_question"))
+            if prev_index == 0:
+                nav_buttons.append(InlineKeyboardButton("⬅️ Назад к темам", callback_data="back_to_topics"))
+            keyboard = InlineKeyboardMarkup([nav_buttons] if nav_buttons else [])
+        else:
+            # Варианты ответа и навигация
+            keyboard = build_question_keyboard(question[3], prev_index, max(prev_index, current_index), len(questions))
         try:
             await query.message.edit_text(question_text, reply_markup=keyboard)
         except Exception:
@@ -415,25 +422,32 @@ class CallbackHandlers(BaseHandler):
         question = questions[next_index]
         source = question[4] if len(question) > 4 else 'db'
         source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
-        
-        # Получаем сохраненный ответ пользователя для этого вопроса
         user_results = context.user_data.get('user_results', [])
         user_answer = None
+        correct_answer = question[1]
         explanation = None
         for result in user_results:
             if result['q_num'] == next_index:
                 user_answer = result['user_answer']
                 explanation = result['explanation']
                 break
-        
-        # Формируем текст вопроса с ответом пользователя, если есть
         question_text = f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {next_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}"
-        if user_answer:
-            question_text += f"\n\nВаш ответ: {user_answer}"
+        if user_answer is not None:
+            question_text += f"\n\nВаш ответ: {user_answer}\nПравильный ответ: {correct_answer}"
             if explanation:
                 question_text += f"\n\nОбъяснение: {explanation}"
-        
-        keyboard = build_question_keyboard(question[3], next_index, next_index, len(questions))
+            # Только навигация
+            nav_buttons = []
+            if next_index > 0:
+                nav_buttons.append(InlineKeyboardButton("⬅️ Предыдущий", callback_data="prev_question"))
+            if next_index < len(questions) - 1:
+                nav_buttons.append(InlineKeyboardButton("➡️ Следующий", callback_data="next_question"))
+            if next_index == 0:
+                nav_buttons.append(InlineKeyboardButton("⬅️ Назад к темам", callback_data="back_to_topics"))
+            keyboard = InlineKeyboardMarkup([nav_buttons] if nav_buttons else [])
+        else:
+            # Варианты ответа и навигация
+            keyboard = build_question_keyboard(question[3], next_index, next_index, len(questions))
         try:
             await query.message.edit_text(question_text, reply_markup=keyboard)
         except Exception:
