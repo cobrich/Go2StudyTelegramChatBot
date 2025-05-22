@@ -18,6 +18,13 @@ class CallbackHandlers(BaseHandler):
         topic_data = query.data.replace('topic_', '')
         is_retake = False
         logging.info(f"[handle_topic_selection] query.data={query.data}, topic_data={topic_data}, is_retake={is_retake}")
+        # Удаляем inline-клавиатуру у предыдущего сообщения (результаты или выбор темы)
+        try:
+            await query.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        # Отправляем сообщение о формировании вопросов
+        await query.message.reply_text("Формируются вопросы, подождите...")
         # Check if this is a retake
         if topic_data.startswith('retake_'):
             is_retake = True
