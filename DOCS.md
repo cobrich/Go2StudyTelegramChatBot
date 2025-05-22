@@ -497,7 +497,12 @@ The processor will:
 
 When a user chooses to retake a test ("Пройти еще раз эту тему"), the system now follows this logic:
 1. First, it includes all questions that were answered incorrectly in the previous attempt
-2. If the number of incorrect questions is less than 10, the system generates additional questions using AI to reach a total of 10 questions
+2. If the number of incorrect questions is less than 10, the system generates additional questions using AI:
+   - For each incorrectly answered question, AI generates a similar question with the same structure but different numbers/variables
+   - If more questions are needed, AI generates regular questions on the topic
 3. The original logic for selecting questions by topic remains unchanged when starting a new test
 
-This change helps users focus on improving their knowledge in areas where they made mistakes while still providing a complete test experience.
+This change helps users:
+- Focus on improving their knowledge in areas where they made mistakes
+- Practice similar types of questions to better understand the concepts
+- Get a complete test experience with a mix of error-focused and new questions

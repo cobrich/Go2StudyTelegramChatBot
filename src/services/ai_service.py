@@ -3,6 +3,7 @@ import google.generativeai as genai
 from typing import Optional, Tuple, List
 import re
 from config.constants import GEMINI_API_KEY, GEMINI_MODEL, MAX_OPTION_LENGTH
+import json
 
 class AIService:
     def __init__(self):
@@ -123,4 +124,42 @@ class AIService:
             return data
         except Exception as e:
             logging.error(f"Gemini normalization error: {e}")
+            return None 
+
+    def generate_similar_task(self, topic: str, similar_to_question: str) -> Optional[tuple]:
+        """Generate a question similar to the given question."""
+        try:
+            prompt = f"""Сгенерируй вопрос по теме '{topic}', который похож на следующий вопрос, но с другими числами/переменными:
+            {similar_to_question}
+            
+            В ответе должен быть JSON в формате:
+            {{
+                "question": "текст вопроса",
+                "correct_answer": "правильный ответ",
+                "incorrect_options": ["вариант1", "вариант2", "вариант3"],
+                "explanation": "объяснение решения"
+            }}
+            
+            Вопрос должен быть:
+            1. По той же теме и того же типа
+            2. С похожей структурой и сложностью
+            3. С другими числами/переменными
+            4. С понятным объяснением решения
+            """
+            
+            response = self.model.generate_content(prompt)
+            response_text = response.text
+            
+            # Extract JSON from response
+            json_str = response_text[response_text.find('{'):response_text.rfind('}')+1]
+            data = json.loads(json_str)
+            
+            return (
+                data['question'],
+                data['correct_answer'],
+                data['incorrect_options'],
+                data['explanation']
+            )
+        except Exception as e:
+            logging.error(f"Error generating similar task: {e}")
             return None 

@@ -27,6 +27,7 @@ class QuestionService:
         
         # 1. Сначала ошибки пользователя
         error_tasks = self.db.get_error_tasks_for_user(user_id, topic, limit=needed)
+        error_questions = []  # Store error questions for AI generation
         for task in error_tasks:
             if task['question'] not in existing_question_texts_to_exclude:
                 options = [task['answer']]
@@ -41,6 +42,7 @@ class QuestionService:
                     'db',
                     task.get('image_path')
                 ))
+                error_questions.append(task['question'])  # Add to error questions list
                 existing_question_texts_to_exclude.add(task['question'])
                 if len(tasks) >= needed:
                     return tasks[:needed]
@@ -51,10 +53,28 @@ class QuestionService:
             if remaining > 0:
                 new_tasks = []
                 loop = asyncio.get_running_loop()
-                generation_tasks = [
-                    loop.run_in_executor(None, self.ai_service.generate_task, topic)
-                    for _ in range(remaining)
-                ]
+                # Generate questions similar to error questions
+                generation_tasks = []
+                for error_question in error_questions:
+                    if len(generation_tasks) >= remaining:
+                        break
+                    # Generate a similar question for each error question
+                    generation_tasks.append(
+                        loop.run_in_executor(
+                            None,
+                            self.ai_service.generate_similar_task,
+                            topic,
+                            error_question
+                        )
+                    )
+                
+                # If we still need more questions, generate regular ones
+                if len(generation_tasks) < remaining:
+                    generation_tasks.extend([
+                        loop.run_in_executor(None, self.ai_service.generate_task, topic)
+                        for _ in range(remaining - len(generation_tasks))
+                    ])
+                
                 results = await asyncio.gather(*generation_tasks, return_exceptions=True)
                 for result in results:
                     if isinstance(result, Exception):
