@@ -81,6 +81,7 @@ class CallbackHandlers(BaseHandler):
                     caption=f"Тема: {topic}\nВопрос 1 из {len(questions)} {source_text}:\n\n{question[0]}",
                     reply_markup=keyboard
                 )
+                return
             else:
                 await query.message.edit_text(
                     f"Тема: {topic}\nВопрос 1 из {len(questions)} {source_text}:\n\n{question[0]}",
