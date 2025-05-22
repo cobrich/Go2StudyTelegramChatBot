@@ -94,7 +94,10 @@ class CallbackHandlers(BaseHandler):
     async def handle_answer(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle answer selection callback."""
         query = update.callback_query
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error in query.answer() (answer): {e}")
         user_id = query.from_user.id
         questions = self.get_user_data(context).get('questions', [])
         current_index = self.get_user_data(context).get('current_question_index', 0)
@@ -178,7 +181,10 @@ class CallbackHandlers(BaseHandler):
     async def handle_continue(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle continue button callback."""
         query = update.callback_query
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error in query.answer() (continue): {e}")
         questions = self.get_user_data(context).get('questions', [])
         current_index = self.get_user_data(context).get('current_question_index', 0)
         logging.info(f"[handle_continue] current_index={current_index}, questions_len={len(questions)}")
@@ -207,7 +213,10 @@ class CallbackHandlers(BaseHandler):
 
     async def handle_show_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error in query.answer() (show_results): {e}")
         user_id = query.from_user.id
         topic = self.get_user_data(context).get('current_topic')
         questions = self.get_user_data(context).get('questions', [])
@@ -250,7 +259,10 @@ class CallbackHandlers(BaseHandler):
 
     async def handle_show_explanation(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error in query.answer() (show_explanation): {e}")
         data = query.data.replace('show_expl_', '')
         try:
             q_num = int(data)
@@ -277,12 +289,15 @@ class CallbackHandlers(BaseHandler):
         except Exception:
             try:
                 await query.message.reply_text(text)
-            except Exception:
-                pass
+            except Exception as e:
+                logging.error(f"Error sending explanation text: {e}")
 
     async def handle_back_to_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error in query.answer() (back_to_results): {e}")
         user_id = query.from_user.id
         topic = self.get_user_data(context).get('current_topic')
         questions = self.get_user_data(context).get('questions', [])
@@ -324,7 +339,10 @@ class CallbackHandlers(BaseHandler):
 
     async def handle_back_to_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error in query.answer() (back_to_topics): {e}")
         user_id = query.from_user.id
         self.db.set_user_inactive(user_id)
         self.clear_user_data(context)
@@ -345,7 +363,10 @@ class CallbackHandlers(BaseHandler):
 
     async def handle_prev_question(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error in query.answer() (prev_question): {e}")
         questions = self.get_user_data(context).get('questions', [])
         current_index = self.get_user_data(context).get('current_question_index', 0)
         if not questions or current_index <= 0:
@@ -381,7 +402,10 @@ class CallbackHandlers(BaseHandler):
 
     async def handle_next_question(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error in query.answer() (next_question): {e}")
         questions = self.get_user_data(context).get('questions', [])
         current_index = self.get_user_data(context).get('current_question_index', 0)
         if not questions or current_index >= len(questions) - 1:
@@ -417,7 +441,10 @@ class CallbackHandlers(BaseHandler):
 
     async def handle_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error in query.answer() (main_menu): {e}")
         user_id = query.from_user.id
         self.db.set_user_inactive(user_id)
         self.clear_user_data(context)

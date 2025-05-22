@@ -95,6 +95,7 @@ python src/bot.py
 - Added keyboard utilities for better user interaction
 - Implemented configuration management
 - Added comprehensive documentation
+- Added processing of errors for all Telegram API requests (query.answer and others) to prevent bot from crashing during timeouts and network errors
 
 ## Usage
 
