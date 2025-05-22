@@ -211,6 +211,13 @@ class Database:
                          correct_answer_text, explanation_text))
                     logging.info(f"[DEBUG][add_user_error] Inserted new error for user_id={user_id}, question_text={question_text}")
                 conn.commit()
+                # Логируем количество строк и последние 3 записи
+                cursor.execute('SELECT COUNT(*) FROM user_errors')
+                count = cursor.fetchone()[0]
+                logging.info(f"[DEBUG][add_user_error] user_errors row count after commit: {count}")
+                cursor.execute('SELECT id, user_id, question_text, error_count FROM user_errors ORDER BY id DESC LIMIT 3')
+                last_rows = cursor.fetchall()
+                logging.info(f"[DEBUG][add_user_error] last 3 rows: {last_rows}")
         except Exception as e:
             logging.error(f"[DEBUG][add_user_error] Exception: {e}")
 
@@ -218,17 +225,23 @@ class Database:
         """Decrement error count for a question and remove if reaches 0."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            cursor.execute('SELECT error_count FROM user_errors WHERE user_id = ? AND question_text = ?', (user_id, question_text))
+            before = cursor.fetchone()
+            logging.info(f"[DEBUG][decrement_error_count] before: {before}")
             cursor.execute('''
                 UPDATE user_errors 
                 SET error_count = error_count - 1
                 WHERE user_id = ? AND question_text = ?
             ''', (user_id, question_text))
-            
+            cursor.execute('SELECT error_count FROM user_errors WHERE user_id = ? AND question_text = ?', (user_id, question_text))
+            after = cursor.fetchone()
+            logging.info(f"[DEBUG][decrement_error_count] after: {after}")
             # Remove if count reaches 0
             cursor.execute('''
                 DELETE FROM user_errors 
                 WHERE user_id = ? AND question_text = ? AND error_count <= 0
             ''', (user_id, question_text))
+            logging.info(f"[DEBUG][decrement_error_count] deleted if error_count <= 0 for user_id={user_id}, question_text={question_text}")
             conn.commit()
 
     def get_tasks_for_topic(self, topic: str, limit: int = 20) -> List[Dict[str, Any]]:
