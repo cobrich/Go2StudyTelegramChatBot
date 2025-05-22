@@ -40,7 +40,7 @@ class QuestionService:
                     task['explanation'],
                     options,
                     'db',
-                    task.get('image_path')
+                    task['image_path'] if 'image_path' in task else None
                 ))
                 error_questions.append(task['question'])  # Add to error questions list
                 existing_question_texts_to_exclude.add(task['question'])
@@ -121,7 +121,7 @@ class QuestionService:
                         task['explanation'],
                         options,
                         task.get('source', 'db'),
-                        task.get('image_path')
+                        task['image_path'] if 'image_path' in task else None
                     ))
                     existing_question_texts_to_exclude.add(task['question'])
                     if len(tasks) >= needed:
