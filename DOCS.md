@@ -492,3 +492,12 @@ The processor will:
 - Исправлено: при наличии картинки вопрос теперь отправляется только один раз (либо фото, либо текст), дублирования больше нет.
 
 - Теперь при просмотре уже отвеченного вопроса (через "Предыдущий"/"Следующий") не показываются варианты ответа, а только ответ пользователя, правильный ответ и объяснение.
+
+## Test Retake Functionality
+
+When a user chooses to retake a test ("Пройти еще раз эту тему"), the system now follows this logic:
+1. First, it includes all questions that were answered incorrectly in the previous attempt
+2. If the number of incorrect questions is less than 10, the system generates additional questions using AI to reach a total of 10 questions
+3. The original logic for selecting questions by topic remains unchanged when starting a new test
+
+This change helps users focus on improving their knowledge in areas where they made mistakes while still providing a complete test experience.

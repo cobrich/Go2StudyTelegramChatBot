@@ -15,7 +15,16 @@ class CallbackHandlers(BaseHandler):
     async def handle_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle topic selection callback."""
         query = update.callback_query
-        topic_index = query.data.replace('topic_', '')
+        topic_data = query.data.replace('topic_', '')
+        is_retake = False
+        
+        # Check if this is a retake
+        if topic_data.startswith('retake_'):
+            is_retake = True
+            topic_index = topic_data.replace('retake_', '')
+        else:
+            topic_index = topic_data
+            
         try:
             topic_index = int(topic_index)
             topic = TOPICS[topic_index]
@@ -48,7 +57,8 @@ class CallbackHandlers(BaseHandler):
         questions = await self.question_service.get_or_generate_tasks(
             user_id=user_id,
             topic=topic,
-            needed=DEFAULT_QUESTIONS_PER_TEST
+            needed=DEFAULT_QUESTIONS_PER_TEST,
+            is_retake=is_retake
         )
         
         if not questions:

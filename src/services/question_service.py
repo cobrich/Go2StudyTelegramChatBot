@@ -17,12 +17,14 @@ class QuestionService:
         topic: str,
         needed: int = DEFAULT_QUESTIONS_PER_TEST,
         force_ai: bool = False,
-        existing_question_texts_to_exclude: Optional[Set[str]] = None
+        existing_question_texts_to_exclude: Optional[Set[str]] = None,
+        is_retake: bool = False
     ) -> List[tuple]:
         """Get tasks for test: сначала ошибки пользователя, потом обычные вопросы, потом ИИ."""
         if existing_question_texts_to_exclude is None:
             existing_question_texts_to_exclude = set()
         tasks = []
+        
         # 1. Сначала ошибки пользователя
         error_tasks = self.db.get_error_tasks_for_user(user_id, topic, limit=needed)
         for task in error_tasks:
@@ -42,25 +44,68 @@ class QuestionService:
                 existing_question_texts_to_exclude.add(task['question'])
                 if len(tasks) >= needed:
                     return tasks[:needed]
-        # 2. Обычные вопросы из базы
-        db_tasks_pool_raw = self.db.get_tasks_for_topic(topic, limit=needed * 2)
-        for task in db_tasks_pool_raw:
-            if task['question'] not in existing_question_texts_to_exclude:
-                options = [task['answer']]
-                if task['incorrect_options']:
-                    options += [opt for opt in task['incorrect_options'].split('\n') if opt.strip()]
-                random.shuffle(options)
-                tasks.append((
-                    task['question'],
-                    task['answer'],
-                    task['explanation'],
-                    options,
-                    'db',
-                    task.get('image_path')
-                ))
-                existing_question_texts_to_exclude.add(task['question'])
-                if len(tasks) >= needed:
-                    return tasks[:needed]
+
+        # If this is a retake and we have some error tasks, generate additional questions to reach needed count
+        if is_retake and tasks:
+            remaining = needed - len(tasks)
+            if remaining > 0:
+                new_tasks = []
+                loop = asyncio.get_running_loop()
+                generation_tasks = [
+                    loop.run_in_executor(None, self.ai_service.generate_task, topic)
+                    for _ in range(remaining)
+                ]
+                results = await asyncio.gather(*generation_tasks, return_exceptions=True)
+                for result in results:
+                    if isinstance(result, Exception):
+                        logging.error(f"Error generating task: {result}")
+                        continue
+                    if result:
+                        question, correct_answer, incorrect_options, explanation = result
+                        if question not in existing_question_texts_to_exclude:
+                            # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
+                            if not self.db.get_explanation_by_question_text(question):
+                                self.db.add_question({
+                                    'topic': topic,
+                                    'question': question,
+                                    'answer': correct_answer,
+                                    'explanation': explanation,
+                                    'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
+                                    'question_type': 'ai'
+                                })
+                            new_tasks.append((
+                                question,
+                                correct_answer,
+                                explanation,
+                                incorrect_options,
+                                'ai',
+                                None
+                            ))
+                            existing_question_texts_to_exclude.add(question)
+                tasks.extend(new_tasks)
+                return tasks[:needed]
+
+        # 2. Обычные вопросы из базы (только если это не ретейк или нет ошибок)
+        if not is_retake or not tasks:
+            db_tasks_pool_raw = self.db.get_tasks_for_topic(topic, limit=needed * 2)
+            for task in db_tasks_pool_raw:
+                if task['question'] not in existing_question_texts_to_exclude:
+                    options = [task['answer']]
+                    if task['incorrect_options']:
+                        options += [opt for opt in task['incorrect_options'].split('\n') if opt.strip()]
+                    random.shuffle(options)
+                    tasks.append((
+                        task['question'],
+                        task['answer'],
+                        task['explanation'],
+                        options,
+                        'db',
+                        task.get('image_path')
+                    ))
+                    existing_question_texts_to_exclude.add(task['question'])
+                    if len(tasks) >= needed:
+                        return tasks[:needed]
+
         # 3. Генерация новых вопросов
         remaining = needed - len(tasks)
         new_tasks = []
@@ -102,7 +147,8 @@ class QuestionService:
             final_tasks = await self.get_or_generate_tasks(
                 user_id, topic, needed, 
                 force_ai=True,
-                existing_question_texts_to_exclude=existing_question_texts_to_exclude
+                existing_question_texts_to_exclude=existing_question_texts_to_exclude,
+                is_retake=is_retake
             )
             return final_tasks
         return all_tasks[:needed]

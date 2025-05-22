@@ -53,7 +53,7 @@ def build_results_keyboard(errors_list: list, current_topic: str) -> InlineKeybo
             )])
     else:
         buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", 
-                                           callback_data=f"topic_{TOPICS.index(current_topic)}")])
+                                           callback_data=f"topic_retake_{TOPICS.index(current_topic)}")])
     
     buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
     return InlineKeyboardMarkup(buttons)
