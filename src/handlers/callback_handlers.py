@@ -154,11 +154,6 @@ class CallbackHandlers(BaseHandler):
             'explanation': question[2],
             'source': source_text
         })
-        self.db.add_test_result(
-            user_id=user_id,
-            topic=self.get_user_data(context).get('current_topic'),
-            percentage=100.0 if is_correct else 0.0
-        )
         if not is_correct:
             logging.info(f"[DEBUG] add_user_error: user_id={user_id}, topic={self.get_user_data(context).get('current_topic')}, question_text={question[0]}, user_answer_text={selected_answer}, correct_answer_text={correct_answer}, explanation_text={question[2]}, is_correct={is_correct}")
             self.db.add_user_error(
@@ -265,6 +260,9 @@ class CallbackHandlers(BaseHandler):
             return
         total = len(user_results)
         correct = sum(1 for r in user_results if r['is_correct'])
+        # Добавляю запись о прохождении теста только здесь
+        percentage = (correct / total * 100.0) if total > 0 else 0.0
+        self.db.add_test_result(user_id, topic, percentage)
         errors = [r for r in user_results if not r['is_correct']]
         results_text = f"📊 Результаты теста по теме '{topic}':\n\n"
         results_text += f"Правильных ответов: {correct} из {total}\n\n"
