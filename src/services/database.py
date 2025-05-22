@@ -366,4 +366,28 @@ class Database:
                 FROM questions
             ''')
             columns = ['question', 'answer', 'explanation', 'topic']
-            return [dict(zip(columns, row)) for row in cursor.fetchall()] 
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    def get_recent_unique_topics(self, user_id: int, unique_limit: int = 5, history_limit: int = 20) -> list:
+        """Get last unique topics with counts from the last history_limit test attempts."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT topic
+                FROM test_results
+                WHERE user_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            ''', (user_id, history_limit))
+            rows = cursor.fetchall()
+            topic_counts = {}
+            topic_order = []
+            for row in rows:
+                topic = row[0]
+                if topic not in topic_counts:
+                    topic_counts[topic] = 1
+                    topic_order.append(topic)
+                else:
+                    topic_counts[topic] += 1
+            # Возвращаем только последние unique_limit уникальных тем
+            return [(topic, topic_counts[topic]) for topic in topic_order[:unique_limit]] 

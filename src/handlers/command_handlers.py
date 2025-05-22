@@ -115,7 +115,7 @@ class CommandHandlers(BaseHandler):
             total_tests, avg_percentage = self.db.get_user_progress(user_id)
             if avg_percentage is None:
                 avg_percentage = 0.0
-            recent_topics = self.db.get_recent_topics(user_id, limit=5)
+            recent_topics = self.db.get_recent_unique_topics(user_id, unique_limit=5, history_limit=20)
             error_topics = self.db.get_error_topics(user_id)
 
             progress_text = f"📊 Ваш прогресс:\n\n"
@@ -123,18 +123,7 @@ class CommandHandlers(BaseHandler):
             progress_text += f"Средний результат: {avg_percentage:.1f}%\n\n"
 
             if recent_topics:
-                # Считаем количество прохождений для каждой уникальной темы (по последним 20 попыткам)
-                topic_counts = {}
-                topic_order = []
-                for t in recent_topics:
-                    topic = t[0]
-                    if topic not in topic_counts:
-                        topic_counts[topic] = 1
-                        topic_order.append(topic)
-                    else:
-                        topic_counts[topic] += 1
-                # Показываем только последние 5 уникальных тем
-                progress_text += "Недавние темы: " + ", ".join([f"{topic} ({topic_counts[topic]})" for topic in topic_order[:5]]) + "\n"
+                progress_text += "Недавние темы: " + ", ".join([f"{topic} ({count})" for topic, count in recent_topics]) + "\n"
             if error_topics:
                 progress_text += "Темы с ошибками: " + ", ".join([f"{t[0]} ({t[1]})" for t in error_topics]) + "\n"
 
