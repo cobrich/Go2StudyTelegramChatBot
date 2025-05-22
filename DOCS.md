@@ -92,6 +92,7 @@ python src/bot.py
 ```
 
 ## Recent Changes
+- Added migration to update question_type from 'ai' to 'test' for all questions
 - Added database migration to add source column to questions table with default value 'db' for existing records
 - Updated help text with more detailed and child-friendly instructions, including emojis and clear explanations for 5-6 grade students
 - Added question validation functionality in AI service for checking answer correctness
@@ -114,7 +115,7 @@ python src/bot.py
 - Added processing of errors for all Telegram API requests (query.answer and others) to prevent bot from crashing during timeouts and network errors
 - Added source field to questions table to properly track AI-generated questions
 - Updated question handling to use source field instead of question_type for determining question origin
-- Fixed question source display in UI (🟢 for database questions, �� for AI-generated)
+- Fixed question source display in UI (🟢 for database questions, 🟣 for AI-generated)
 
 ## Usage
 
@@ -566,3 +567,6 @@ This system helps users:
 1. Focus on questions they find most challenging
 2. Track their progress in mastering difficult questions
 3. Gradually remove questions from their error list as they improve
+
+## 2024-06-09
+- Исправлены импорты в `src/validate_questions.py` для корректного запуска скрипта из папки `src` (без префикса `src.` в импортах).

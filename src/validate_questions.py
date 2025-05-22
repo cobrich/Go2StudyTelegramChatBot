@@ -1,7 +1,7 @@
 import logging
 import asyncio
-from src.services.database import Database
-from src.services.ai_service import AIService
+from services.database import Database
+from services.ai_service import AIService
 
 async def validate_all_questions():
     """Validate and fix all questions in the database."""
