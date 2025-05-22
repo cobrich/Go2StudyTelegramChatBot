@@ -29,6 +29,13 @@ class Database:
                 # Column already exists
                 pass
             
+            # Update question_type from 'ai' to 'test'
+            try:
+                cursor.execute('UPDATE questions SET question_type = "test" WHERE question_type = "ai"')
+                conn.commit()
+            except sqlite3.OperationalError as e:
+                logging.error(f"Error updating question_type: {e}")
+            
             # Users table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
@@ -176,33 +183,36 @@ class Database:
                       user_answer_text: str, correct_answer_text: str,
                       explanation_text: str) -> None:
         """Add a user's error to the database or increment error count if exists."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            # Check if error already exists
-            cursor.execute('''
-                SELECT id, error_count FROM user_errors 
-                WHERE user_id = ? AND question_text = ?
-            ''', (user_id, question_text))
-            result = cursor.fetchone()
-            
-            if result:
-                # Update existing error
-                error_id, current_count = result
+        try:
+            logging.info(f"[DEBUG][add_user_error] user_id={user_id}, topic={topic}, question_text={question_text}, user_answer_text={user_answer_text}, correct_answer_text={correct_answer_text}, explanation_text={explanation_text}")
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                # Check if error already exists
                 cursor.execute('''
-                    UPDATE user_errors 
-                    SET error_count = error_count + 1,
-                        timestamp = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                ''', (error_id,))
-            else:
-                # Insert new error
-                cursor.execute('''
-                    INSERT INTO user_errors 
-                    (user_id, topic, question_text, user_answer, correct_answer, explanation)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (user_id, topic, question_text, user_answer_text,
-                     correct_answer_text, explanation_text))
-            conn.commit()
+                    SELECT id, error_count FROM user_errors 
+                    WHERE user_id = ? AND question_text = ?
+                ''', (user_id, question_text))
+                result = cursor.fetchone()
+                if result:
+                    error_id, current_count = result
+                    cursor.execute('''
+                        UPDATE user_errors 
+                        SET error_count = error_count + 1,
+                            timestamp = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    ''', (error_id,))
+                    logging.info(f"[DEBUG][add_user_error] Updated error_count for id={error_id}")
+                else:
+                    cursor.execute('''
+                        INSERT INTO user_errors 
+                        (user_id, topic, question_text, user_answer, correct_answer, explanation)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (user_id, topic, question_text, user_answer_text,
+                         correct_answer_text, explanation_text))
+                    logging.info(f"[DEBUG][add_user_error] Inserted new error for user_id={user_id}, question_text={question_text}")
+                conn.commit()
+        except Exception as e:
+            logging.error(f"[DEBUG][add_user_error] Exception: {e}")
 
     def decrement_error_count(self, user_id: int, question_text: str) -> None:
         """Decrement error count for a question and remove if reaches 0."""

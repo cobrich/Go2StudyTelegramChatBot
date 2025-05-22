@@ -152,6 +152,7 @@ class CallbackHandlers(BaseHandler):
             percentage=100.0 if is_correct else 0.0
         )
         if not is_correct:
+            logging.info(f"[DEBUG] add_user_error: user_id={user_id}, topic={self.get_user_data(context).get('current_topic')}, question_text={question[0]}, user_answer_text={selected_answer}, correct_answer_text={correct_answer}, explanation_text={question[2]}, is_correct={is_correct}")
             self.db.add_user_error(
                 user_id=user_id,
                 topic=self.get_user_data(context).get('current_topic'),
@@ -404,7 +405,7 @@ class CallbackHandlers(BaseHandler):
         self.set_user_data(context, 'current_question_index', prev_index)
         question = questions[prev_index]
         source = question[4] if len(question) > 4 else 'db'
-        source_text = '🟢 (из базы)' if source == 'db' else '�� (ИИ)'
+        source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         user_results = context.user_data.get('user_results', [])
         user_answer = None
         correct_answer = question[1]
@@ -450,7 +451,7 @@ class CallbackHandlers(BaseHandler):
         self.set_user_data(context, 'current_question_index', next_index)
         question = questions[next_index]
         source = question[4] if len(question) > 4 else 'db'
-        source_text = '🟢 (из базы)' if source == 'db' else '�� (ИИ)'
+        source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
         user_results = context.user_data.get('user_results', [])
         user_answer = None
         correct_answer = question[1]
