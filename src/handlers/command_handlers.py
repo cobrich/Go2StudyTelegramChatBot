@@ -119,7 +119,7 @@ class CommandHandlers(BaseHandler):
             error_topics = self.db.get_error_topics(user_id)
 
             progress_text = f"📊 Ваш прогресс:\n\n"
-            progress_text += f"Всего тестов: {total_tests}\n"
+            progress_text += f"Всего тестов: {total_tests/10}\n"
             progress_text += f"Средний результат: {avg_percentage:.1f}%\n\n"
 
             if recent_topics:

@@ -264,11 +264,60 @@ class CallbackHandlers(BaseHandler):
                 break
         if explanation:
             source_text = explanation['source']
-            text = f"Вопрос: {explanation['question']}\n\nПравильный ответ: {explanation['correct_answer']}\n\nОбъяснение: {explanation['explanation']}\n\nИсточник: {source_text}"
+            text = f"Вопрос {q_num+1}: {explanation['question']}\n\nПравильный ответ: {explanation['correct_answer']}\n\nОбъяснение: {explanation['explanation']}\n\nИсточник: {source_text}"
         else:
             text = "Вопрос не найден."
+        # Кнопка назад к результатам
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("⬅️ Назад к результатам", callback_data="back_to_results")]
+        ])
         try:
-            await query.message.reply_text(text)
+            await query.message.edit_text(text, reply_markup=keyboard)
+        except Exception:
+            try:
+                await query.message.reply_text(text)
+            except Exception:
+                pass
+
+    async def handle_back_to_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        await query.answer()
+        user_id = query.from_user.id
+        topic = self.get_user_data(context).get('current_topic')
+        questions = self.get_user_data(context).get('questions', [])
+        user_results = context.user_data.get('user_results', [])
+        if not topic or not questions or not user_results:
+            await query.message.edit_text(
+                "Произошла ошибка. Пожалуйста, начните тест заново.",
+                reply_markup=build_topic_selection_keyboard()
+            )
+            return
+        total = len(user_results)
+        correct = sum(1 for r in user_results if r['is_correct'])
+        errors = [r for r in user_results if not r['is_correct']]
+        results_text = f"📊 Результаты теста по теме '{topic}':\n\n"
+        results_text += f"Правильных ответов: {correct} из {total}\n\n"
+        if errors:
+            results_text += "Ошибки:\n"
+            for err in errors:
+                results_text += (
+                    f"Вопрос {err['q_num']+1}: Ваш ответ: {err['user_answer']} | Правильный: {err['correct_answer']}\n"
+                )
+        else:
+            results_text += "Поздравляем! Все ответы верны!\n"
+        buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]]
+        for err in errors:
+            buttons.append([
+                InlineKeyboardButton(
+                    f"Показать объяснение к вопросу {err['q_num']+1}",
+                    callback_data=f"show_expl_{err['q_num']}"
+                )
+            ])
+        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"topic_{TOPICS.index(topic)}")])
+        buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
+        keyboard = InlineKeyboardMarkup(buttons)
+        try:
+            await query.message.edit_text(results_text, reply_markup=keyboard)
         except Exception:
             pass
 
