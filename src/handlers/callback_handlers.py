@@ -161,8 +161,6 @@ class CallbackHandlers(BaseHandler):
                 correct_answer_text=correct_answer,
                 explanation_text=question[2]
             )
-            # Decrement error count if this was previously an error
-            self.db.decrement_error_count(user_id, question[0])
         else:
             # Decrement error count if this was previously an error
             self.db.decrement_error_count(user_id, question[0])
