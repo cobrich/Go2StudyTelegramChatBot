@@ -38,6 +38,8 @@ def main() -> None:
     # Add command handlers
     application.add_handler(CommandHandler("start", command_handlers.start))
     application.add_handler(CommandHandler("stop", command_handlers.stop))
+    application.add_handler(CommandHandler("change_fio", command_handlers.handle_text))
+    application.add_handler(CommandHandler("change_grade", command_handlers.handle_text))
 
     # Add text message handler for ReplyKeyboardMarkup
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, command_handlers.handle_text))
