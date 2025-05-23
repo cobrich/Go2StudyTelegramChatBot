@@ -116,7 +116,11 @@ class CommandHandlers(BaseHandler):
             except ValueError:
                 await update.message.reply_text("Пожалуйста, введите корректный класс: 4, 5 или 6.")
                 return
+            # Получаем ФИО: сначала из context, если нет — из базы
             full_name = context.user_data.get('full_name')
+            if not full_name:
+                db_info = self.db.get_user_info(user_id)
+                full_name = db_info[0] if db_info else None
             self.db.set_user_info(user_id, full_name, grade)
             context.user_data['awaiting_grade'] = False
             await update.message.reply_text(f"Спасибо, {full_name}! Ваш класс: {grade}. Теперь вы можете пользоваться ботом.", reply_markup=self.main_menu_markup)
