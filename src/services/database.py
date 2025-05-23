@@ -41,6 +41,8 @@ class Database:
                 CREATE TABLE IF NOT EXISTS users (
                     user_id INTEGER PRIMARY KEY,
                     username TEXT,
+                    full_name TEXT,
+                    grade INTEGER,
                     is_active BOOLEAN DEFAULT 0,
                     current_topic TEXT,
                     last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -390,4 +392,35 @@ class Database:
                 else:
                     topic_counts[topic] += 1
             # Возвращаем только последние unique_limit уникальных тем
-            return [(topic, topic_counts[topic]) for topic in topic_order[:unique_limit]] 
+            return [(topic, topic_counts[topic]) for topic in topic_order[:unique_limit]]
+
+    def update_user_info(self, user_id: int, full_name: str, grade: int) -> None:
+        """Update user's full name and grade."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users SET full_name = ?, grade = ? WHERE user_id = ?
+            ''', (full_name, grade, user_id))
+            conn.commit()
+
+    def get_user_info(self, user_id: int):
+        """Get user's full name and grade."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT full_name, grade FROM users WHERE user_id = ?
+            ''', (user_id,))
+            return cursor.fetchone()
+
+    def set_user_info(self, user_id: int, full_name: str, grade: int) -> None:
+        """Set user's full name and grade (insert or update)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users SET full_name = ?, grade = ? WHERE user_id = ?
+            ''', (full_name, grade, user_id))
+            if cursor.rowcount == 0:
+                cursor.execute('''
+                    INSERT INTO users (user_id, full_name, grade) VALUES (?, ?, ?)
+                ''', (user_id, full_name, grade))
+            conn.commit() 

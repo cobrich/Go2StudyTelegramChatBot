@@ -14,6 +14,13 @@ class CommandHandlers(BaseHandler):
         # Регистрируем пользователя в базе, если его нет
         self.db.register_user(user.id, user.username)
 
+        # Проверяем, есть ли ФИО и класс
+        user_info = self.db.get_user_info(user.id)
+        if not user_info or not user_info[0] or not user_info[1]:
+            context.user_data['awaiting_full_name'] = True
+            await update.message.reply_text("Пожалуйста, введите ваше ФИО:")
+            return
+
         # Clear previous session data
         self.clear_user_data(context)
         logging.info(f"User {user.id} ({user.username}) executed /start. User data cleared for chat {chat_id}.")
@@ -93,6 +100,36 @@ class CommandHandlers(BaseHandler):
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         text = update.message.text.strip()
         user_id = update.effective_user.id
+        # Проверка на ввод ФИО
+        if context.user_data.get('awaiting_full_name'):
+            context.user_data['full_name'] = text
+            context.user_data['awaiting_full_name'] = False
+            context.user_data['awaiting_grade'] = True
+            await update.message.reply_text("Спасибо! Теперь введите ваш класс (4, 5 или 6):")
+            return
+        # Проверка на ввод класса
+        if context.user_data.get('awaiting_grade'):
+            try:
+                grade = int(text)
+                if grade not in [4, 5, 6]:
+                    raise ValueError
+            except ValueError:
+                await update.message.reply_text("Пожалуйста, введите корректный класс: 4, 5 или 6.")
+                return
+            full_name = context.user_data.get('full_name')
+            self.db.set_user_info(user_id, full_name, grade)
+            context.user_data['awaiting_grade'] = False
+            await update.message.reply_text(f"Спасибо, {full_name}! Ваш класс: {grade}. Теперь вы можете пользоваться ботом.", reply_markup=self.main_menu_markup)
+            return
+        # CRUD команды для изменения ФИО и класса
+        if text.lower() == "/change_fio":
+            context.user_data['awaiting_full_name'] = True
+            await update.message.reply_text("Введите новое ФИО:")
+            return
+        if text.lower() == "/change_grade":
+            context.user_data['awaiting_grade'] = True
+            await update.message.reply_text("Введите новый класс (4, 5 или 6):")
+            return
         # If user is in a test, block main menu actions
         if self.db.is_user_active(user_id):
             await update.message.reply_text(
