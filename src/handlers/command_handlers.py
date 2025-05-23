@@ -102,10 +102,15 @@ class CommandHandlers(BaseHandler):
         user_id = update.effective_user.id
         # Проверка на ввод ФИО
         if context.user_data.get('awaiting_full_name'):
-            context.user_data['full_name'] = text
+            full_name = text
+            db_info = self.db.get_user_info(user_id)
+            grade = db_info[1] if db_info else None
+            self.db.set_user_info(user_id, full_name, grade)
             context.user_data['awaiting_full_name'] = False
-            context.user_data['awaiting_grade'] = True
-            await update.message.reply_text("Спасибо! Теперь введите ваш класс (4, 5 или 6):")
+            await update.message.reply_text(
+                f"Спасибо! Ваше новое ФИО: {full_name}. Ваш класс: {grade}.",
+                reply_markup=self.main_menu_markup
+            )
             return
         # Проверка на ввод класса
         if context.user_data.get('awaiting_grade'):
