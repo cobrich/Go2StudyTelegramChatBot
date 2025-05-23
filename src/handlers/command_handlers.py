@@ -16,7 +16,7 @@ class CommandHandlers(BaseHandler):
 
         # Проверяем, есть ли ФИО и класс
         user_info = self.db.get_user_info(user.id)
-        if not user_info or not user_info[0] or not user_info[1]:
+        if not user_info or not user_info[0] or not user_info[1] or not user_info[2]:
             context.user_data['awaiting_full_name'] = True
             await update.message.reply_text("Пожалуйста, введите ваше ФИО:")
             return
@@ -105,7 +105,8 @@ class CommandHandlers(BaseHandler):
             full_name = text
             db_info = self.db.get_user_info(user_id)
             grade = db_info[1] if db_info else None
-            self.db.set_user_info(user_id, full_name, grade)
+            language = db_info[2] if db_info else 'ru'
+            self.db.set_user_info_with_language(user_id, full_name, grade, language)
             context.user_data['awaiting_full_name'] = False
             await update.message.reply_text(
                 f"Спасибо! Ваше новое ФИО: {full_name}. Ваш класс: {grade}.",
@@ -121,14 +122,27 @@ class CommandHandlers(BaseHandler):
             except ValueError:
                 await update.message.reply_text("Пожалуйста, введите корректный класс: 4, 5 или 6.")
                 return
-            # Получаем ФИО: сначала из context, если нет — из базы
-            full_name = context.user_data.get('full_name')
-            if not full_name:
-                db_info = self.db.get_user_info(user_id)
-                full_name = db_info[0] if db_info else None
-            self.db.set_user_info(user_id, full_name, grade)
+            context.user_data['grade'] = grade
             context.user_data['awaiting_grade'] = False
-            await update.message.reply_text(f"Спасибо, {full_name}! Ваш класс: {grade}. Теперь вы можете пользоваться ботом.", reply_markup=self.main_menu_markup)
+            context.user_data['awaiting_language'] = True
+            await update.message.reply_text("Спасибо! Теперь выберите язык для вопросов:\n\n1 - Русский\n2 - Қазақша")
+            return
+        # Проверка на ввод языка
+        if context.user_data.get('awaiting_language'):
+            if text == "1":
+                language = "ru"
+                language_name = "Русский"
+            elif text == "2":
+                language = "kk"
+                language_name = "Қазақша"
+            else:
+                await update.message.reply_text("Пожалуйста, выберите 1 для русского или 2 для казахского языка.")
+                return
+            full_name = context.user_data.get('full_name')
+            grade = context.user_data.get('grade')
+            self.db.set_user_info_with_language(user_id, full_name, grade, language)
+            context.user_data['awaiting_language'] = False
+            await update.message.reply_text(f"Спасибо, {full_name}! Ваш класс: {grade}, язык: {language_name}. Теперь вы можете пользоваться ботом.", reply_markup=self.main_menu_markup)
             return
         # CRUD команды для изменения ФИО и класса
         if text.lower() == "/change_fio":
@@ -136,8 +150,48 @@ class CommandHandlers(BaseHandler):
             await update.message.reply_text("Введите новое ФИО:")
             return
         if text.lower() == "/change_grade":
-            context.user_data['awaiting_grade'] = True
+            context.user_data['awaiting_grade_only'] = True
             await update.message.reply_text("Введите новый класс (4, 5 или 6):")
+            return
+        if text.lower() == "/change_language":
+            context.user_data['awaiting_language_only'] = True
+            await update.message.reply_text("Выберите язык для вопросов:\n\n1 - Русский\n2 - Қазақша")
+            return
+        # Проверка на изменение только класса
+        if context.user_data.get('awaiting_grade_only'):
+            try:
+                grade = int(text)
+                if grade not in [4, 5, 6]:
+                    raise ValueError
+            except ValueError:
+                await update.message.reply_text("Пожалуйста, введите корректный класс: 4, 5 или 6.")
+                return
+            # Получаем ФИО и язык: из базы
+            db_info = self.db.get_user_info(user_id)
+            full_name = db_info[0] if db_info else None
+            language = db_info[2] if db_info else 'ru'
+            self.db.set_user_info_with_language(user_id, full_name, grade, language)
+            context.user_data['awaiting_grade_only'] = False
+            await update.message.reply_text(f"Спасибо, {full_name}! Ваш класс: {grade}. Теперь вы можете пользоваться ботом.", reply_markup=self.main_menu_markup)
+            return
+        # Проверка на изменение только языка
+        if context.user_data.get('awaiting_language_only'):
+            if text == "1":
+                language = "ru"
+                language_name = "Русский"
+            elif text == "2":
+                language = "kk"
+                language_name = "Қазақша"
+            else:
+                await update.message.reply_text("Пожалуйста, выберите 1 для русского или 2 для казахского языка.")
+                return
+            # Получаем ФИО и класс из базы
+            db_info = self.db.get_user_info(user_id)
+            full_name = db_info[0] if db_info else None
+            grade = db_info[1] if db_info else None
+            self.db.set_user_info_with_language(user_id, full_name, grade, language)
+            context.user_data['awaiting_language_only'] = False
+            await update.message.reply_text(f"Спасибо, {full_name}! Язык изменен на: {language_name}.", reply_markup=self.main_menu_markup)
             return
         # If user is in a test, block main menu actions
         if self.db.is_user_active(user_id):

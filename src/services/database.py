@@ -36,6 +36,16 @@ class Database:
             except sqlite3.OperationalError as e:
                 logging.error(f"Error updating question_type: {e}")
             
+            # Add language column if it doesn't exist
+            try:
+                cursor.execute('ALTER TABLE users ADD COLUMN language TEXT DEFAULT "ru"')
+                # Update existing records to have 'ru' as default language
+                cursor.execute('UPDATE users SET language = "ru" WHERE language IS NULL')
+                conn.commit()
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+            
             # Users table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
@@ -43,6 +53,7 @@ class Database:
                     username TEXT,
                     full_name TEXT,
                     grade INTEGER,
+                    language TEXT DEFAULT 'ru',
                     is_active BOOLEAN DEFAULT 0,
                     current_topic TEXT,
                     last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -404,11 +415,11 @@ class Database:
             conn.commit()
 
     def get_user_info(self, user_id: int):
-        """Get user's full name and grade."""
+        """Get user's full name, grade and language."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT full_name, grade FROM users WHERE user_id = ?
+                SELECT full_name, grade, language FROM users WHERE user_id = ?
             ''', (user_id,))
             return cursor.fetchone()
 
@@ -423,4 +434,36 @@ class Database:
                 cursor.execute('''
                     INSERT INTO users (user_id, full_name, grade) VALUES (?, ?, ?)
                 ''', (user_id, full_name, grade))
-            conn.commit() 
+            conn.commit()
+
+    def set_user_info_with_language(self, user_id: int, full_name: str, grade: int, language: str) -> None:
+        """Set user's full name, grade and language (insert or update)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users SET full_name = ?, grade = ?, language = ? WHERE user_id = ?
+            ''', (full_name, grade, language, user_id))
+            if cursor.rowcount == 0:
+                cursor.execute('''
+                    INSERT INTO users (user_id, full_name, grade, language) VALUES (?, ?, ?, ?)
+                ''', (user_id, full_name, grade, language))
+            conn.commit()
+
+    def update_user_language(self, user_id: int, language: str) -> None:
+        """Update user's language."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users SET language = ? WHERE user_id = ?
+            ''', (language, user_id))
+            conn.commit()
+
+    def get_user_language(self, user_id: int) -> str:
+        """Get user's language."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT language FROM users WHERE user_id = ?
+            ''', (user_id,))
+            result = cursor.fetchone()
+            return result[0] if result else 'ru' 
