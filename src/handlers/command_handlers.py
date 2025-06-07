@@ -11,6 +11,16 @@ class CommandHandlers(BaseHandler):
         user = update.effective_user
         chat_id = update.effective_chat.id
 
+        # Проверяем, является ли пользователь админом
+        if not self.db.is_admin(user.id):
+            # Если не админ, проверяем whitelist
+            if not self.db.is_user_allowed(user.username):
+                await update.message.reply_text(
+                    "❌ Извините, у вас нет доступа к этому боту.\n\n"
+                    "Для получения доступа обратитесь к администратору."
+                )
+                return
+
         # Регистрируем пользователя в базе, если его нет
         self.db.register_user(user.id, user.username)
 

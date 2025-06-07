@@ -13,6 +13,7 @@ from services.question_service import QuestionService
 from services.ai_service import AIService
 from handlers.command_handlers import CommandHandlers
 from handlers.callback_handlers import CallbackHandlers
+from handlers.admin_handlers import AdminHandlers
 
 # Configure logging
 logging.basicConfig(
@@ -31,6 +32,7 @@ def main() -> None:
     # Initialize handlers
     command_handlers = CommandHandlers(db, question_service)
     callback_handlers = CallbackHandlers(db, question_service)
+    admin_handlers = AdminHandlers()
     
     # Create the Application
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
@@ -41,9 +43,60 @@ def main() -> None:
     application.add_handler(CommandHandler("change_fio", command_handlers.handle_text))
     application.add_handler(CommandHandler("change_grade", command_handlers.handle_text))
     application.add_handler(CommandHandler("change_language", command_handlers.handle_text))
+    
+    # Add admin command
+    application.add_handler(CommandHandler("admin", admin_handlers.admin_panel))
 
-    # Add text message handler for ReplyKeyboardMarkup
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, command_handlers.handle_text))
+    # Add text message handler for ReplyKeyboardMarkup and admin actions
+    async def handle_text_with_admin(update: Update, context):
+        # Сначала проверяем админские действия
+        await admin_handlers.handle_admin_text(update, context)
+        # Затем обычные действия
+        await command_handlers.handle_text(update, context)
+    
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_with_admin))
+    
+    # Add admin callback handlers
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.students_menu,
+        pattern="^admin_students$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.topics_menu,
+        pattern="^admin_topics$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.admins_menu,
+        pattern="^admin_admins$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.show_stats,
+        pattern="^admin_stats$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_student_start,
+        pattern="^add_student$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.list_students,
+        pattern="^list_students$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_topic_start,
+        pattern="^add_topic$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.list_topics,
+        pattern="^list_topics$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_admin_start,
+        pattern="^add_admin$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.list_admins,
+        pattern="^list_admins$"
+    ))
     
     # Add callback query handlers
     application.add_handler(CallbackQueryHandler(

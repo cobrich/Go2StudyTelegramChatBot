@@ -9,7 +9,7 @@ from utils.keyboards import (
     build_continue_keyboard,
     get_main_menu_markup
 )
-from config.constants import TOPICS, DEFAULT_QUESTIONS_PER_TEST
+from config.constants import DEFAULT_QUESTIONS_PER_TEST, get_active_topics
 
 class CallbackHandlers(BaseHandler):
     async def handle_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -34,7 +34,8 @@ class CallbackHandlers(BaseHandler):
         logging.info(f"[handle_topic_selection] after retake check: is_retake={is_retake}, topic_index={topic_index}")
         try:
             topic_index = int(topic_index)
-            topic = TOPICS[topic_index]
+            topics = get_active_topics()
+            topic = topics[topic_index]
             logging.info(f"[handle_topic_selection] topic_index={topic_index}, topic={topic}")
         except (ValueError, IndexError):
             logging.error(f"Invalid topic selected: {topic_index}")
@@ -282,7 +283,7 @@ class CallbackHandlers(BaseHandler):
                     callback_data=f"show_expl_{err['q_num']}"
                 )
             ])
-        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{TOPICS.index(topic)}")])
+        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{get_active_topics().index(topic)}")])
         buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
         keyboard = InlineKeyboardMarkup(buttons)
         try:
@@ -363,7 +364,7 @@ class CallbackHandlers(BaseHandler):
                     callback_data=f"show_expl_{err['q_num']}"
                 )
             ])
-        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{TOPICS.index(topic)}")])
+        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{get_active_topics().index(topic)}")])
         buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
         keyboard = InlineKeyboardMarkup(buttons)
         try:

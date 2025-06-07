@@ -1,11 +1,12 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
-from config.constants import TOPICS, MAIN_MENU_KEYBOARD
+from config.constants import MAIN_MENU_KEYBOARD, get_active_topics
 
 def build_topic_selection_keyboard() -> InlineKeyboardMarkup:
     """Create InlineKeyboardMarkup for topic selection, including 'Back to main menu' button."""
+    topics = get_active_topics()
     keyboard = [
         [InlineKeyboardButton(topic, callback_data=f"topic_{i}")]
-        for i, topic in enumerate(TOPICS)
+        for i, topic in enumerate(topics)
     ]
     # Add "Back to main menu" button at the end
     keyboard.append([InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")])
@@ -52,8 +53,11 @@ def build_results_keyboard(errors_list: list, current_topic: str) -> InlineKeybo
                 callback_data=f"show_expl_{err['q_num']}"
             )])
     else:
-        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", 
-                                           callback_data=f"topic_retake_{TOPICS.index(current_topic)}")])
+        topics = get_active_topics()
+        if current_topic in topics:
+            topic_index = topics.index(current_topic)
+            buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", 
+                                               callback_data=f"topic_retake_{topic_index}")])
     
     buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
     return InlineKeyboardMarkup(buttons)

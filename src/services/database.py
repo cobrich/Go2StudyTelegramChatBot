@@ -46,6 +46,46 @@ class Database:
                 # Column already exists
                 pass
             
+            # Admins table - для управления администраторами
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS admins (
+                    user_id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    full_name TEXT,
+                    is_super_admin BOOLEAN DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_by INTEGER,
+                    FOREIGN KEY (created_by) REFERENCES admins(user_id)
+                )
+            ''')
+            
+            # Allowed users table - whitelist учеников
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS allowed_users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE,
+                    full_name TEXT,
+                    grade INTEGER,
+                    added_by INTEGER,
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT 1,
+                    FOREIGN KEY (added_by) REFERENCES admins(user_id)
+                )
+            ''')
+            
+            # Topics table - для управления темами
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS topics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    description TEXT,
+                    is_active BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_by INTEGER,
+                    FOREIGN KEY (created_by) REFERENCES admins(user_id)
+                )
+            ''')
+            
             # Users table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS users (
@@ -102,6 +142,15 @@ class Database:
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             ''')
+            
+            # Инициализация тем из constants.py если таблица пустая
+            cursor.execute('SELECT COUNT(*) FROM topics')
+            if cursor.fetchone()[0] == 0:
+                for topic in TOPICS:
+                    cursor.execute('''
+                        INSERT INTO topics (name, description, is_active)
+                        VALUES (?, ?, 1)
+                    ''', (topic, f"Тема: {topic}"))
             
             conn.commit()
 
@@ -466,4 +515,232 @@ class Database:
                 SELECT language FROM users WHERE user_id = ?
             ''', (user_id,))
             result = cursor.fetchone()
-            return result[0] if result else 'ru' 
+            return result[0] if result else 'ru'
+
+    # === ADMIN MANAGEMENT METHODS ===
+    
+    def is_super_admin(self, user_id: int) -> bool:
+        """Check if user is super admin."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT is_super_admin FROM admins WHERE user_id = ?', (user_id,))
+            result = cursor.fetchone()
+            return bool(result and result[0])
+    
+    def is_admin(self, user_id: int) -> bool:
+        """Check if user is admin (regular or super)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT user_id FROM admins WHERE user_id = ?', (user_id,))
+            return cursor.fetchone() is not None
+    
+    def add_admin(self, user_id: int, username: str, full_name: str, is_super: bool = False, added_by: int = None) -> bool:
+        """Add new admin."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO admins (user_id, username, full_name, is_super_admin, created_by)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (user_id, username, full_name, is_super, added_by))
+                conn.commit()
+                return True
+        except sqlite3.IntegrityError:
+            return False
+    
+    def remove_admin(self, user_id: int) -> bool:
+        """Remove admin (only super admin can do this)."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM admins WHERE user_id = ? AND is_super_admin = 0', (user_id,))
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception:
+            return False
+    
+    def get_all_admins(self) -> List[Dict[str, Any]]:
+        """Get all admins."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_id, username, full_name, is_super_admin, created_at
+                FROM admins
+                ORDER BY is_super_admin DESC, created_at ASC
+            ''')
+            results = cursor.fetchall()
+            return [
+                {
+                    'user_id': row[0],
+                    'username': row[1],
+                    'full_name': row[2],
+                    'is_super_admin': bool(row[3]),
+                    'created_at': row[4]
+                }
+                for row in results
+            ]
+    
+    # === ALLOWED USERS MANAGEMENT ===
+    
+    def is_user_allowed(self, username: str) -> bool:
+        """Check if user is in whitelist."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT is_active FROM allowed_users WHERE username = ?', (username,))
+            result = cursor.fetchone()
+            return bool(result and result[0])
+    
+    def add_allowed_user(self, username: str, full_name: str, grade: int, added_by: int) -> bool:
+        """Add user to whitelist."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO allowed_users (username, full_name, grade, added_by)
+                    VALUES (?, ?, ?, ?)
+                ''', (username, full_name, grade, added_by))
+                conn.commit()
+                return True
+        except sqlite3.IntegrityError:
+            return False
+    
+    def remove_allowed_user(self, username: str) -> bool:
+        """Remove user from whitelist."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM allowed_users WHERE username = ?', (username,))
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception:
+            return False
+    
+    def update_allowed_user(self, username: str, full_name: str = None, grade: int = None, is_active: bool = None) -> bool:
+        """Update allowed user info."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                updates = []
+                params = []
+                
+                if full_name is not None:
+                    updates.append("full_name = ?")
+                    params.append(full_name)
+                if grade is not None:
+                    updates.append("grade = ?")
+                    params.append(grade)
+                if is_active is not None:
+                    updates.append("is_active = ?")
+                    params.append(is_active)
+                
+                if updates:
+                    params.append(username)
+                    cursor.execute(f'''
+                        UPDATE allowed_users 
+                        SET {", ".join(updates)}
+                        WHERE username = ?
+                    ''', params)
+                    conn.commit()
+                    return cursor.rowcount > 0
+                return False
+        except Exception:
+            return False
+    
+    def get_all_allowed_users(self) -> List[Dict[str, Any]]:
+        """Get all allowed users."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT username, full_name, grade, is_active, added_at
+                FROM allowed_users
+                ORDER BY added_at DESC
+            ''')
+            results = cursor.fetchall()
+            return [
+                {
+                    'username': row[0],
+                    'full_name': row[1],
+                    'grade': row[2],
+                    'is_active': bool(row[3]),
+                    'added_at': row[4]
+                }
+                for row in results
+            ]
+    
+    # === TOPICS MANAGEMENT ===
+    
+    def get_all_topics(self, active_only: bool = True) -> List[Dict[str, Any]]:
+        """Get all topics."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            query = 'SELECT id, name, description, is_active, created_at FROM topics'
+            if active_only:
+                query += ' WHERE is_active = 1'
+            query += ' ORDER BY name'
+            
+            cursor.execute(query)
+            results = cursor.fetchall()
+            return [
+                {
+                    'id': row[0],
+                    'name': row[1],
+                    'description': row[2],
+                    'is_active': bool(row[3]),
+                    'created_at': row[4]
+                }
+                for row in results
+            ]
+    
+    def add_topic(self, name: str, description: str = None, created_by: int = None) -> bool:
+        """Add new topic."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO topics (name, description, created_by)
+                    VALUES (?, ?, ?)
+                ''', (name, description or f"Тема: {name}", created_by))
+                conn.commit()
+                return True
+        except sqlite3.IntegrityError:
+            return False
+    
+    def update_topic(self, topic_id: int, name: str = None, description: str = None, is_active: bool = None) -> bool:
+        """Update topic."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                updates = []
+                params = []
+                
+                if name is not None:
+                    updates.append("name = ?")
+                    params.append(name)
+                if description is not None:
+                    updates.append("description = ?")
+                    params.append(description)
+                if is_active is not None:
+                    updates.append("is_active = ?")
+                    params.append(is_active)
+                
+                if updates:
+                    params.append(topic_id)
+                    cursor.execute(f'''
+                        UPDATE topics 
+                        SET {", ".join(updates)}
+                        WHERE id = ?
+                    ''', params)
+                    conn.commit()
+                    return cursor.rowcount > 0
+                return False
+        except Exception:
+            return False
+    
+    def delete_topic(self, topic_id: int) -> bool:
+        """Delete topic (soft delete - set is_active to 0)."""
+        return self.update_topic(topic_id, is_active=False)
+    
+    def get_topic_names(self, active_only: bool = True) -> List[str]:
+        """Get list of topic names for compatibility with existing code."""
+        topics = self.get_all_topics(active_only)
+        return [topic['name'] for topic in topics] 
