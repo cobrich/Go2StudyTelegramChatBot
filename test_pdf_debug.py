@@ -18,41 +18,58 @@ def analyze_pdf_structure(pdf_path):
         print(f"Символов на странице: {len(page_text)}")
         
         # Ищем вопросы на странице
-        questions = re.findall(r'(\d+)\)\s*([^\n]+)', page_text)
+        questions = re.findall(r'(\d+)[.)]\s*([^\n]+)', page_text)
         print(f"Найдено вопросов: {len(questions)}")
         
         if questions:
             print("Первые 3 вопроса:")
             for i, (num, text) in enumerate(questions[:3]):
-                print(f"  {num}) {text[:50]}...")
+                print(f"  {num}) {text[:100]}...")
+        
+        # Ищем правильные ответы
+        correct_answers = re.findall(r'[A-DА-Г]\)[^✅]*✅', page_text)
+        print(f"Найдено правильных ответов: {len(correct_answers)}")
+        
+        # Ищем заголовки тем
+        topics = re.findall(r'Тема:\s*([^(]+)\((\d+)\)', page_text)
+        if topics:
+            print(f"Найдены темы: {topics}")
+    
+    # Общая статистика
+    print(f"\n{'='*60}")
+    print("ОБЩАЯ СТАТИСТИКА:")
+    print(f"{'='*60}")
+    
+    # Все вопросы
+    all_questions = re.findall(r'(\d+)[.)]\s*([^\n]+)', full_text)
+    print(f"Всего вопросов в файле: {len(all_questions)}")
+    
+    # Все правильные ответы
+    all_correct = re.findall(r'[A-DА-Г]\)[^✅]*✅', full_text)
+    print(f"Всего правильных ответов: {len(all_correct)}")
+    
+    # Все темы
+    all_topics = re.findall(r'Тема:\s*([^(]+)\((\d+)\)', full_text)
+    print(f"Всего тем: {len(all_topics)}")
+    if all_topics:
+        print("Список тем:")
+        for topic, count in all_topics:
+            print(f"  - {topic.strip()}: {count} вопросов")
     
     doc.close()
-    
-    print(f"\n=== ОБЩАЯ СТАТИСТИКА ===")
-    print(f"Общее количество символов: {len(full_text)}")
-    
-    # Ищем все вопросы в тексте
-    all_questions = re.findall(r'(\d+)\)\s*([^\n]+)', full_text)
-    print(f"Всего найдено вопросов: {len(all_questions)}")
-    
-    # Анализируем нумерацию
-    question_numbers = [int(num) for num, _ in all_questions]
-    if question_numbers:
-        print(f"Номера вопросов: от {min(question_numbers)} до {max(question_numbers)}")
-        print(f"Уникальных номеров: {len(set(question_numbers))}")
-    
-    # Ищем варианты ответов
-    options = re.findall(r'[A-D]\)\s*[^\n]+', full_text)
-    print(f"Найдено вариантов ответов: {len(options)}")
-    
-    # Ищем правильные ответы
-    correct_answers = re.findall(r'[A-D]\)[^\n]*✅', full_text)
-    print(f"Найдено правильных ответов: {len(correct_answers)}")
-    
-    # Показываем первые 1000 символов для анализа
-    print(f"\n=== ПЕРВЫЕ 1000 СИМВОЛОВ ===")
-    clean_text = ''.join(char for char in full_text[:1000] if char.isprintable() or char.isspace())
-    print(repr(clean_text))
+    return full_text
 
 if __name__ == "__main__":
-    analyze_pdf_structure("files/математика темы 180 вопросов (2).pdf") 
+    # Анализируем оба PDF файла
+    pdf_files = ["files/file1.pdf", "files/file2.pdf"]
+    
+    for pdf_file in pdf_files:
+        try:
+            print(f"\n{'='*80}")
+            print(f"АНАЛИЗ ФАЙЛА: {pdf_file}")
+            print(f"{'='*80}")
+            analyze_pdf_structure(pdf_file)
+        except Exception as e:
+            print(f"❌ Ошибка при анализе {pdf_file}: {e}")
+        
+        print("\n" + "="*80 + "\n") 

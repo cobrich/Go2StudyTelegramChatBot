@@ -22,8 +22,8 @@ class PDFProcessor:
         # Паттерн для поиска заголовков тем
         self.topic_header_pattern = r'Тема:\s*([^(]+)\((\d+)\)'
         
-        # Паттерн для поиска вопросов
-        self.question_pattern = r'^(\d+)\)\s*(.+)'
+        # Паттерн для поиска вопросов (поддерживает как точку, так и скобку)
+        self.question_pattern = r'^(\d+)[.)\s]\s*(.+)'
         
         # Паттерны для поиска вариантов ответов
         self.option_patterns = [
@@ -46,6 +46,8 @@ class PDFProcessor:
         current_question = None
         current_options = []
         correct_answer = None
+        
+        print(f"[DEBUG] Всего строк для обработки: {len(lines)}")
         
         i = 0
         while i < len(lines):
@@ -85,6 +87,7 @@ class PDFProcessor:
                             'options': current_options,
                             'correct_answer': correct_answer
                         })
+                        print(f"[SAVE] Сохранен вопрос: {clean_question[:50]}...")
                 
                 # Начинаем новый вопрос
                 question_number = question_match.group(1)
@@ -134,6 +137,10 @@ class PDFProcessor:
                 if clean_line:
                     current_question += " " + clean_line
             
+            # Отладочная информация для первых 20 строк
+            if i < 20:
+                print(f"[DEBUG][{i}] Строка: '{line[:100]}...' | Тема: {current_topic} | Вопрос: {bool(current_question)}")
+            
             i += 1
         
         # Сохраняем последний вопрос
@@ -149,7 +156,9 @@ class PDFProcessor:
                     'options': current_options,
                     'correct_answer': correct_answer
                 })
+                print(f"[SAVE] Сохранен последний вопрос: {clean_question[:50]}...")
         
+        print(f"[DEBUG] Итого извлечено вопросов: {len(questions)}")
         return questions
 
     def normalize_topic_name(self, topic_name: str) -> str:
@@ -400,7 +409,7 @@ class PDFProcessor:
                 continue
             
             # Проверяем на начало вопроса (любое число с закрывающей скобкой)
-            question_match = re.match(r'^(\d+)\)\s*(.+)', line)
+            question_match = re.match(r'^(\d+)[.)\s]\s*(.+)', line)
             if question_match:
                 # Сохраняем предыдущий вопрос, если он был
                 if current_question and current_options and correct_answer:
@@ -561,29 +570,48 @@ def add_questions_to_db(questions: List[Dict], db: Database):
         print(f"  - {topic}: {count} вопросов")
 
 def main():
-    """Основная функция для обработки всех PDF файлов."""
-    print("[LOG] Запуск обработки PDF файлов...")
+    """Основная функция для обработки PDF файлов."""
     processor = PDFProcessor()
-    db = Database()
     
-    # Список файлов для обработки
+    # Список PDF файлов для обработки
     pdf_files = [
-        "files/математика темы 180 вопросов (2).pdf",
+        "../files/file1.pdf",  # Первый правильно отформатированный файл
+        "../files/file2.pdf"   # Второй файл с математическими задачами
     ]
     
     total_questions = 0
     
     for pdf_file in pdf_files:
-        if os.path.exists(pdf_file):
-            print(f"\n[LOG] Обработка файла: {pdf_file}")
+        if not os.path.exists(pdf_file):
+            print(f"❌ Файл не найден: {pdf_file}")
+            continue
+            
+        print(f"\n{'='*60}")
+        print(f"🔄 Обрабатываю файл: {pdf_file}")
+        print(f"{'='*60}")
+        
+        try:
             questions = processor.process_pdf_file(pdf_file)
-            print(f"[LOG] Найдено {len(questions)} вопросов. Начинаю добавление в базу...")
-            add_questions_to_db(questions, db)
+            print(f"✅ Успешно обработано {len(questions)} вопросов из {pdf_file}")
+            
+            # Добавляем вопросы в базу данных
+            if questions:
+                print(f"\n🔄 Добавляю {len(questions)} вопросов в базу данных...")
+                from services.database import Database
+                db = Database()
+                add_questions_to_db(questions, db)
+                print(f"✅ Вопросы успешно добавлены в базу данных")
+            
             total_questions += len(questions)
-        else:
-            print(f"[LOG] Файл не найден: {pdf_file}")
+            
+        except Exception as e:
+            print(f"❌ Ошибка при обработке {pdf_file}: {e}")
+            import traceback
+            traceback.print_exc()
     
-    print(f"\n[LOG] Обработка завершена. Всего обработано {total_questions} вопросов.")
+    print(f"\n{'='*60}")
+    print(f"🎉 ИТОГО ОБРАБОТАНО: {total_questions} вопросов")
+    print(f"{'='*60}")
 
 if __name__ == "__main__":
     main() 
