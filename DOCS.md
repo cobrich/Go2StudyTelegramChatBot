@@ -1725,12 +1725,12 @@ python init_superadmin.py
 ```
 === Инициализация суперадмина ===
 Суперадмин не найден. Создаем нового...
-Введите Telegram user_id суперадмина: 135424060
+Введите Telegram user_id суперадмина: 1354242060
 Введите username суперадмина (без @): Bekzat
 Введите ФИО суперадмина: Tursun Bekzat Yerikuly
 
 ✅ Суперадмин успешно создан!
-  ID: 135424060
+  ID: 1354242060
   Username: @Bekzat
   ФИО: Tursun Bekzat Yerikuly
 ```
@@ -1793,7 +1793,7 @@ for admin in admins:
 
 **Результат:**
 ```
-ID: 135424060, Username: @Bekzat, Name: Tursun Bekzat Yerikuly, Super: True
+ID: 1354242060, Username: @Bekzat, Name: Tursun Bekzat Yerikuly, Super: True
 ```
 
 #### **🎯 Следующие шаги после создания:**
