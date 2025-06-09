@@ -78,6 +78,21 @@ class CommandHandlers(BaseHandler):
             "🛑 Бот остановлен. Все данные очищены.\n\nДля нового старта используйте /start",
             reply_markup=ReplyKeyboardRemove()
         )
+
+    async def reset(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Reset user state if stuck in a test."""
+        user_id = update.effective_user.id
+        
+        # Clear user activity
+        self.db.set_user_inactive(user_id)
+        
+        # Clear context data
+        context.user_data.clear()
+        
+        await update.message.reply_text(
+            "🔄 Состояние сброшено. Можете начать заново.",
+            reply_markup=self.main_menu_markup
+        )
     
     async def get_my_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать user_id пользователя (временная команда для настройки админа)."""

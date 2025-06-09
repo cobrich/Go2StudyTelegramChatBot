@@ -380,6 +380,17 @@ class Database:
             cursor.execute('UPDATE users SET is_active = 0, current_topic = NULL')
             conn.commit()
 
+    def clear_user_activity(self, user_id: int) -> None:
+        """Clear user activity and set as inactive."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE users 
+                SET is_active = 0, current_topic = NULL, last_activity = CURRENT_TIMESTAMP 
+                WHERE user_id = ?
+            ''', (user_id,))
+            conn.commit()
+
     def register_user(self, user_id: int, username: str) -> None:
         """Register a user if not exists."""
         with sqlite3.connect(self.db_path) as conn:

@@ -12,6 +12,11 @@ Go2Study Bot is a Telegram bot designed to help students learn mathematics throu
 - ✅ **Added Loading Message**: Added "🔍 Формируются вопросы, подождите..." message when user selects any topic
   - Prevents users from clicking multiple topics while questions are being generated
   - Shows for both regular topic selection and retakes
+- ✅ **Fixed Stale Session Issue**: Resolved issue where users get stuck in "test mode" without actual test data
+  - Problem: User marked as active in database but no test data in context (common after bot restart)
+  - Solution: Added automatic detection and clearing of stale sessions in `check_user_active`
+  - Added `/reset` command for manual state reset when stuck
+  - Added missing `clear_user_activity` method to Database class
 
 ### Previously Completed:
 - ✅ Implemented complete admin system with supeadmin and regular admin roles

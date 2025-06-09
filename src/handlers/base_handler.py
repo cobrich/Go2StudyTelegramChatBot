@@ -16,6 +16,17 @@ class BaseHandler:
         user_id = update.effective_user.id
         msg = update.effective_message
         if self.db.is_user_active(user_id):
+            # Check if we have valid test data in context
+            questions = context.user_data.get('questions', [])
+            current_topic = context.user_data.get('current_topic')
+            
+            # If user is marked as active but has no test data, clear the stale session
+            if not questions or not current_topic:
+                logging.warning(f"User {user_id} is marked as active but has no test data. Clearing stale session.")
+                self.db.set_user_inactive(user_id)
+                self.clear_user_data(context)
+                return False
+            
             await msg.reply_text(
                 "Вы проходите тест. Чтобы выбрать другую опцию, пожалуйста, завершите текущий тест. "
                 "Для возврата к выбору тем без завершения теста, перейдите к первому вопросу теста.",
