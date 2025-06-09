@@ -710,3 +710,103 @@ The processor provides detailed logging:
 - Topic-based question distribution
 
 This update makes the PDF processor much more robust and suitable for standardized educational content with clear topic organization.
+
+## [2024-12-19] Admin PDF Upload Functionality
+
+### Changes Made:
+1. **Added PDF upload to admin panel**: Admins and super admins can now upload PDF files directly through the Telegram bot
+2. **Integrated PDF processor**: The bot now uses the updated PDF processor to handle uploaded files
+3. **Real-time processing feedback**: Users get live updates during PDF processing
+4. **Comprehensive statistics**: After processing, admins see detailed statistics about added questions
+5. **Error handling**: Robust error handling for file validation and processing errors
+
+### New Admin Features:
+
+#### Questions Management Menu:
+- **📄 Загрузить PDF**: Upload PDF files with questions
+- **📋 Статистика вопросов**: View detailed statistics by topic and source
+- **🔍 Поиск вопросов**: Search functionality (placeholder for future implementation)
+- **🗑️ Удалить вопросы**: Delete questions functionality (placeholder for future implementation)
+
+#### PDF Upload Process:
+1. Admin selects "Управление вопросами" → "Загрузить PDF"
+2. Bot shows format instructions and examples
+3. Admin uploads PDF file (max 20MB)
+4. Bot validates file format and size
+5. Real-time processing with status updates:
+   - "⏳ Обрабатываю PDF файл..."
+   - "⏳ Извлекаю вопросы из PDF..."
+   - "⏳ Найдено X вопросов. Сохраняю в базу данных..."
+6. Final report with statistics:
+   - File name
+   - Total questions found
+   - New questions saved
+   - Duplicates skipped
+   - Breakdown by topics
+
+#### File Validation:
+- **Format check**: Only PDF files accepted
+- **Size limit**: Maximum 20MB per file
+- **Content validation**: Questions must follow the supported format
+- **Duplicate detection**: Existing questions are automatically skipped
+
+#### Processing Features:
+- **Asynchronous processing**: PDF processing runs in background thread
+- **Automatic topic mapping**: Topics from PDF are mapped to system topics
+- **AI fallback**: If topic mapping fails, AI determines the best topic
+- **Temporary file handling**: Secure temporary file creation and cleanup
+- **Error recovery**: Graceful handling of processing errors
+
+### Usage Instructions:
+
+#### For Admins:
+1. Use `/admin` command to access admin panel
+2. Select "❓ Управление вопросами"
+3. Choose "📄 Загрузить PDF"
+4. Follow the format instructions
+5. Upload your PDF file
+6. Wait for processing to complete
+7. Review the statistics report
+
+#### Supported PDF Format:
+```
+Тема: Пропорция(10)
+
+1) Найдите значение x в пропорции 2:3 = x:12
+A) 6
+B) 8 ✅
+C) 9
+D) 10
+
+2) Решите пропорцию 5:x = 15:9
+A) 3 ✅
+B) 4
+C) 5
+D) 6
+
+...
+
+Тема: Уравнение(5)
+
+1) Решите уравнение: 2x + 5 = 13
+A) x = 3
+B) x = 4 ✅
+C) x = 5
+D) x = 6
+```
+
+### Technical Implementation:
+- **Document handler**: New message handler for PDF files
+- **Async processing**: Uses `asyncio.run_in_executor` for non-blocking PDF processing
+- **Temporary files**: Secure handling with automatic cleanup
+- **Database integration**: Direct integration with existing question storage system
+- **Error logging**: Comprehensive error logging for debugging
+
+### Benefits:
+- **No manual file management**: Admins don't need server access
+- **Immediate feedback**: Real-time processing status
+- **Quality control**: Automatic validation and duplicate detection
+- **Scalable**: Can handle multiple admins uploading simultaneously
+- **User-friendly**: Simple Telegram interface for complex operations
+
+This feature significantly improves the workflow for content managers and makes the system more accessible to non-technical administrators.

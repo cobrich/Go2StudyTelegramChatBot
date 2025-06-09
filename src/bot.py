@@ -56,7 +56,18 @@ def main() -> None:
     
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_with_admin))
     
+    # Add document handler for admin PDF uploads
+    async def handle_document_with_admin(update: Update, context):
+        # Проверяем админские действия с документами
+        await admin_handlers.handle_admin_document(update, context)
+    
+    application.add_handler(MessageHandler(filters.Document.ALL, handle_document_with_admin))
+    
     # Add admin callback handlers
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.admin_panel,
+        pattern="^admin_panel$"
+    ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.students_menu,
         pattern="^admin_students$"
@@ -66,6 +77,10 @@ def main() -> None:
         pattern="^admin_topics$"
     ))
     application.add_handler(CallbackQueryHandler(
+        admin_handlers.questions_menu,
+        pattern="^admin_questions$"
+    ))
+    application.add_handler(CallbackQueryHandler(
         admin_handlers.admins_menu,
         pattern="^admin_admins$"
     ))
@@ -73,6 +88,8 @@ def main() -> None:
         admin_handlers.show_stats,
         pattern="^admin_stats$"
     ))
+    
+    # Student management handlers
     application.add_handler(CallbackQueryHandler(
         admin_handlers.add_student_start,
         pattern="^add_student$"
@@ -81,6 +98,8 @@ def main() -> None:
         admin_handlers.list_students,
         pattern="^list_students$"
     ))
+    
+    # Topic management handlers
     application.add_handler(CallbackQueryHandler(
         admin_handlers.add_topic_start,
         pattern="^add_topic$"
@@ -89,6 +108,18 @@ def main() -> None:
         admin_handlers.list_topics,
         pattern="^list_topics$"
     ))
+    
+    # Questions management handlers
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.upload_pdf_start,
+        pattern="^upload_pdf$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.questions_stats,
+        pattern="^questions_stats$"
+    ))
+    
+    # Admin management handlers
     application.add_handler(CallbackQueryHandler(
         admin_handlers.add_admin_start,
         pattern="^add_admin$"

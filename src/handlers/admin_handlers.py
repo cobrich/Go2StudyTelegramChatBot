@@ -1,18 +1,26 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 from services.database import Database
+from services.pdf_processor import PDFProcessor, add_questions_to_db
 import logging
+import os
+import tempfile
+import asyncio
 
 class AdminHandlers:
     def __init__(self):
         self.db = Database()
+        self.pdf_processor = PDFProcessor()
     
     async def admin_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Главная админ-панель."""
         user_id = update.effective_user.id
         
         if not self.db.is_admin(user_id):
-            await update.message.reply_text("❌ У вас нет прав администратора.")
+            if update.message:
+                await update.message.reply_text("❌ У вас нет прав администратора.")
+            else:
+                await update.callback_query.answer("❌ У вас нет прав администратора.")
             return
         
         is_super = self.db.is_super_admin(user_id)
@@ -38,7 +46,12 @@ class AdminHandlers:
         role = "Суперадминистратор" if is_super else "Администратор"
         text = f"🔧 **Админ-панель**\n\nВаша роль: {role}\n\nВыберите действие:"
         
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        if update.message:
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        else:
+            query = update.callback_query
+            await query.answer()
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
     
     # === УПРАВЛЕНИЕ УЧЕНИКАМИ ===
     
@@ -139,6 +152,208 @@ class AdminHandlers:
         
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
     
+    # === УПРАВЛЕНИЕ ВОПРОСАМИ ===
+    
+    async def questions_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Меню управления вопросами."""
+        query = update.callback_query
+        await query.answer()
+        
+        keyboard = [
+            [InlineKeyboardButton("📄 Загрузить PDF", callback_data="upload_pdf")],
+            [InlineKeyboardButton("📋 Статистика вопросов", callback_data="questions_stats")],
+            [InlineKeyboardButton("🔍 Поиск вопросов", callback_data="search_questions")],
+            [InlineKeyboardButton("🗑️ Удалить вопросы", callback_data="delete_questions")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text("❓ **Управление вопросами**\n\nВыберите действие:", 
+                                     reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def upload_pdf_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало загрузки PDF файла."""
+        query = update.callback_query
+        await query.answer()
+        
+        context.user_data['admin_action'] = 'upload_pdf'
+        
+        text = "📄 **Загрузка PDF файла**\n\n"
+        text += "Отправьте PDF файл с вопросами в следующем формате:\n\n"
+        text += "```\nТема: Пропорция(10)\n\n"
+        text += "1) Вопрос\nA) Вариант A\nB) Вариант B ✅\nC) Вариант C\nD) Вариант D\n\n"
+        text += "2) Следующий вопрос\n...\n```\n\n"
+        text += "⚠️ Убедитесь, что правильные ответы помечены символом ✅"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_questions")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def questions_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Статистика вопросов по темам."""
+        query = update.callback_query
+        await query.answer()
+        
+        # Получаем статистику вопросов из базы данных
+        try:
+            cursor = self.db.conn.cursor()
+            cursor.execute("""
+                SELECT topic, COUNT(*) as count, 
+                       SUM(CASE WHEN source = 'pdf' THEN 1 ELSE 0 END) as pdf_count,
+                       SUM(CASE WHEN source = 'ai' THEN 1 ELSE 0 END) as ai_count
+                FROM questions 
+                GROUP BY topic 
+                ORDER BY count DESC
+            """)
+            stats = cursor.fetchall()
+            
+            if not stats:
+                text = "📋 **Статистика вопросов**\n\nВопросы не найдены."
+            else:
+                text = "📋 **Статистика вопросов**\n\n"
+                total_questions = 0
+                total_pdf = 0
+                total_ai = 0
+                
+                for topic, count, pdf_count, ai_count in stats:
+                    text += f"📚 **{topic}**\n"
+                    text += f"   Всего: {count}\n"
+                    text += f"   📄 PDF: {pdf_count}\n"
+                    text += f"   🤖 AI: {ai_count}\n\n"
+                    
+                    total_questions += count
+                    total_pdf += pdf_count
+                    total_ai += ai_count
+                
+                text += f"**📊 Общая статистика:**\n"
+                text += f"Всего вопросов: {total_questions}\n"
+                text += f"Из PDF: {total_pdf}\n"
+                text += f"Сгенерировано AI: {total_ai}"
+            
+        except Exception as e:
+            text = f"❌ Ошибка при получении статистики: {e}"
+            logging.error(f"Error getting questions stats: {e}")
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_questions")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def process_pdf_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Обработка загруженного PDF файла."""
+        if not update.message.document:
+            await update.message.reply_text("❌ Пожалуйста, отправьте PDF файл.")
+            return
+        
+        # Проверяем, что это PDF файл
+        if not update.message.document.file_name.lower().endswith('.pdf'):
+            await update.message.reply_text("❌ Пожалуйста, отправьте файл в формате PDF.")
+            return
+        
+        # Проверяем размер файла (максимум 20MB)
+        if update.message.document.file_size > 20 * 1024 * 1024:
+            await update.message.reply_text("❌ Размер файла слишком большой. Максимум 20MB.")
+            return
+        
+        processing_msg = await update.message.reply_text("⏳ Обрабатываю PDF файл...")
+        
+        try:
+            # Скачиваем файл
+            file = await context.bot.get_file(update.message.document.file_id)
+            
+            # Создаем временный файл
+            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_file:
+                await file.download_to_drive(temp_file.name)
+                temp_path = temp_file.name
+            
+            # Обрабатываем PDF
+            await processing_msg.edit_text("⏳ Извлекаю вопросы из PDF...")
+            
+            # Запускаем обработку в отдельном потоке, чтобы не блокировать бот
+            loop = asyncio.get_event_loop()
+            questions = await loop.run_in_executor(None, self.pdf_processor.process_pdf_file, temp_path)
+            
+            if not questions:
+                await processing_msg.edit_text("❌ Не удалось извлечь вопросы из PDF файла. Проверьте формат файла.")
+                return
+            
+            await processing_msg.edit_text(f"⏳ Найдено {len(questions)} вопросов. Сохраняю в базу данных...")
+            
+            # Сохраняем вопросы в базу данных
+            saved_count = 0
+            skipped_count = 0
+            topic_stats = {}
+            
+            for question in questions:
+                question_text = question['question'].strip()
+                topic = question.get('topic', 'Операции с дробями и остатками')
+                
+                # Обновляем статистику
+                topic_stats[topic] = topic_stats.get(topic, 0) + 1
+                
+                # Проверяем уникальность
+                exists = self.db.get_explanation_by_question_text(question_text)
+                if exists:
+                    skipped_count += 1
+                    continue
+                
+                # Подготавливаем данные для базы
+                correct_answer_index = ord(question['correct_answer']) - ord('A')
+                correct_answer_text = question['options'][correct_answer_index]
+                
+                # Формируем неправильные варианты
+                incorrect_options = []
+                for i, option in enumerate(question['options']):
+                    if i != correct_answer_index:
+                        incorrect_options.append(option)
+                
+                db_question = {
+                    'topic': topic,
+                    'question': question_text,
+                    'answer': correct_answer_text,
+                    'explanation': f"Правильный ответ: {question['correct_answer']}) {correct_answer_text}",
+                    'incorrect_options': '\n'.join(incorrect_options),
+                    'question_type': 'standard',
+                    'source': 'pdf'
+                }
+                
+                try:
+                    self.db.add_question(db_question)
+                    saved_count += 1
+                except Exception as e:
+                    logging.error(f"Error saving question: {e}")
+            
+            # Формируем отчет
+            result_text = f"✅ **Обработка завершена!**\n\n"
+            result_text += f"📄 Файл: {update.message.document.file_name}\n"
+            result_text += f"📊 Найдено вопросов: {len(questions)}\n"
+            result_text += f"💾 Сохранено новых: {saved_count}\n"
+            result_text += f"⏭️ Пропущено (дубликаты): {skipped_count}\n\n"
+            
+            if topic_stats:
+                result_text += "**📚 Статистика по темам:**\n"
+                for topic, count in sorted(topic_stats.items()):
+                    result_text += f"• {topic}: {count}\n"
+            
+            await processing_msg.edit_text(result_text, parse_mode='Markdown')
+            
+        except Exception as e:
+            error_msg = f"❌ Ошибка при обработке PDF: {str(e)}"
+            logging.error(f"PDF processing error: {e}")
+            await processing_msg.edit_text(error_msg)
+        
+        finally:
+            # Удаляем временный файл
+            try:
+                if 'temp_path' in locals():
+                    os.unlink(temp_path)
+            except:
+                pass
+            
+            # Очищаем состояние
+            context.user_data.pop('admin_action', None)
+    
     # === УПРАВЛЕНИЕ АДМИНАМИ (только для суперадмина) ===
     
     async def admins_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -218,6 +433,22 @@ class AdminHandlers:
             await self._handle_student_grade(update, context, text)
         elif action == 'topic_description':
             await self._handle_topic_description(update, context, text)
+    
+    # === ОБРАБОТКА ДОКУМЕНТОВ ===
+    
+    async def handle_admin_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Обработка документов в админ-режиме."""
+        user_id = update.effective_user.id
+        
+        if not self.db.is_admin(user_id):
+            return
+        
+        action = context.user_data.get('admin_action')
+        
+        if action == 'upload_pdf':
+            await self.process_pdf_file(update, context)
+        else:
+            await update.message.reply_text("❌ Неожиданный документ. Пожалуйста, используйте админ-панель для загрузки файлов.")
     
     async def _handle_add_student(self, update: Update, context: ContextTypes.DEFAULT_TYPE, username: str) -> None:
         """Обработка добавления ученика - этап 1 (username)."""
@@ -313,8 +544,6 @@ class AdminHandlers:
             await update.message.reply_text(f"❌ Ошибка при добавлении админа. Возможно, пользователь {new_admin_id} уже является админом.")
         
         context.user_data.pop('admin_action', None)
-    
-    # === СТАТИСТИКА ===
     
     async def show_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать статистику системы."""
