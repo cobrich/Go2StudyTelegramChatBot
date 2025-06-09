@@ -13,6 +13,9 @@ from handlers.command_handlers import CommandHandlers
 from handlers.callback_handlers import CallbackHandlers
 from handlers.admin_handlers import AdminHandlers
 
+# Import telegram handlers
+from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, filters
+
 # Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',

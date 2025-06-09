@@ -1013,4 +1013,17 @@ This architecture ensures **data integrity**, **access security**, and **operati
 - Добавленные файлы: `src/utils/cleanup_null_questions.py`
 - Улучшено логирование при обработке AI-сгенерированных вопросов
 
----
+## Recent Changes and Fixes
+
+### Import Error Fix (Latest)
+**Issue:** `"CommandHandler" is not defined` error in `src/bot_universal.py`
+**Cause:** Missing imports for telegram.ext classes
+**Solution:** Added missing imports:
+```python
+from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, filters
+```
+
+### NoneType Error Resolution
+**Issue:** `TypeError: 'NoneType' object is not subscriptable` in question_service.py line 235
+
+// ... existing code ...
