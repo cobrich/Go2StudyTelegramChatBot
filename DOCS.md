@@ -22,6 +22,11 @@ Go2Study Bot is a Telegram bot designed to help students learn mathematics throu
   - Solution: Modified logic to skip grade requirement for admins and super admins
   - Admins now only need to provide their full name to start using the bot
   - Separate logic for admins vs regular students during registration and data updates
+- ✅ **Fixed Bot Initialization Error**: Resolved RuntimeError with ExtBot initialization
+  - Problem: Bot failed to start with python-telegram-bot version 22.x due to breaking changes
+  - Solution: Downgraded to stable version 20.8 and reverted to synchronous initialization
+  - Created requirements.txt to lock stable dependency versions
+  - Bot now starts successfully without initialization errors
 
 ### Previously Completed:
 - ✅ Implemented complete admin system with supeadmin and regular admin roles
