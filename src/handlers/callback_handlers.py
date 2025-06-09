@@ -4,12 +4,13 @@ import logging
 from handlers.base_handler import BaseHandler
 from utils.keyboards import (
     build_topic_selection_keyboard,
+    build_subtopic_selection_keyboard,
     build_question_keyboard,
     build_results_keyboard,
     build_continue_keyboard,
     get_main_menu_markup
 )
-from config.constants import DEFAULT_QUESTIONS_PER_TEST, get_active_topics
+from config.constants import DEFAULT_QUESTIONS_PER_TEST, get_active_topics, get_main_topics, get_subtopics
 
 class CallbackHandlers(BaseHandler):
     async def handle_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -395,11 +396,12 @@ class CallbackHandlers(BaseHandler):
         except Exception:
             pass
         try:
-            # Отправляем новое сообщение с выбором темы
+            # Отправляем новое сообщение с выбором основных разделов
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
-                text="Выберите тему:",
-                reply_markup=build_topic_selection_keyboard()
+                text="📚 **Выберите раздел математики:**",
+                reply_markup=build_topic_selection_keyboard(),
+                parse_mode='Markdown'
             )
         except Exception:
             pass
@@ -518,4 +520,59 @@ class CallbackHandlers(BaseHandler):
                 reply_markup=get_main_menu_markup()
             )
         except Exception:
+            pass
+
+    async def handle_main_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle main topic category selection callback."""
+        query = update.callback_query
+        try:
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error in query.answer() (main_topic): {e}")
+        
+        # Извлекаем индекс основной темы
+        try:
+            main_topic_index = int(query.data.replace('main_topic_', ''))
+            main_topics = get_main_topics()
+            main_topic = main_topics[main_topic_index]
+            logging.info(f"[handle_main_topic_selection] main_topic_index={main_topic_index}, main_topic={main_topic}")
+        except (ValueError, IndexError):
+            logging.error(f"Invalid main topic selected: {query.data}")
+            try:
+                await query.message.edit_text(
+                    "Произошла ошибка при выборе раздела. Пожалуйста, попробуйте еще раз.",
+                    reply_markup=build_topic_selection_keyboard()
+                )
+            except Exception:
+                pass
+            return
+        
+        # Показываем подтемы выбранного раздела
+        try:
+            await query.message.edit_text(
+                f"📚 **{main_topic}**\n\nВыберите конкретную тему:",
+                reply_markup=build_subtopic_selection_keyboard(main_topic, main_topic_index),
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logging.error(f"Error displaying subtopics: {e}")
+            pass
+
+    async def handle_back_to_main_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle back to main topics callback."""
+        query = update.callback_query
+        try:
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error in query.answer() (back_to_main_topics): {e}")
+        
+        # Возвращаемся к выбору основных разделов
+        try:
+            await query.message.edit_text(
+                "📚 **Выберите раздел математики:**",
+                reply_markup=build_topic_selection_keyboard(),
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logging.error(f"Error returning to main topics: {e}")
             pass 

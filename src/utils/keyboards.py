@@ -1,14 +1,34 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
-from config.constants import MAIN_MENU_KEYBOARD, get_active_topics
+from config.constants import MAIN_MENU_KEYBOARD, get_active_topics, get_main_topics, get_subtopics
 
 def build_topic_selection_keyboard() -> InlineKeyboardMarkup:
-    """Create InlineKeyboardMarkup for topic selection, including 'Back to main menu' button."""
-    topics = get_active_topics()
+    """Create InlineKeyboardMarkup for main topic categories selection."""
+    main_topics = get_main_topics()
     keyboard = [
-        [InlineKeyboardButton(topic, callback_data=f"topic_{i}")]
-        for i, topic in enumerate(topics)
+        [InlineKeyboardButton(main_topic, callback_data=f"main_topic_{i}")]
+        for i, main_topic in enumerate(main_topics)
     ]
     # Add "Back to main menu" button at the end
+    keyboard.append([InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")])
+    return InlineKeyboardMarkup(keyboard)
+
+def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int) -> InlineKeyboardMarkup:
+    """Create InlineKeyboardMarkup for subtopic selection within a main topic."""
+    subtopics = get_subtopics(main_topic)
+    all_topics = get_active_topics()  # Плоский список всех тем
+    
+    keyboard = []
+    for subtopic in subtopics:
+        # Находим индекс подтемы в общем списке тем
+        try:
+            subtopic_index = all_topics.index(subtopic)
+            keyboard.append([InlineKeyboardButton(subtopic, callback_data=f"topic_{subtopic_index}")])
+        except ValueError:
+            # Если подтема не найдена в активных темах, пропускаем
+            continue
+    
+    # Add navigation buttons
+    keyboard.append([InlineKeyboardButton("🔙 Назад к разделам", callback_data="back_to_main_topics")])
     keyboard.append([InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")])
     return InlineKeyboardMarkup(keyboard)
 

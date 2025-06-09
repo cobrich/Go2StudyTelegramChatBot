@@ -153,6 +153,14 @@ def main() -> None:
     
     # Add callback query handlers
     application.add_handler(CallbackQueryHandler(
+        callback_handlers.handle_main_topic_selection,
+        pattern="^main_topic_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        callback_handlers.handle_back_to_main_topics,
+        pattern="^back_to_main_topics$"
+    ))
+    application.add_handler(CallbackQueryHandler(
         callback_handlers.handle_topic_selection,
         pattern=r'^(topic_|retake_)'
     ))

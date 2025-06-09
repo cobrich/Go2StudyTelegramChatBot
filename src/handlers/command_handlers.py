@@ -251,8 +251,9 @@ class CommandHandlers(BaseHandler):
             )
             # Затем отправляем сообщение с inline-кнопками
             await update.message.reply_text(
-                "Выберите тему:",
-                reply_markup=build_topic_selection_keyboard()
+                "📚 **Выберите раздел математики:**",
+                reply_markup=build_topic_selection_keyboard(),
+                parse_mode='Markdown'
             )
         elif text == "📊 Мой прогресс":
             total_tests, avg_percentage = self.db.get_user_progress(user_id)
