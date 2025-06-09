@@ -32,7 +32,7 @@ def main() -> None:
     # Initialize handlers
     command_handlers = CommandHandlers(db, question_service)
     callback_handlers = CallbackHandlers(db, question_service)
-    admin_handlers = AdminHandlers()
+    admin_handlers = AdminHandlers(db, question_service)
     
     # Create the Application
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()

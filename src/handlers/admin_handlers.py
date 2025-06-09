@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 from services.database import Database
+from services.question_service import QuestionService
 from services.pdf_processor import PDFProcessor, add_questions_to_db
 import logging
 import os
@@ -11,9 +12,8 @@ from handlers.base_handler import BaseHandler
 from services.topic_manager import TopicManager
 
 class AdminHandlers(BaseHandler):
-    def __init__(self):
-        super().__init__()
-        self.db = Database()
+    def __init__(self, db: Database, question_service: QuestionService):
+        super().__init__(db, question_service)
         self.pdf_processor = PDFProcessor()
         self.topic_manager = TopicManager()
     
