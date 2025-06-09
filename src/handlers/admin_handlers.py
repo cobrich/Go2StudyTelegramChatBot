@@ -7,11 +7,15 @@ import os
 import tempfile
 import asyncio
 import sqlite3
+from handlers.base_handler import BaseHandler
+from services.topic_manager import TopicManager
 
-class AdminHandlers:
+class AdminHandlers(BaseHandler):
     def __init__(self):
+        super().__init__()
         self.db = Database()
         self.pdf_processor = PDFProcessor()
+        self.topic_manager = TopicManager()
     
     async def admin_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Главная админ-панель."""
@@ -116,6 +120,7 @@ class AdminHandlers:
             [InlineKeyboardButton("📋 Список тем", callback_data="list_topics")],
             [InlineKeyboardButton("✏️ Редактировать тему", callback_data="edit_topic")],
             [InlineKeyboardButton("🗑️ Удалить тему", callback_data="remove_topic")],
+            [InlineKeyboardButton("🔗 Объединить темы", callback_data="merge_topics")],
             [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
         ]
         
@@ -137,6 +142,7 @@ class AdminHandlers:
         await query.answer()
         
         topics = self.db.get_all_topics(active_only=False)
+        topic_stats = self.topic_manager.get_topic_statistics()
         
         if not topics:
             text = "📋 **Список тем**\n\nТемы не найдены."
@@ -144,11 +150,15 @@ class AdminHandlers:
             text = "📋 **Список тем**\n\n"
             for i, topic in enumerate(topics, 1):
                 status = "✅" if topic['is_active'] else "❌"
-                text += f"{i}. {status} {topic['name']}\n"
-                text += f"   ID: {topic['id']}\n"
+                question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
+                text += f"{i}. {status} **{topic['name']}**\n"
+                text += f"   ID: {topic['id']} | Вопросов: {question_count}\n"
                 text += f"   Описание: {topic['description']}\n\n"
         
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]]
+        keyboard = [
+            [InlineKeyboardButton("🔄 Обновить статистику", callback_data="refresh_topics")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
@@ -652,4 +662,168 @@ class AdminHandlers:
         keyboard = [[InlineKeyboardButton("🔙 Назад к статистике", callback_data="admin_stats")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown') 
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def merge_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало объединения тем."""
+        query = update.callback_query
+        await query.answer()
+        
+        topics = self.db.get_all_topics(active_only=False)
+        topic_stats = self.topic_manager.get_topic_statistics()
+        
+        if len(topics) < 2:
+            await query.edit_message_text(
+                "❌ Недостаточно тем для объединения. Нужно минимум 2 темы.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]])
+            )
+            return
+        
+        text = "🔗 **Объединение тем**\n\n"
+        text += "Выберите исходную тему (из которой будут перенесены вопросы):\n\n"
+        
+        keyboard = []
+        for topic in topics:
+            question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
+            status = "✅" if topic['is_active'] else "❌"
+            keyboard.append([InlineKeyboardButton(
+                f"{status} {topic['name']} ({question_count} вопросов)",
+                callback_data=f"merge_source_{topic['id']}"
+            )])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def merge_topics_select_target(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выбор целевой темы для объединения."""
+        query = update.callback_query
+        source_topic_id = int(query.data.replace('merge_source_', ''))
+        await query.answer()
+        
+        # Сохраняем ID исходной темы
+        context.user_data['merge_source_id'] = source_topic_id
+        
+        # Получаем информацию об исходной теме
+        topics = self.db.get_all_topics(active_only=False)
+        source_topic = next((t for t in topics if t['id'] == source_topic_id), None)
+        
+        if not source_topic:
+            await query.edit_message_text(
+                "❌ Исходная тема не найдена.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]])
+            )
+            return
+        
+        topic_stats = self.topic_manager.get_topic_statistics()
+        
+        text = f"🔗 **Объединение тем**\n\n"
+        text += f"Исходная тема: **{source_topic['name']}**\n"
+        text += f"Вопросов: {topic_stats.get(source_topic['name'], {}).get('question_count', 0)}\n\n"
+        text += "Выберите целевую тему (в которую будут перенесены вопросы):\n\n"
+        
+        keyboard = []
+        for topic in topics:
+            if topic['id'] == source_topic_id:
+                continue  # Пропускаем исходную тему
+            
+            question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
+            status = "✅" if topic['is_active'] else "❌"
+            keyboard.append([InlineKeyboardButton(
+                f"{status} {topic['name']} ({question_count} вопросов)",
+                callback_data=f"merge_target_{topic['id']}"
+            )])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def merge_topics_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение объединения тем."""
+        query = update.callback_query
+        target_topic_id = int(query.data.replace('merge_target_', ''))
+        source_topic_id = context.user_data.get('merge_source_id')
+        await query.answer()
+        
+        if not source_topic_id:
+            await query.edit_message_text(
+                "❌ Ошибка: исходная тема не выбрана.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]])
+            )
+            return
+        
+        # Получаем информацию о темах
+        topics = self.db.get_all_topics(active_only=False)
+        source_topic = next((t for t in topics if t['id'] == source_topic_id), None)
+        target_topic = next((t for t in topics if t['id'] == target_topic_id), None)
+        
+        if not source_topic or not target_topic:
+            await query.edit_message_text(
+                "❌ Одна из тем не найдена.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]])
+            )
+            return
+        
+        topic_stats = self.topic_manager.get_topic_statistics()
+        source_count = topic_stats.get(source_topic['name'], {}).get('question_count', 0)
+        target_count = topic_stats.get(target_topic['name'], {}).get('question_count', 0)
+        
+        text = f"🔗 **Подтверждение объединения**\n\n"
+        text += f"**Исходная тема:** {source_topic['name']}\n"
+        text += f"Вопросов: {source_count}\n\n"
+        text += f"**Целевая тема:** {target_topic['name']}\n"
+        text += f"Вопросов: {target_count}\n\n"
+        text += f"**Результат:** {target_count + source_count} вопросов в теме '{target_topic['name']}'\n\n"
+        text += "⚠️ **Внимание:** Исходная тема будет деактивирована!\n\n"
+        text += "Подтвердите объединение:"
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ Подтвердить", callback_data=f"merge_execute_{source_topic_id}_{target_topic_id}")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="admin_topics")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def merge_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение объединения тем."""
+        query = update.callback_query
+        await query.answer()
+        
+        # Парсим данные
+        parts = query.data.replace('merge_execute_', '').split('_')
+        source_topic_id = int(parts[0])
+        target_topic_id = int(parts[1])
+        
+        # Получаем информацию о темах
+        topics = self.db.get_all_topics(active_only=False)
+        source_topic = next((t for t in topics if t['id'] == source_topic_id), None)
+        target_topic = next((t for t in topics if t['id'] == target_topic_id), None)
+        
+        if not source_topic or not target_topic:
+            await query.edit_message_text(
+                "❌ Ошибка: темы не найдены.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]])
+            )
+            return
+        
+        # Выполняем объединение
+        success = self.topic_manager.merge_topics(source_topic['name'], target_topic['name'])
+        
+        if success:
+            text = f"✅ **Объединение завершено!**\n\n"
+            text += f"Все вопросы из темы '{source_topic['name']}' перенесены в '{target_topic['name']}'.\n"
+            text += f"Исходная тема деактивирована."
+        else:
+            text = f"❌ **Ошибка при объединении тем.**\n\n"
+            text += "Попробуйте еще раз или обратитесь к разработчику."
+        
+        keyboard = [[InlineKeyboardButton("🔙 К управлению темами", callback_data="admin_topics")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        
+        # Очищаем данные
+        context.user_data.pop('merge_source_id', None) 

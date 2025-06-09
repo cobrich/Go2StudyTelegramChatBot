@@ -12,12 +12,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from services.database import Database
 from services.ai_service import AIService
+from services.topic_manager import TopicManager
 
 class PDFProcessor:
     def __init__(self, output_dir: str = "question_images"):
         self.output_dir = output_dir
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
+        
+        self.topic_manager = TopicManager()
         
         # Паттерн для поиска заголовков тем
         self.topic_header_pattern = r'Тема:\s*([^(]+)\((\d+)\)'
@@ -161,93 +164,6 @@ class PDFProcessor:
         print(f"[DEBUG] Итого извлечено вопросов: {len(questions)}")
         return questions
 
-    def normalize_topic_name(self, topic_name: str) -> str:
-        """Нормализация названия темы для соответствия константам."""
-        try:
-            from config.constants import TOPICS
-            
-            # Словарь соответствий для нормализации
-            topic_mapping = {
-                'пропорция': 'Соотношение и пропорция',
-                'уравнение': 'Линейные уравнения',
-                'уравнения': 'Линейные уравнения',
-                'система уравнений': 'Система уравнений',
-                'неравенства': 'Равенства и неравенства',
-                'неравенство': 'Равенства и неравенства',
-                'дроби': 'Операции с дробями и остатками',
-                'дробь': 'Операции с дробями и остатками',
-                'процент': 'Процент',
-                'проценты': 'Процент',
-                'геометрия': 'Геометрия',
-                'текстовые задачи': 'Текстовые задачи',
-                'текстовая задача': 'Текстовые задачи',
-                'логика': 'Логические задачи',
-                'логические задачи': 'Логические задачи',
-                'функция': 'График функции',
-                'функции': 'График функции',
-                'график': 'График функции',
-                'модуль': 'Модуль числа',
-                'масштаб': 'Масштаб и расстояние',
-                'площадь': 'Площадь и объем',
-                'объем': 'Площадь и объем',
-                'скорость': 'Скорость и время',
-                'время': 'Скорость и время',
-                'движение': 'Задачи на движение',
-                'работа': 'Задачи на работу',
-                'углы': 'Углы',
-                'угол': 'Углы'
-            }
-            
-            topic_lower = topic_name.lower().strip()
-            
-            # Прямое соответствие
-            if topic_name in TOPICS:
-                return topic_name
-            
-            # Поиск по словарю соответствий
-            for key, value in topic_mapping.items():
-                if key in topic_lower:
-                    return value
-            
-            # Поиск частичного совпадения в списке TOPICS
-            for topic in TOPICS:
-                if topic_lower in topic.lower() or topic.lower() in topic_lower:
-                    return topic
-            
-            # Если ничего не найдено, используем AI для определения
-            return self.determine_topic_with_ai(topic_name)
-            
-        except Exception as e:
-            logging.error(f"Ошибка при нормализации темы '{topic_name}': {e}")
-            return "Операции с дробями и остатками"  # fallback
-
-    def determine_topic_with_ai(self, topic_name: str) -> str:
-        """Определение темы с помощью AI."""
-        try:
-            from config.constants import TOPICS
-            ai_service = AIService()
-            
-            prompt = f"""
-Определи наиболее подходящую тему из списка для темы "{topic_name}":
-
-{', '.join(TOPICS)}
-
-Ответь только названием темы из списка выше. Если не можешь точно определить, ответь "Операции с дробями и остатками".
-"""
-            
-            response = ai_service.model.generate_content(prompt)
-            topic = response.text.strip()
-            
-            # Проверяем, что тема есть в списке
-            if topic in TOPICS:
-                return topic
-            else:
-                return "Операции с дробями и остатками"  # fallback
-                
-        except Exception as e:
-            logging.error(f"Ошибка при определении темы с AI: {e}")
-            return "Операции с дробями и остатками"  # fallback
-
     def extract_questions_from_pdf(self, pdf_path: str) -> List[Dict]:
         """Извлечение вопросов из PDF файла."""
         questions = []
@@ -290,11 +206,13 @@ class PDFProcessor:
             invalid_count = 0
             
             for i, q in enumerate(extracted_questions):
-                # Нормализуем тему (если используется AI определение)
+                # Определяем тему с помощью TopicManager
                 if has_topic_headers:
-                    normalized_topic = self.normalize_topic_name(q['topic'])
+                    # Если есть заголовки тем, используем их
+                    normalized_topic = self.topic_manager.ensure_topic_exists(q['topic'])
                 else:
-                    normalized_topic = q['topic']  # Уже определена по содержанию
+                    # Если заголовков нет, определяем по содержанию
+                    normalized_topic = self.topic_manager.get_topic_by_content(q['question'])
                 
                 question_data = {
                     'question': q['question'].strip(),
@@ -418,7 +336,7 @@ class PDFProcessor:
                     
                     if len(clean_question) >= 10:
                         questions.append({
-                            'topic': self.determine_topic_by_content(clean_question),
+                            'topic': self.topic_manager.get_topic_by_content(clean_question),
                             'question': clean_question,
                             'options': current_options,
                             'correct_answer': correct_answer
@@ -481,37 +399,13 @@ class PDFProcessor:
             
             if len(clean_question) >= 10:
                 questions.append({
-                    'topic': self.determine_topic_by_content(clean_question),
+                    'topic': self.topic_manager.get_topic_by_content(clean_question),
                     'question': clean_question,
                     'options': current_options,
                     'correct_answer': correct_answer
                 })
         
         return questions
-
-    def determine_topic_by_content(self, question_text: str) -> str:
-        """Определение темы по содержанию вопроса."""
-        question_lower = question_text.lower()
-        
-        # Ключевые слова для определения тем
-        topic_keywords = {
-            'Операции с дробями и остатками': ['дроб', 'остат', '⁄', '/', 'вычислите'],
-            'Процент': ['процент', '%', 'процентов'],
-            'Геометрия': ['площадь', 'периметр', 'угол', 'треугольник', 'квадрат', 'круг', 'см²', 'см', 'градус', '°'],
-            'Текстовые задачи': ['скорость', 'время', 'расстояние', 'км', 'час', 'движение', 'встреча'],
-            'Арифметика': ['сумма', 'разность', 'произведение', 'частное', '+', '-', '*', '×'],
-            'Соотношение и пропорция': ['пропорция', 'соотношение', 'отношение', ':'],
-            'Линейные уравнения': ['уравнение', 'найдите x', 'решите', '='],
-            'Логические задачи': ['логика', 'если', 'то', 'следовательно']
-        }
-        
-        # Ищем ключевые слова
-        for topic, keywords in topic_keywords.items():
-            if any(keyword in question_lower for keyword in keywords):
-                return topic
-        
-        # По умолчанию
-        return 'Операции с дробями и остатками'
 
 def add_questions_to_db(questions: List[Dict], db: Database):
     """Добавление вопросов в базу данных."""

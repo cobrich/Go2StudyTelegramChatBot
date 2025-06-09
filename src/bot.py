@@ -114,6 +114,22 @@ def main() -> None:
         admin_handlers.list_topics,
         pattern="^list_topics$"
     ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.merge_topics_start,
+        pattern="^merge_topics$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.merge_topics_select_target,
+        pattern="^merge_source_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.merge_topics_confirm,
+        pattern="^merge_target_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.merge_topics_execute,
+        pattern="^merge_execute_"
+    ))
     
     # Questions management handlers
     application.add_handler(CallbackQueryHandler(

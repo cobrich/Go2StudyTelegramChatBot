@@ -726,306 +726,65 @@ This system helps users:
 ### Руководство по формату PDF:
 Создан файл `PDF_FORMAT_GUIDE.md` с подробными инструкциями по подготовке PDF файлов для загрузки.
 
-## [2024-12-19] PDF Processor Major Update - New Format Support
+## [2024-12-19] Реализована динамическая система управления темами
 
-### Changes Made:
-1. **Complete rewrite of PDF processor** to handle new simplified format
-2. **New topic header detection**: Now recognizes headers like `Тема: Пропорция(10)`
-3. **Simplified question parsing**: Handles format with numbered questions `1) Question` and options `A)`, `B) ✅`, `C)`, `D)`
-4. **Automatic topic normalization**: Maps topic names from PDF to standardized topics in constants.py
-5. **Enhanced validation**: Better question validation and error handling
+### Новая архитектура тем:
 
-### New PDF Format Support:
-The processor now handles PDFs with this structure:
-```
-Тема: Пропорция(10)
+**Создан TopicManager** (`src/services/topic_manager.py`) - централизованный сервис для управления темами:
 
-1) Question text here
-A) Option A
-B) Option B ✅
-C) Option C  
-D) Option D
+#### Основные возможности:
+1. **Автоматическое создание тем** при добавлении вопросов из PDF
+2. **Интеллектуальное определение тем** с помощью AI
+3. **Поиск похожих тем** для избежания дублирования
+4. **Объединение тем** с переносом всех вопросов
+5. **Статистика по темам** с подсчетом количества вопросов
 
-2) Another question
-A) Option A ✅
-B) Option B
-C) Option C
-D) Option D
+#### Ключевые методы:
+- `ensure_topic_exists()` - создает тему если её нет
+- `get_topic_by_content()` - определяет тему по содержанию вопроса
+- `merge_topics()` - объединяет две темы
+- `get_topic_statistics()` - возвращает статистику по всем темам
 
-...
+### Обновления в PDF процессоре:
 
-Тема: Уравнение(5)
+**Заменена старая логика определения тем:**
+- Удалены методы `normalize_topic_name()`, `determine_topic_with_ai()`, `determine_topic_by_content()`
+- Теперь используется `TopicManager` для всех операций с темами
+- Автоматическое создание новых тем при обработке PDF
 
-1) Question about equations
-A) Option A
-B) Option B ✅
-C) Option C
-D) Option D
-```
+### Новые возможности админ-панели:
 
-### Key Features:
-- **Topic Headers**: Automatically detects `Тема: [название](количество)` format
-- **Question Numbering**: Supports `1)`, `2)`, etc. format
-- **Answer Options**: Supports both Latin (A, B, C, D) and Cyrillic (А, Б, В, Г) letters
-- **Correct Answer Marking**: Detects ✅ symbol to identify correct answers
-- **Topic Normalization**: Maps PDF topic names to standardized topics using dictionary and AI fallback
-- **Language Detection**: Automatically detects Russian/Kazakh content
-- **Validation**: Ensures all questions have required fields before adding to database
+**Добавлено управление темами:**
+- 🔗 **Объединение тем** - перенос всех вопросов из одной темы в другую
+- 📊 **Расширенная статистика** - показывает количество вопросов по каждой теме
+- 🔄 **Обновление статистики** в реальном времени
 
-### Topic Mapping:
-The processor includes intelligent topic mapping:
-- Direct matching with topics from constants.py
-- Dictionary-based mapping (e.g., "пропорция" → "Соотношение и пропорция")
-- Partial matching for similar topic names
-- AI-based topic determination as fallback
-- Default fallback to "Операции с дробями и остатками"
+#### Процесс объединения тем:
+1. Выбор исходной темы (откуда переносить)
+2. Выбор целевой темы (куда переносить)
+3. Подтверждение с показом статистики
+4. Автоматический перенос всех вопросов
+5. Деактивация исходной темы
 
-### Usage:
-1. Place your PDF file in the `files/` directory
-2. Update the `pdf_files` list in `main()` function with your file path
-3. Run: `python -m src.services.pdf_processor`
+### Преимущества новой системы:
 
-### Processing Statistics:
-The processor provides detailed logging:
-- Topic detection with question counts
-- Question processing progress
-- Validation results
-- Database insertion statistics
-- Topic-based question distribution
+1. **Гибкость** - темы создаются автоматически по мере необходимости
+2. **Точность** - AI определяет наиболее подходящие темы
+3. **Избежание дублирования** - поиск похожих тем перед созданием новых
+4. **Легкость управления** - возможность объединения и реорганизации тем
+5. **Масштабируемость** - система адаптируется к любому количеству тем
 
-This update makes the PDF processor much more robust and suitable for standardized educational content with clear topic organization.
+### Технические детали:
 
-## [2024-12-19] Admin PDF Upload Functionality
+- Добавлен метод `_get_connection()` в Database для работы с транзакциями
+- Обновлены обработчики callback'ов для новых функций
+- Интеграция с существующей системой админ-панели
+- Сохранена обратная совместимость с существующими темами
 
-### Changes Made:
-1. **Added PDF upload to admin panel**: Admins and super admins can now upload PDF files directly through the Telegram bot
-2. **Integrated PDF processor**: The bot now uses the updated PDF processor to handle uploaded files
-3. **Real-time processing feedback**: Users get live updates during PDF processing
-4. **Comprehensive statistics**: After processing, admins see detailed statistics about added questions
-5. **Error handling**: Robust error handling for file validation and processing errors
+### Влияние на пользователей:
 
-### New Admin Features:
+- **Для учеников**: Более точная категоризация вопросов по темам
+- **Для админов**: Удобные инструменты управления и реорганизации тем
+- **Для системы**: Автоматическая адаптация к новому контенту
 
-#### Questions Management Menu:
-- **📄 Загрузить PDF**: Upload PDF files with questions
-- **📋 Статистика вопросов**: View detailed statistics by topic and source
-- **🔍 Поиск вопросов**: Search functionality (placeholder for future implementation)
-- **🗑️ Удалить вопросы**: Delete questions functionality (placeholder for future implementation)
-
-#### PDF Upload Process:
-1. Admin selects "❓ Управление вопросами" → "Загрузить PDF"
-2. Bot shows format instructions and examples
-3. Admin uploads PDF file (max 20MB)
-4. Bot validates file format and size
-5. Real-time processing with status updates:
-   - "⏳ Обрабатываю PDF файл..."
-   - "⏳ Извлекаю вопросы из PDF..."
-   - "⏳ Найдено X вопросов. Сохраняю в базу данных..."
-6. Final report with statistics:
-   - File name
-   - Total questions found
-   - New questions saved
-   - Duplicates skipped
-   - Breakdown by topics
-
-#### File Validation:
-- **Format check**: Only PDF files accepted
-- **Size limit**: Maximum 20MB per file
-- **Content validation**: Questions must follow the supported format
-- **Duplicate detection**: Existing questions are automatically skipped
-
-#### Processing Features:
-- **Asynchronous processing**: PDF processing runs in background thread
-- **Automatic topic mapping**: Topics from PDF are mapped to system topics
-- **AI fallback**: If topic mapping fails, AI determines the best topic
-- **Temporary file handling**: Secure temporary file creation and cleanup
-- **Error recovery**: Graceful handling of processing errors
-
-### Usage Instructions:
-
-#### For Admins:
-1. Use `/admin` command to access admin panel
-2. Select "❓ Управление вопросами"
-3. Choose "📄 Загрузить PDF"
-4. Follow the format instructions
-5. Upload your PDF file
-6. Wait for processing to complete
-7. Review the statistics report
-
-#### Supported PDF Format:
-```
-Тема: Пропорция(10)
-
-1) Найдите значение x в пропорции 2:3 = x:12
-A) 6
-B) 8 ✅
-C) 9
-D) 10
-
-2) Решите пропорцию 5:x = 15:9
-A) 3 ✅
-B) 4
-C) 5
-D) 6
-
-...
-
-Тема: Уравнение(5)
-
-1) Решите уравнение: 2x + 5 = 13
-A) x = 3
-B) x = 4 ✅
-C) x = 5
-D) x = 6
-```
-
-### Technical Implementation:
-- **Document handler**: New message handler for PDF files
-- **Async processing**: Uses `asyncio.run_in_executor` for non-blocking PDF processing
-- **Temporary files**: Secure handling with automatic cleanup
-- **Database integration**: Direct integration with existing question storage system
-- **Error logging**: Comprehensive error logging for debugging
-
-### Benefits:
-- **No manual file management**: Admins don't need server access
-- **Immediate feedback**: Real-time processing status
-- **Quality control**: Automatic validation and duplicate detection
-- **Scalable**: Can handle multiple admins uploading simultaneously
-- **User-friendly**: Simple Telegram interface for complex operations
-
-This feature significantly improves the workflow for content managers and makes the system more accessible to non-technical administrators.
-
-## Database Architecture
-
-### User Management: Two-Table Approach
-
-The system uses a **dual-table architecture** for user management, which provides both security and data preservation:
-
-#### Table 1: `allowed_users` (Access Control Whitelist)
-- **Purpose**: Controls who can access the bot
-- **Key**: `username` (can change over time)
-- **Managed by**: Admins through admin panel
-- **Data**: Static permission data
-
-```sql
-CREATE TABLE allowed_users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,           -- Can change
-    full_name TEXT,
-    grade INTEGER,
-    added_by INTEGER,               -- Audit trail
-    added_at TIMESTAMP,
-    is_active BOOLEAN DEFAULT 1     -- Soft delete
-);
-```
-
-#### Table 2: `users` (Active Sessions & Historical Data)
-- **Purpose**: Stores working data and user state
-- **Key**: `user_id` (permanent Telegram ID)
-- **Managed by**: Bot automatically
-- **Data**: Dynamic session and historical data
-
-```sql
-CREATE TABLE users (
-    user_id INTEGER PRIMARY KEY,    -- Never changes
-    username TEXT,                  -- Current username
-    full_name TEXT,
-    grade INTEGER,
-    language TEXT DEFAULT 'ru',
-    is_active BOOLEAN DEFAULT 0,    -- Current session state
-    current_topic TEXT,
-    last_activity TIMESTAMP
-);
-```
-
-### Benefits of This Architecture:
-
-#### 1. **Data Preservation** 📚
-- When a student is removed from whitelist, their learning history remains intact
-- Test results, error patterns, and progress are preserved
-- If re-added to whitelist, student continues from where they left off
-
-#### 2. **Username Change Resilience** 🔄
-- Telegram usernames can change, but `user_id` never changes
-- All statistical data linked to permanent `user_id`
-- No data loss when usernames change
-
-#### 3. **Access Control Flexibility** 🔐
-- Admins can temporarily disable access without losing data
-- Easy to re-enable access for returning students
-- Audit trail of who added each student
-
-#### 4. **Statistical Continuity** 📊
-```sql
--- Get complete user history even if not in whitelist
-SELECT * FROM test_results WHERE user_id = 123;
-SELECT * FROM user_errors WHERE user_id = 123;
-
--- Restore user when re-added to whitelist
--- All previous data automatically reconnects via user_id
-```
-
-#### 5. **Clean Separation of Concerns** 🎯
-- **Security Layer**: `allowed_users` table
-- **Business Logic Layer**: `users` table
-- **Data Layer**: `test_results`, `user_errors` tables
-
-### Use Cases:
-
-#### Student Temporarily Suspended:
-1. Admin sets `is_active = 0` in `allowed_users`
-2. Student loses access immediately
-3. All historical data preserved in `users`, `test_results`, `user_errors`
-4. When re-enabled, student continues seamlessly
-
-#### Student Changes Username:
-1. Update `username` in `allowed_users` table
-2. Bot automatically syncs `users` table on next login
-3. All historical data remains linked via `user_id`
-
-#### Administrative Statistics:
-- View all-time statistics including former students
-- Track learning patterns across time periods
-- Generate reports on student progress over months/years
-
-This architecture ensures **data integrity**, **access security**, and **operational flexibility** while maintaining excellent performance.
-
-## [2025-01-03] Исправление проблемы с NULL значениями в вопросах
-
-### Проблема
-Обнаружен вопрос с ID=7, который содержал NULL значения в критических полях:
-- question: NULL
-- answer: NULL
-- explanation: NULL
-
-Это происходило из-за неполной валидации при сохранении AI-сгенерированных вопросов в базу данных.
-
-### Исправления
-1. **Удален проблемный вопрос**: Удален вопрос с ID=7 из базы данных
-2. **Добавлена валидация в QuestionService**: 
-   - Добавена проверка на NULL значения перед сохранением AI-вопросов
-   - Логирование предупреждений при попытке сохранить некорректные вопросы
-3. **Добавлена валидация в Database.add_question()**: 
-   - Проверка обязательных полей (topic, question, answer, explanation)
-   - Предотвращение вставки записей с пустыми значениями
-4. **Создана утилита очистки**: `src/utils/cleanup_null_questions.py` для поиска и удаления вопросов с NULL значениями
-
-### Техническая информация
-- Файлы изменены: `src/services/question_service.py`, `src/services/database.py`
-- Добавленные файлы: `src/utils/cleanup_null_questions.py`
-- Улучшено логирование при обработке AI-сгенерированных вопросов
-
-## Recent Changes and Fixes
-
-### Import Error Fix (Latest)
-**Issue:** `"CommandHandler" is not defined` error in `src/bot_universal.py`
-**Cause:** Missing imports for telegram.ext classes
-**Solution:** Added missing imports:
-```python
-from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, filters
-```
-
-### NoneType Error Resolution
-**Issue:** `TypeError: 'NoneType' object is not subscriptable` in question_service.py line 235
-
-// ... existing code ...
+## [2024-06-11] Темы обновлены по содержанию NIS.pdf

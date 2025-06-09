@@ -154,6 +154,10 @@ class Database:
             
             conn.commit()
 
+    def _get_connection(self):
+        """Get database connection context manager."""
+        return sqlite3.connect(self.db_path)
+
     def set_user_active(self, user_id: int, topic: str) -> None:
         """Set user as active and update their current topic."""
         with sqlite3.connect(self.db_path) as conn:
