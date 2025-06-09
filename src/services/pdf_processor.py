@@ -19,24 +19,16 @@ class PDFProcessor:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         
-        # Паттерны для поиска вопросов
-        self.question_patterns = [
-            r'^\d+[\.\)]\s+',  # 1) или 1.
-            r'^\d+\.\s+',      # 1. 
-        ]
+        # Паттерн для поиска заголовков тем
+        self.topic_header_pattern = r'Тема:\s*([^(]+)\((\d+)\)'
+        
+        # Паттерн для поиска вопросов
+        self.question_pattern = r'^(\d+)\)\s*(.+)'
         
         # Паттерны для поиска вариантов ответов
         self.option_patterns = [
-            r'^\s*[A-D]\)\s+',  # A) B) C) D)
-            r'^\s*[А-Г]\)\s+',  # А) Б) В) Г)
-        ]
-        
-        # Паттерны для поиска правильного ответа
-        self.correct_answer_patterns = [
-            r'✅\s*Правильный ответ:\s*([A-DА-Г])\)',  # ✅ Правильный ответ: A)
-            r'✅\s*([A-DА-Г])\)',                      # ✅ A)
-            r'([A-DА-Г])\s*✅',                        # A) ✅
-            r'([A-DА-Г])\).*?✅',                      # A) текст ✅ (новый формат)
+            r'^([A-D])\)\s*(.*?)(\s*✅)?$',  # A) текст ✅ (опционально)
+            r'^([А-Г])\)\s*(.*?)(\s*✅)?$',  # А) текст ✅ (опционально)
         ]
 
     def detect_language(self, text: str) -> str:
@@ -46,23 +38,164 @@ class PDFProcessor:
             return 'kk'
         return 'ru'
 
-    def extract_topic_from_filename(self, filename: str) -> str:
-        """Извлечение темы из имени файла - fallback тема."""
-        # Возвращаем fallback тему, которая точно есть в TOPICS
-        return "Операции с дробями и остатками"  # Первая подходящая тема для математики 5 класса
+    def extract_topics_and_questions(self, text: str) -> List[Dict]:
+        """Извлечение тем и вопросов из текста PDF."""
+        questions = []
+        lines = text.split('\n')
+        current_topic = None
+        current_question = None
+        current_options = []
+        correct_answer = None
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Пропускаем пустые строки
+            if not line:
+                i += 1
+                continue
+            
+            # Проверяем на заголовок темы
+            topic_match = re.match(self.topic_header_pattern, line)
+            if topic_match:
+                current_topic = topic_match.group(1).strip()
+                expected_questions = int(topic_match.group(2))
+                print(f"[LOG] Найдена тема: '{current_topic}' ({expected_questions} вопросов)")
+                i += 1
+                continue
+            
+            # Проверяем на начало вопроса
+            question_match = re.match(self.question_pattern, line)
+            if question_match:
+                # Сохраняем предыдущий вопрос, если он был
+                if current_question and current_options and correct_answer:
+                    questions.append({
+                        'topic': current_topic or 'Математика',
+                        'question': current_question,
+                        'options': current_options,
+                        'correct_answer': correct_answer
+                    })
+                
+                # Начинаем новый вопрос
+                question_number = question_match.group(1)
+                current_question = question_match.group(2).strip()
+                current_options = []
+                correct_answer = None
+                
+                print(f"[LOG] Вопрос {question_number}: {current_question[:50]}...")
+                i += 1
+                continue
+            
+            # Проверяем на вариант ответа
+            option_found = False
+            for pattern in self.option_patterns:
+                option_match = re.match(pattern, line)
+                if option_match:
+                    option_letter = option_match.group(1)
+                    option_text = option_match.group(2).strip()
+                    has_checkmark = option_match.group(3) is not None
+                    
+                    # Конвертируем русские буквы в латинские
+                    if option_letter in 'АБВГ':
+                        option_letter = ['A', 'B', 'C', 'D']['АБВГ'.index(option_letter)]
+                    
+                    current_options.append(option_text)
+                    
+                    if has_checkmark:
+                        correct_answer = option_letter
+                        print(f"[LOG] Правильный ответ: {option_letter}) {option_text}")
+                    
+                    option_found = True
+                    break
+            
+            if not option_found and current_question:
+                # Возможно, это продолжение вопроса
+                current_question += " " + line
+            
+            i += 1
+        
+        # Сохраняем последний вопрос
+        if current_question and current_options and correct_answer:
+            questions.append({
+                'topic': current_topic or 'Математика',
+                'question': current_question,
+                'options': current_options,
+                'correct_answer': correct_answer
+            })
+        
+        return questions
 
-    def determine_topic_with_ai(self, question_text: str) -> str:
-        """Определение темы вопроса с помощью AI."""
+    def normalize_topic_name(self, topic_name: str) -> str:
+        """Нормализация названия темы для соответствия константам."""
+        try:
+            from config.constants import TOPICS
+            
+            # Словарь соответствий для нормализации
+            topic_mapping = {
+                'пропорция': 'Соотношение и пропорция',
+                'уравнение': 'Линейные уравнения',
+                'уравнения': 'Линейные уравнения',
+                'система уравнений': 'Система уравнений',
+                'неравенства': 'Равенства и неравенства',
+                'неравенство': 'Равенства и неравенства',
+                'дроби': 'Операции с дробями и остатками',
+                'дробь': 'Операции с дробями и остатками',
+                'процент': 'Процент',
+                'проценты': 'Процент',
+                'геометрия': 'Геометрия',
+                'текстовые задачи': 'Текстовые задачи',
+                'текстовая задача': 'Текстовые задачи',
+                'логика': 'Логические задачи',
+                'логические задачи': 'Логические задачи',
+                'функция': 'График функции',
+                'функции': 'График функции',
+                'график': 'График функции',
+                'модуль': 'Модуль числа',
+                'масштаб': 'Масштаб и расстояние',
+                'площадь': 'Площадь и объем',
+                'объем': 'Площадь и объем',
+                'скорость': 'Скорость и время',
+                'время': 'Скорость и время',
+                'движение': 'Задачи на движение',
+                'работа': 'Задачи на работу',
+                'углы': 'Углы',
+                'угол': 'Углы'
+            }
+            
+            topic_lower = topic_name.lower().strip()
+            
+            # Прямое соответствие
+            if topic_name in TOPICS:
+                return topic_name
+            
+            # Поиск по словарю соответствий
+            for key, value in topic_mapping.items():
+                if key in topic_lower:
+                    return value
+            
+            # Поиск частичного совпадения в списке TOPICS
+            for topic in TOPICS:
+                if topic_lower in topic.lower() or topic.lower() in topic_lower:
+                    return topic
+            
+            # Если ничего не найдено, используем AI для определения
+            return self.determine_topic_with_ai(topic_name)
+            
+        except Exception as e:
+            logging.error(f"Ошибка при нормализации темы '{topic_name}': {e}")
+            return "Операции с дробями и остатками"  # fallback
+
+    def determine_topic_with_ai(self, topic_name: str) -> str:
+        """Определение темы с помощью AI."""
         try:
             from config.constants import TOPICS
             ai_service = AIService()
             
             prompt = f"""
-Определи наиболее подходящую тему для этого математического вопроса из списка:
+Определи наиболее подходящую тему из списка для темы "{topic_name}":
 
 {', '.join(TOPICS)}
-
-Вопрос: {question_text}
 
 Ответь только названием темы из списка выше. Если не можешь точно определить, ответь "Операции с дробями и остатками".
 """
@@ -79,141 +212,6 @@ class PDFProcessor:
         except Exception as e:
             logging.error(f"Ошибка при определении темы с AI: {e}")
             return "Операции с дробями и остатками"  # fallback
-
-    def parse_question_block(self, text_block: str) -> Optional[Dict]:
-        """Парсинг блока текста с вопросом."""
-        lines = text_block.strip().split('\n')
-        if not lines:
-            return None
-        
-        # Поиск начала вопроса
-        question_text = ""
-        options = []
-        correct_answer = None
-        
-        i = 0
-        # Найти строку с номером вопроса
-        while i < len(lines):
-            line = lines[i].strip()
-            if any(re.match(pattern, line) for pattern in self.question_patterns):
-                # Убираем номер вопроса
-                question_text = re.sub(r'^\d+[\.\)]\s*', '', line).strip()
-                i += 1
-                break
-            i += 1
-        
-        if not question_text:
-            return None
-        
-        # Собираем продолжение вопроса до первого варианта ответа
-        while i < len(lines):
-            line = lines[i].strip()
-            if any(re.match(pattern, line) for pattern in self.option_patterns):
-                break
-            if line and not any(re.search(pattern, line) for pattern in self.correct_answer_patterns):
-                question_text += " " + line
-            i += 1
-        
-        # Собираем варианты ответов
-        current_option = ""
-        while i < len(lines):
-            line = lines[i].strip()
-            
-            # Проверяем на правильный ответ
-            for pattern in self.correct_answer_patterns:
-                match = re.search(pattern, line)
-                if match:
-                    correct_answer = match.group(1).upper()
-                    # Убираем маркер правильного ответа из строки
-                    line = re.sub(r'✅.*', '', line).strip()
-                    break
-            
-            # Проверяем начало нового варианта ответа
-            option_match = None
-            for pattern in self.option_patterns:
-                option_match = re.match(pattern, line)
-                if option_match:
-                    break
-            
-            if option_match:
-                # Сохраняем предыдущий вариант
-                if current_option:
-                    options.append(current_option.strip())
-                # Начинаем новый вариант
-                current_option = re.sub(r'^\s*[A-DА-Г]\)\s*', '', line)
-            else:
-                # Продолжение текущего варианта
-                if line:
-                    current_option += " " + line
-            
-            i += 1
-        
-        # Добавляем последний вариант
-        if current_option:
-            options.append(current_option.strip())
-        
-        # Проверяем, что у нас есть все необходимые данные
-        if not question_text or len(options) < 2:
-            return None
-        
-        # Нормализуем правильный ответ
-        if correct_answer:
-            # Конвертируем русские буквы в латинские
-            if correct_answer in 'АБВГ':
-                correct_answer = ['A', 'B', 'C', 'D']['АБВГ'.index(correct_answer)]
-        
-        return {
-            'question': question_text.strip(),
-            'options': options,
-            'correct_answer': correct_answer,
-            'raw_text': text_block
-        }
-
-    def extract_topics_from_headers(self, text: str) -> Dict[int, str]:
-        """Извлечение тем из заголовков PDF."""
-        from config.constants import TOPICS
-        
-        lines = text.split('\n')
-        topic_map = {}  # номер_строки -> тема
-        
-        for i, line in enumerate(lines):
-            line_clean = line.strip()
-            
-            # Ищем строки с "ТЕМА:"
-            if line_clean.startswith('ТЕМА:'):
-                topic_name = line_clean.replace('ТЕМА:', '').strip()
-                if topic_name in TOPICS:
-                    topic_map[i] = topic_name
-                    continue
-            
-            # Ищем темы в обычных строках (без префикса)
-            for topic in TOPICS:
-                if topic.lower() in line_clean.lower() and len(line_clean) < 100:
-                    # Проверяем, что это не часть вопроса
-                    if not any(pattern in line_clean for pattern in ['A)', 'B)', 'C)', 'D)', '1.', '2.', '3.']):
-                        topic_map[i] = topic
-                        break
-        
-        return topic_map
-
-    def determine_topic_for_question(self, question_text: str, question_line_num: int, topic_map: Dict[int, str]) -> str:
-        """Определение темы для конкретного вопроса."""
-        # Ищем ближайшую тему перед вопросом
-        closest_topic = None
-        closest_distance = float('inf')
-        
-        for line_num, topic in topic_map.items():
-            if line_num < question_line_num:
-                distance = question_line_num - line_num
-                if distance < closest_distance:
-                    closest_distance = distance
-                    closest_topic = topic
-        
-        if closest_topic:
-            return closest_topic
-        
-        # Если тема не найдена в заголовках, используем AI
-        return self.determine_topic_with_ai(question_text)
 
     def extract_questions_from_pdf(self, pdf_path: str) -> List[Dict]:
         """Извлечение вопросов из PDF файла."""
@@ -234,72 +232,34 @@ class PDFProcessor:
             # Определяем язык
             language = self.detect_language(full_text)
             
-            # Извлекаем темы из заголовков
-            topic_map = self.extract_topics_from_headers(full_text)
-            print(f"[LOG] Найдено тем в заголовках: {len(topic_map)}")
-            for line_num, topic in topic_map.items():
-                print(f"  Строка {line_num}: {topic}")
+            # Извлекаем вопросы
+            extracted_questions = self.extract_topics_and_questions(full_text)
             
-            # Разбиваем текст на блоки вопросов
-            question_blocks = self.split_into_question_blocks(full_text)
-            lines = full_text.split('\n')
+            # Обрабатываем каждый вопрос
+            for q in extracted_questions:
+                # Нормализуем тему
+                normalized_topic = self.normalize_topic_name(q['topic'])
+                
+                question_data = {
+                    'question': q['question'].strip(),
+                    'options': q['options'],
+                    'correct_answer': q['correct_answer'],
+                    'language': language,
+                    'topic': normalized_topic,
+                    'source_file': os.path.basename(pdf_path)
+                }
+                
+                if self.validate_question(question_data):
+                    questions.append(question_data)
+                else:
+                    print(f"[SKIP] Невалидный вопрос: {q['question'][:50]}...")
             
-            for block in question_blocks:
-                parsed_question = self.parse_question_block(block)
-                if parsed_question:
-                    # Находим номер строки для этого вопроса
-                    question_line_num = 0
-                    for i, line in enumerate(lines):
-                        if parsed_question['question'][:20] in line:
-                            question_line_num = i
-                            break
-                    
-                    # Определяем тему для вопроса
-                    topic = self.determine_topic_for_question(
-                        parsed_question['question'], 
-                        question_line_num, 
-                        topic_map
-                    )
-                    
-                    parsed_question.update({
-                        'language': language,
-                        'topic': topic,
-                        'source_file': os.path.basename(pdf_path)
-                    })
-                    questions.append(parsed_question)
-            
-            logging.info(f"Извлечено {len(questions)} вопросов из {pdf_path}")
+            logging.info(f"Извлечено {len(questions)} валидных вопросов из {pdf_path}")
             return questions
             
         except Exception as e:
             logging.error(f"Ошибка при обработке {pdf_path}: {e}")
             return []
-
-    def split_into_question_blocks(self, text: str) -> List[str]:
-        """Разбивка текста на блоки вопросов."""
-        # Ищем начала вопросов
-        question_starts = []
-        lines = text.split('\n')
-        
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if any(re.match(pattern, line) for pattern in self.question_patterns):
-                question_starts.append(i)
-        
-        if not question_starts:
-            return []
-        
-        # Создаем блоки
-        blocks = []
-        for i in range(len(question_starts)):
-            start_line = question_starts[i]
-            end_line = question_starts[i + 1] if i + 1 < len(question_starts) else len(lines)
-            
-            block_lines = lines[start_line:end_line]
-            block_text = '\n'.join(block_lines)
-            blocks.append(block_text)
-        
-        return blocks
 
     def process_pdf_file(self, pdf_path: str) -> List[Dict]:
         """Обработка PDF файла и извлечение вопросов."""
@@ -309,14 +269,8 @@ class PDFProcessor:
             
             questions = self.extract_questions_from_pdf(pdf_path)
             
-            # Дополнительная обработка и валидация
-            validated_questions = []
-            for question in questions:
-                if self.validate_question(question):
-                    validated_questions.append(question)
-            
-            logging.info(f"Валидировано {len(validated_questions)} из {len(questions)} вопросов")
-            return validated_questions
+            logging.info(f"Обработано {len(questions)} вопросов из {pdf_path}")
+            return questions
             
         except Exception as e:
             logging.error(f"Ошибка при обработке {pdf_path}: {e}")
@@ -407,10 +361,9 @@ def main():
     processor = PDFProcessor()
     db = Database()
     
-    # Список файлов для обработки
+    # Список файлов для обработки (обновите пути к вашим файлам)
     pdf_files = [
-        "files/математика темы 180 вопросов.pdf",
-        "files/Математика 5 класс 120 вопросов.pdf"
+        "files/new_format.pdf",  # Замените на реальный путь к вашему файлу
     ]
     
     total_questions = 0

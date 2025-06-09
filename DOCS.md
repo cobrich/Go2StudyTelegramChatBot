@@ -641,3 +641,72 @@ This system helps users:
 
 ### Руководство по формату PDF:
 Создан файл `PDF_FORMAT_GUIDE.md` с подробными инструкциями по подготовке PDF файлов для загрузки.
+
+## [2024-12-19] PDF Processor Major Update - New Format Support
+
+### Changes Made:
+1. **Complete rewrite of PDF processor** to handle new simplified format
+2. **New topic header detection**: Now recognizes headers like `Тема: Пропорция(10)`
+3. **Simplified question parsing**: Handles format with numbered questions `1) Question` and options `A)`, `B) ✅`, `C)`, `D)`
+4. **Automatic topic normalization**: Maps topic names from PDF to standardized topics in constants.py
+5. **Enhanced validation**: Better question validation and error handling
+
+### New PDF Format Support:
+The processor now handles PDFs with this structure:
+```
+Тема: Пропорция(10)
+
+1) Question text here
+A) Option A
+B) Option B ✅
+C) Option C  
+D) Option D
+
+2) Another question
+A) Option A ✅
+B) Option B
+C) Option C
+D) Option D
+
+...
+
+Тема: Уравнение(5)
+
+1) Question about equations
+A) Option A
+B) Option B ✅
+C) Option C
+D) Option D
+```
+
+### Key Features:
+- **Topic Headers**: Automatically detects `Тема: [название](количество)` format
+- **Question Numbering**: Supports `1)`, `2)`, etc. format
+- **Answer Options**: Supports both Latin (A, B, C, D) and Cyrillic (А, Б, В, Г) letters
+- **Correct Answer Marking**: Detects ✅ symbol to identify correct answers
+- **Topic Normalization**: Maps PDF topic names to standardized topics using dictionary and AI fallback
+- **Language Detection**: Automatically detects Russian/Kazakh content
+- **Validation**: Ensures all questions have required fields before adding to database
+
+### Topic Mapping:
+The processor includes intelligent topic mapping:
+- Direct matching with topics from constants.py
+- Dictionary-based mapping (e.g., "пропорция" → "Соотношение и пропорция")
+- Partial matching for similar topic names
+- AI-based topic determination as fallback
+- Default fallback to "Операции с дробями и остатками"
+
+### Usage:
+1. Place your PDF file in the `files/` directory
+2. Update the `pdf_files` list in `main()` function with your file path
+3. Run: `python -m src.services.pdf_processor`
+
+### Processing Statistics:
+The processor provides detailed logging:
+- Topic detection with question counts
+- Question processing progress
+- Validation results
+- Database insertion statistics
+- Topic-based question distribution
+
+This update makes the PDF processor much more robust and suitable for standardized educational content with clear topic organization.
