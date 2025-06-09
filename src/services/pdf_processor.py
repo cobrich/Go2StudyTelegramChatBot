@@ -51,6 +51,10 @@ class PDFProcessor:
         while i < len(lines):
             line = lines[i].strip()
             
+            # Очищаем строку от невидимых символов
+            line = ''.join(char for char in line if char.isprintable() or char.isspace())
+            line = line.strip()
+            
             # Пропускаем пустые строки
             if not line:
                 i += 1
@@ -70,12 +74,17 @@ class PDFProcessor:
             if question_match:
                 # Сохраняем предыдущий вопрос, если он был
                 if current_question and current_options and correct_answer:
-                    questions.append({
-                        'topic': current_topic or 'Математика',
-                        'question': current_question,
-                        'options': current_options,
-                        'correct_answer': correct_answer
-                    })
+                    # Очищаем текст вопроса
+                    clean_question = ''.join(char for char in current_question if char.isprintable() or char.isspace())
+                    clean_question = clean_question.strip()
+                    
+                    if len(clean_question) >= 10:  # Минимальная длина вопроса
+                        questions.append({
+                            'topic': current_topic or 'Математика',
+                            'question': clean_question,
+                            'options': current_options,
+                            'correct_answer': correct_answer
+                        })
                 
                 # Начинаем новый вопрос
                 question_number = question_match.group(1)
@@ -96,6 +105,15 @@ class PDFProcessor:
                     option_text = option_match.group(2).strip()
                     has_checkmark = option_match.group(3) is not None
                     
+                    # Очищаем текст варианта ответа
+                    option_text = ''.join(char for char in option_text if char.isprintable() or char.isspace())
+                    option_text = option_text.strip()
+                    
+                    # Пропускаем пустые варианты
+                    if len(option_text) < 1:
+                        i += 1
+                        continue
+                    
                     # Конвертируем русские буквы в латинские
                     if option_letter in 'АБВГ':
                         option_letter = ['A', 'B', 'C', 'D']['АБВГ'.index(option_letter)]
@@ -111,18 +129,26 @@ class PDFProcessor:
             
             if not option_found and current_question:
                 # Возможно, это продолжение вопроса
-                current_question += " " + line
+                clean_line = ''.join(char for char in line if char.isprintable() or char.isspace())
+                clean_line = clean_line.strip()
+                if clean_line:
+                    current_question += " " + clean_line
             
             i += 1
         
         # Сохраняем последний вопрос
         if current_question and current_options and correct_answer:
-            questions.append({
-                'topic': current_topic or 'Математика',
-                'question': current_question,
-                'options': current_options,
-                'correct_answer': correct_answer
-            })
+            # Очищаем текст вопроса
+            clean_question = ''.join(char for char in current_question if char.isprintable() or char.isspace())
+            clean_question = clean_question.strip()
+            
+            if len(clean_question) >= 10:  # Минимальная длина вопроса
+                questions.append({
+                    'topic': current_topic or 'Математика',
+                    'question': clean_question,
+                    'options': current_options,
+                    'correct_answer': correct_answer
+                })
         
         return questions
 
@@ -229,16 +255,37 @@ class PDFProcessor:
             
             doc.close()
             
+            print(f"[DEBUG] Извлечено {len(full_text)} символов из PDF")
+            print(f"[DEBUG] Первые 200 символов: {repr(full_text[:200])}")
+            
             # Определяем язык
             language = self.detect_language(full_text)
+            print(f"[DEBUG] Определен язык: {language}")
             
-            # Извлекаем вопросы
-            extracted_questions = self.extract_topics_and_questions(full_text)
+            # Проверяем, есть ли заголовки тем в формате "Тема: название(количество)"
+            has_topic_headers = bool(re.search(self.topic_header_pattern, full_text))
+            print(f"[DEBUG] Найдены заголовки тем: {has_topic_headers}")
+            
+            # Выбираем подходящий метод парсинга
+            if has_topic_headers:
+                print("[DEBUG] Используем парсер с заголовками тем")
+                extracted_questions = self.extract_topics_and_questions(full_text)
+            else:
+                print("[DEBUG] Используем парсер без заголовков тем")
+                extracted_questions = self.extract_questions_without_topics(full_text)
+            
+            print(f"[DEBUG] Извлечено {len(extracted_questions)} сырых вопросов")
             
             # Обрабатываем каждый вопрос
-            for q in extracted_questions:
-                # Нормализуем тему
-                normalized_topic = self.normalize_topic_name(q['topic'])
+            valid_count = 0
+            invalid_count = 0
+            
+            for i, q in enumerate(extracted_questions):
+                # Нормализуем тему (если используется AI определение)
+                if has_topic_headers:
+                    normalized_topic = self.normalize_topic_name(q['topic'])
+                else:
+                    normalized_topic = q['topic']  # Уже определена по содержанию
                 
                 question_data = {
                     'question': q['question'].strip(),
@@ -251,9 +298,13 @@ class PDFProcessor:
                 
                 if self.validate_question(question_data):
                     questions.append(question_data)
+                    valid_count += 1
+                    print(f"[VALID][{i+1}] Тема: {normalized_topic} | {q['question'][:50]}...")
                 else:
-                    print(f"[SKIP] Невалидный вопрос: {q['question'][:50]}...")
+                    invalid_count += 1
+                    print(f"[SKIP][{i+1}] Невалидный вопрос: {q['question'][:50]}...")
             
+            print(f"[DEBUG] Валидных вопросов: {valid_count}, Невалидных: {invalid_count}")
             logging.info(f"Извлечено {len(questions)} валидных вопросов из {pdf_path}")
             return questions
             
@@ -282,22 +333,176 @@ class PDFProcessor:
         if not question.get('question') or not question.get('options'):
             return False
         
+        # Очищаем текст вопроса от невидимых символов
+        question_text = question['question'].strip()
+        # Удаляем невидимые символы Unicode
+        question_text = ''.join(char for char in question_text if char.isprintable() or char.isspace())
+        question_text = question_text.strip()
+        
+        # Проверяем, что вопрос не пустой и содержит хотя бы 10 символов
+        if len(question_text) < 10:
+            logging.warning(f"Вопрос слишком короткий или пустой: '{question_text}'")
+            return False
+        
+        # Проверяем, что вопрос содержит буквы или цифры
+        if not any(char.isalnum() for char in question_text):
+            logging.warning(f"Вопрос не содержит букв или цифр: '{question_text}'")
+            return False
+        
         # Проверяем количество вариантов ответов
         if len(question['options']) < 2:
+            logging.warning(f"Недостаточно вариантов ответов: {len(question['options'])}")
             return False
         
         # Проверяем наличие правильного ответа
         if not question.get('correct_answer'):
-            logging.warning(f"Вопрос без правильного ответа: {question['question'][:50]}...")
+            logging.warning(f"Вопрос без правильного ответа: {question_text[:50]}...")
             return False
         
         # Проверяем, что правильный ответ соответствует одному из вариантов
         correct_index = ord(question['correct_answer']) - ord('A')
         if correct_index >= len(question['options']):
-            logging.warning(f"Неверный индекс правильного ответа: {question['correct_answer']} для вопроса: {question['question'][:50]}...")
+            logging.warning(f"Неверный индекс правильного ответа: {question['correct_answer']} для вопроса: {question_text[:50]}...")
             return False
         
+        # Проверяем, что варианты ответов не пустые
+        for i, option in enumerate(question['options']):
+            option_text = option.strip()
+            option_text = ''.join(char for char in option_text if char.isprintable() or char.isspace())
+            option_text = option_text.strip()
+            
+            if len(option_text) < 1:
+                logging.warning(f"Пустой вариант ответа {i+1} для вопроса: {question_text[:50]}...")
+                return False
+        
         return True
+
+    def extract_questions_without_topics(self, text: str) -> List[Dict]:
+        """Извлечение вопросов из PDF без четких заголовков тем."""
+        questions = []
+        lines = text.split('\n')
+        current_question = None
+        current_options = []
+        correct_answer = None
+        question_number = 0
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Очищаем строку от невидимых символов
+            line = ''.join(char for char in line if char.isprintable() or char.isspace())
+            line = line.strip()
+            
+            # Пропускаем пустые строки
+            if not line:
+                i += 1
+                continue
+            
+            # Проверяем на начало вопроса (любое число с закрывающей скобкой)
+            question_match = re.match(r'^(\d+)\)\s*(.+)', line)
+            if question_match:
+                # Сохраняем предыдущий вопрос, если он был
+                if current_question and current_options and correct_answer:
+                    clean_question = ''.join(char for char in current_question if char.isprintable() or char.isspace())
+                    clean_question = clean_question.strip()
+                    
+                    if len(clean_question) >= 10:
+                        questions.append({
+                            'topic': self.determine_topic_by_content(clean_question),
+                            'question': clean_question,
+                            'options': current_options,
+                            'correct_answer': correct_answer
+                        })
+                
+                # Начинаем новый вопрос
+                question_number = int(question_match.group(1))
+                current_question = question_match.group(2).strip()
+                current_options = []
+                correct_answer = None
+                
+                print(f"[LOG] Вопрос {question_number}: {current_question[:50]}...")
+                i += 1
+                continue
+            
+            # Проверяем на вариант ответа
+            option_found = False
+            for pattern in self.option_patterns:
+                option_match = re.match(pattern, line)
+                if option_match:
+                    option_letter = option_match.group(1)
+                    option_text = option_match.group(2).strip()
+                    has_checkmark = option_match.group(3) is not None
+                    
+                    # Очищаем текст варианта ответа
+                    option_text = ''.join(char for char in option_text if char.isprintable() or char.isspace())
+                    option_text = option_text.strip()
+                    
+                    # Пропускаем пустые варианты
+                    if len(option_text) < 1:
+                        i += 1
+                        continue
+                    
+                    # Конвертируем русские буквы в латинские
+                    if option_letter in 'АБВГ':
+                        option_letter = ['A', 'B', 'C', 'D']['АБВГ'.index(option_letter)]
+                    
+                    current_options.append(option_text)
+                    
+                    if has_checkmark:
+                        correct_answer = option_letter
+                        print(f"[LOG] Правильный ответ: {option_letter}) {option_text}")
+                    
+                    option_found = True
+                    break
+            
+            if not option_found and current_question:
+                # Возможно, это продолжение вопроса
+                clean_line = ''.join(char for char in line if char.isprintable() or char.isspace())
+                clean_line = clean_line.strip()
+                if clean_line:
+                    current_question += " " + clean_line
+            
+            i += 1
+        
+        # Сохраняем последний вопрос
+        if current_question and current_options and correct_answer:
+            clean_question = ''.join(char for char in current_question if char.isprintable() or char.isspace())
+            clean_question = clean_question.strip()
+            
+            if len(clean_question) >= 10:
+                questions.append({
+                    'topic': self.determine_topic_by_content(clean_question),
+                    'question': clean_question,
+                    'options': current_options,
+                    'correct_answer': correct_answer
+                })
+        
+        return questions
+
+    def determine_topic_by_content(self, question_text: str) -> str:
+        """Определение темы по содержанию вопроса."""
+        question_lower = question_text.lower()
+        
+        # Ключевые слова для определения тем
+        topic_keywords = {
+            'Операции с дробями и остатками': ['дроб', 'остат', '⁄', '/', 'вычислите'],
+            'Процент': ['процент', '%', 'процентов'],
+            'Геометрия': ['площадь', 'периметр', 'угол', 'треугольник', 'квадрат', 'круг', 'см²', 'см', 'градус', '°'],
+            'Текстовые задачи': ['скорость', 'время', 'расстояние', 'км', 'час', 'движение', 'встреча'],
+            'Арифметика': ['сумма', 'разность', 'произведение', 'частное', '+', '-', '*', '×'],
+            'Соотношение и пропорция': ['пропорция', 'соотношение', 'отношение', ':'],
+            'Линейные уравнения': ['уравнение', 'найдите x', 'решите', '='],
+            'Логические задачи': ['логика', 'если', 'то', 'следовательно']
+        }
+        
+        # Ищем ключевые слова
+        for topic, keywords in topic_keywords.items():
+            if any(keyword in question_lower for keyword in keywords):
+                return topic
+        
+        # По умолчанию
+        return 'Операции с дробями и остатками'
 
 def add_questions_to_db(questions: List[Dict], db: Database):
     """Добавление вопросов в базу данных."""
@@ -361,9 +566,9 @@ def main():
     processor = PDFProcessor()
     db = Database()
     
-    # Список файлов для обработки (обновите пути к вашим файлам)
+    # Список файлов для обработки
     pdf_files = [
-        "files/new_format.pdf",  # Замените на реальный путь к вашему файлу
+        "files/математика темы 180 вопросов (2).pdf",
     ]
     
     total_questions = 0
