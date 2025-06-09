@@ -392,6 +392,13 @@ class Database:
 
     def add_question(self, question: dict) -> None:
         """Add a new question to the database."""
+        # Validate required fields are not None or empty
+        required_fields = ['topic', 'question', 'answer', 'explanation']
+        for field in required_fields:
+            if not question.get(field):
+                logging.error(f"Cannot add question: {field} is None or empty. Question data: {question}")
+                return
+        
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''

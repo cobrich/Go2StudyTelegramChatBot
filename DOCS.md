@@ -955,3 +955,30 @@ SELECT * FROM user_errors WHERE user_id = 123;
 - Generate reports on student progress over months/years
 
 This architecture ensures **data integrity**, **access security**, and **operational flexibility** while maintaining excellent performance.
+
+## [2025-01-03] Исправление проблемы с NULL значениями в вопросах
+
+### Проблема
+Обнаружен вопрос с ID=7, который содержал NULL значения в критических полях:
+- question: NULL
+- answer: NULL
+- explanation: NULL
+
+Это происходило из-за неполной валидации при сохранении AI-сгенерированных вопросов в базу данных.
+
+### Исправления
+1. **Удален проблемный вопрос**: Удален вопрос с ID=7 из базы данных
+2. **Добавлена валидация в QuestionService**: 
+   - Добавена проверка на NULL значения перед сохранением AI-вопросов
+   - Логирование предупреждений при попытке сохранить некорректные вопросы
+3. **Добавлена валидация в Database.add_question()**: 
+   - Проверка обязательных полей (topic, question, answer, explanation)
+   - Предотвращение вставки записей с пустыми значениями
+4. **Создана утилита очистки**: `src/utils/cleanup_null_questions.py` для поиска и удаления вопросов с NULL значениями
+
+### Техническая информация
+- Файлы изменены: `src/services/question_service.py`, `src/services/database.py`
+- Добавленные файлы: `src/utils/cleanup_null_questions.py`
+- Улучшено логирование при обработке AI-сгенерированных вопросов
+
+---

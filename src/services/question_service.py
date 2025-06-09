@@ -99,16 +99,20 @@ class QuestionService:
                             continue
                         # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
                         if not self.db.get_explanation_by_question_text(question):
-                            self.db.add_question({
-                                'topic': topic,
-                                'question': question,
-                                'answer': correct_answer,
-                                'explanation': explanation,
-                                'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
-                                'question_type': 'standard',
-                                'source': 'ai'
-                            })
-                            logging.info(f"[get_or_generate_tasks][retake][AI generation] Saved new AI question to DB: {question}")
+                            # Validate that all required fields are not None/empty
+                            if question and correct_answer and explanation:
+                                self.db.add_question({
+                                    'topic': topic,
+                                    'question': question,
+                                    'answer': correct_answer,
+                                    'explanation': explanation,
+                                    'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
+                                    'question_type': 'standard',
+                                    'source': 'ai'
+                                })
+                                logging.info(f"[get_or_generate_tasks][retake][AI generation] Saved new AI question to DB: {question}")
+                            else:
+                                logging.warning(f"[get_or_generate_tasks][retake][AI generation] Skipping question with NULL fields: question={question}, answer={correct_answer}, explanation={explanation}")
                         # Формируем варианты: правильный + неправильные, гарантируем наличие правильного
                         options = [correct_answer]
                         if incorrect_options:
@@ -181,16 +185,20 @@ class QuestionService:
                 if question not in existing_question_texts_to_exclude:
                     # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
                     if not self.db.get_explanation_by_question_text(question):
-                        self.db.add_question({
-                            'topic': topic,
-                            'question': question,
-                            'answer': correct_answer,
-                            'explanation': explanation,
-                            'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
-                            'question_type': 'standard',
-                            'source': 'ai'
-                        })
-                        logging.info(f"[get_or_generate_tasks][final AI generation] Saved new AI question to DB: {question}")
+                        # Validate that all required fields are not None/empty
+                        if question and correct_answer and explanation:
+                            self.db.add_question({
+                                'topic': topic,
+                                'question': question,
+                                'answer': correct_answer,
+                                'explanation': explanation,
+                                'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
+                                'question_type': 'standard',
+                                'source': 'ai'
+                            })
+                            logging.info(f"[get_or_generate_tasks][final AI generation] Saved new AI question to DB: {question}")
+                        else:
+                            logging.warning(f"[get_or_generate_tasks][final AI generation] Skipping question with NULL fields: question={question}, answer={correct_answer}, explanation={explanation}")
                     # Формируем варианты: правильный + неправильные, гарантируем наличие правильного
                     options = [correct_answer]
                     if incorrect_options:
