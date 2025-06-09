@@ -219,7 +219,11 @@ class QuestionService:
                     logging.info(f"[get_or_generate_tasks][final AI generation] Added AI question: {question}")
                 else:
                     logging.info(f"[get_or_generate_tasks][final AI generation] Skipped duplicate AI question: {question}")
+            else:
+                logging.warning(f"[get_or_generate_tasks][final AI generation] Skipping empty or invalid result: {result}")
         all_tasks = tasks + new_tasks
+        # Filter out any None values from all_tasks before logging and returning
+        all_tasks = [task for task in all_tasks if task is not None and len(task) >= 5]
         logging.info(f"[get_or_generate_tasks] Total tasks after all stages: {len(all_tasks)}")
         if len(all_tasks) < needed:
             logging.warning(f"[get_or_generate_tasks] Could only generate {len(all_tasks)} tasks out of {needed} needed. Trying one more time...")

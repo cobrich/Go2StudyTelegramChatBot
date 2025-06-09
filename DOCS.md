@@ -3,9 +3,17 @@
 ## Project Overview
 Go2Study Bot is a Telegram bot designed to help students learn mathematics through interactive tests and quizzes. The bot provides a structured learning experience with immediate feedback and explanations.
 
-## Current Status: Admin System Testing (2025-01-09)
+## Current Status: Bug Fixes and UX Improvements (2025-01-09)
 
-### Recently Completed:
+### Recently Fixed:
+- ✅ **Fixed NoneType Error**: Resolved `TypeError: 'NoneType' object is not subscriptable` in question_service.py line 235
+  - Problem: AI generation sometimes returned `(None, None, None, None)` which was added to task list
+  - Solution: Added filtering to remove None values from all_tasks before logging and returning
+- ✅ **Added Loading Message**: Added "🔍 Формируются вопросы, подождите..." message when user selects any topic
+  - Prevents users from clicking multiple topics while questions are being generated
+  - Shows for both regular topic selection and retakes
+
+### Previously Completed:
 - ✅ Implemented complete admin system with supeadmin and regular admin roles
 - ✅ Added whitelist system for student access control  
 - ✅ Created PDF upload functionality for admins
