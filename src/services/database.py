@@ -584,6 +584,10 @@ class Database:
     
     def is_user_allowed(self, username: str) -> bool:
         """Check if user is in whitelist."""
+        # Проверяем, что username не None и не пустой
+        if not username:
+            return False
+            
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT is_active FROM allowed_users WHERE username = ?', (username,))
@@ -743,4 +747,139 @@ class Database:
     def get_topic_names(self, active_only: bool = True) -> List[str]:
         """Get list of topic names for compatibility with existing code."""
         topics = self.get_all_topics(active_only)
-        return [topic['name'] for topic in topics] 
+        return [topic['name'] for topic in topics]
+
+    # === USER DATA MANAGEMENT ===
+    
+    def get_user_full_profile(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get complete user profile combining users and allowed_users data."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT 
+                    u.user_id,
+                    u.username as current_username,
+                    u.full_name as current_full_name,
+                    u.grade as current_grade,
+                    u.language,
+                    u.is_active,
+                    u.current_topic,
+                    u.last_activity,
+                    au.username as whitelist_username,
+                    au.full_name as whitelist_full_name,
+                    au.grade as whitelist_grade,
+                    au.is_active as whitelist_active,
+                    au.added_at as whitelist_added_at
+                FROM users u
+                LEFT JOIN allowed_users au ON u.username = au.username
+                WHERE u.user_id = ?
+            ''', (user_id,))
+            
+            result = cursor.fetchone()
+            if not result:
+                return None
+                
+            return {
+                'user_id': result[0],
+                'current_username': result[1],
+                'current_full_name': result[2],
+                'current_grade': result[3],
+                'language': result[4],
+                'is_active': bool(result[5]),
+                'current_topic': result[6],
+                'last_activity': result[7],
+                'whitelist_username': result[8],
+                'whitelist_full_name': result[9],
+                'whitelist_grade': result[10],
+                'whitelist_active': bool(result[11]) if result[11] is not None else False,
+                'whitelist_added_at': result[12],
+                'has_whitelist_access': result[11] is not None and bool(result[11])
+            }
+    
+    def sync_user_with_whitelist(self, user_id: int, username: str) -> bool:
+        """Sync user data with whitelist information."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Get whitelist data
+                cursor.execute('''
+                    SELECT full_name, grade FROM allowed_users 
+                    WHERE username = ? AND is_active = 1
+                ''', (username,))
+                whitelist_data = cursor.fetchone()
+                
+                if whitelist_data:
+                    # Update users table with whitelist data if it's newer/better
+                    cursor.execute('''
+                        UPDATE users 
+                        SET username = ?, 
+                            full_name = COALESCE(?, full_name),
+                            grade = COALESCE(?, grade)
+                        WHERE user_id = ?
+                    ''', (username, whitelist_data[0], whitelist_data[1], user_id))
+                    
+                    return True
+                return False
+        except Exception as e:
+            logging.error(f"Error syncing user with whitelist: {e}")
+            return False
+    
+    def get_user_historical_stats(self, user_id: int) -> Dict[str, Any]:
+        """Get historical statistics for a user, even if they're not in whitelist."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Test results
+            cursor.execute('''
+                SELECT COUNT(*), AVG(percentage), MIN(timestamp), MAX(timestamp)
+                FROM test_results WHERE user_id = ?
+            ''', (user_id,))
+            test_stats = cursor.fetchone()
+            
+            # Error count
+            cursor.execute('''
+                SELECT COUNT(DISTINCT question_text), SUM(error_count)
+                FROM user_errors WHERE user_id = ?
+            ''', (user_id,))
+            error_stats = cursor.fetchone()
+            
+            # User info
+            cursor.execute('''
+                SELECT username, full_name, grade, language, last_activity
+                FROM users WHERE user_id = ?
+            ''', (user_id,))
+            user_info = cursor.fetchone()
+            
+            return {
+                'user_id': user_id,
+                'username': user_info[0] if user_info else None,
+                'full_name': user_info[1] if user_info else None,
+                'grade': user_info[2] if user_info else None,
+                'language': user_info[3] if user_info else 'ru',
+                'last_activity': user_info[4] if user_info else None,
+                'total_tests': test_stats[0] if test_stats else 0,
+                'avg_percentage': test_stats[1] if test_stats else 0,
+                'first_test': test_stats[2] if test_stats else None,
+                'last_test': test_stats[3] if test_stats else None,
+                'unique_errors': error_stats[0] if error_stats else 0,
+                'total_error_count': error_stats[1] if error_stats else 0
+            }
+    
+    def get_all_users_with_history(self) -> List[Dict[str, Any]]:
+        """Get all users who have any activity history."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT DISTINCT u.user_id
+                FROM users u
+                WHERE u.user_id IN (
+                    SELECT DISTINCT user_id FROM test_results
+                    UNION
+                    SELECT DISTINCT user_id FROM user_errors
+                )
+                ORDER BY u.last_activity DESC
+            ''')
+            
+            user_ids = [row[0] for row in cursor.fetchall()]
+            return [self.get_user_historical_stats(user_id) for user_id in user_ids] 

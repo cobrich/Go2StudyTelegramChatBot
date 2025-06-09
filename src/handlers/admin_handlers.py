@@ -6,6 +6,7 @@ import logging
 import os
 import tempfile
 import asyncio
+import sqlite3
 
 class AdminHandlers:
     def __init__(self):
@@ -546,24 +547,109 @@ class AdminHandlers:
         context.user_data.pop('admin_action', None)
     
     async def show_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Показать статистику системы."""
+        """Показать общую статистику системы."""
         query = update.callback_query
         await query.answer()
         
         # Получаем статистику
-        students = self.db.get_all_allowed_users()
-        topics = self.db.get_all_topics(active_only=False)
-        admins = self.db.get_all_admins()
+        with sqlite3.connect(self.db.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Статистика пользователей
+            cursor.execute('SELECT COUNT(*) FROM allowed_users WHERE is_active = 1')
+            active_students = cursor.fetchone()[0]
+            
+            cursor.execute('SELECT COUNT(*) FROM allowed_users')
+            total_students = cursor.fetchone()[0]
+            
+            cursor.execute('SELECT COUNT(*) FROM admins')
+            total_admins = cursor.fetchone()[0]
+            
+            # Статистика вопросов
+            cursor.execute('SELECT COUNT(*) FROM questions')
+            total_questions = cursor.fetchone()[0]
+            
+            cursor.execute('SELECT COUNT(*) FROM questions WHERE source = "ai"')
+            ai_questions = cursor.fetchone()[0]
+            
+            cursor.execute('SELECT COUNT(*) FROM questions WHERE source = "db"')
+            db_questions = cursor.fetchone()[0]
+            
+            # Статистика тестов
+            cursor.execute('SELECT COUNT(*) FROM test_results')
+            total_tests = cursor.fetchone()[0]
+            
+            cursor.execute('SELECT AVG(percentage) FROM test_results')
+            avg_score = cursor.fetchone()[0] or 0
+            
+            # Статистика активности
+            cursor.execute('SELECT COUNT(DISTINCT user_id) FROM test_results')
+            users_with_tests = cursor.fetchone()[0]
+            
+            cursor.execute('''
+                SELECT COUNT(*) FROM test_results 
+                WHERE timestamp >= datetime('now', '-7 days')
+            ''')
+            tests_last_week = cursor.fetchone()[0]
         
-        active_students = len([s for s in students if s['is_active']])
-        active_topics = len([t for t in topics if t['is_active']])
+        text = f"📊 **Статистика системы**\n\n"
+        text += f"👥 **Пользователи:**\n"
+        text += f"• Активные ученики: {active_students}\n"
+        text += f"• Всего в whitelist: {total_students}\n"
+        text += f"• Администраторы: {total_admins}\n\n"
         
-        text = "📊 **Статистика системы**\n\n"
-        text += f"👥 Ученики: {len(students)} (активных: {active_students})\n"
-        text += f"📚 Темы: {len(topics)} (активных: {active_topics})\n"
-        text += f"👑 Админы: {len(admins)}\n"
+        text += f"❓ **Вопросы:**\n"
+        text += f"• Всего вопросов: {total_questions}\n"
+        text += f"• Из базы данных: {db_questions}\n"
+        text += f"• Сгенерированы ИИ: {ai_questions}\n\n"
         
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]]
+        text += f"📝 **Тестирование:**\n"
+        text += f"• Всего тестов: {total_tests}\n"
+        text += f"• Пользователей с тестами: {users_with_tests}\n"
+        text += f"• Средний балл: {avg_score:.1f}%\n"
+        text += f"• Тестов за неделю: {tests_last_week}\n"
+        
+        keyboard = [
+            [InlineKeyboardButton("📈 История пользователей", callback_data="admin_user_history")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def show_user_history(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Показать историю всех пользователей, включая удаленных из whitelist."""
+        query = update.callback_query
+        await query.answer()
+        
+        users_with_history = self.db.get_all_users_with_history()
+        
+        if not users_with_history:
+            text = "📈 **История пользователей**\n\nПользователей с историей тестов не найдено."
+        else:
+            text = "📈 **История пользователей**\n\n"
+            text += "*(включая удаленных из whitelist)*\n\n"
+            
+            for i, user in enumerate(users_with_history[:10], 1):  # Показываем первых 10
+                username = user['username'] or f"ID_{user['user_id']}"
+                full_name = user['full_name'] or "Не указано"
+                
+                # Проверяем, есть ли пользователь в whitelist
+                is_whitelisted = self.db.is_user_allowed(user['username']) if user['username'] else False
+                status = "✅ Активен" if is_whitelisted else "❌ Не в whitelist"
+                
+                text += f"{i}. **@{username}** ({status})\n"
+                text += f"   ФИО: {full_name}\n"
+                text += f"   Тестов: {user['total_tests']}, Средний балл: {user['avg_percentage']:.1f}%\n"
+                text += f"   Ошибок: {user['unique_errors']} уникальных\n"
+                if user['last_activity']:
+                    text += f"   Последняя активность: {user['last_activity'][:10]}\n"
+                text += "\n"
+            
+            if len(users_with_history) > 10:
+                text += f"... и еще {len(users_with_history) - 10} пользователей"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад к статистике", callback_data="admin_stats")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown') 

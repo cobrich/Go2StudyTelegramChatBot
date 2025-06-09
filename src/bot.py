@@ -43,6 +43,7 @@ def main() -> None:
     application.add_handler(CommandHandler("change_fio", command_handlers.handle_text))
     application.add_handler(CommandHandler("change_grade", command_handlers.handle_text))
     application.add_handler(CommandHandler("change_language", command_handlers.handle_text))
+    application.add_handler(CommandHandler("myid", command_handlers.get_my_id))
     
     # Add admin command
     application.add_handler(CommandHandler("admin", admin_handlers.admin_panel))
@@ -87,6 +88,10 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(
         admin_handlers.show_stats,
         pattern="^admin_stats$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.show_user_history,
+        pattern="^admin_user_history$"
     ))
     
     # Student management handlers

@@ -10,8 +10,8 @@ import sys
 # Добавляем путь к src в PYTHONPATH для корректных импортов
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.services.database import Database
-from src.services.ai_service import AIService
+from services.database import Database
+from services.ai_service import AIService
 
 class PDFProcessor:
     def __init__(self, output_dir: str = "question_images"):

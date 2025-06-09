@@ -33,7 +33,6 @@ class CommandHandlers(BaseHandler):
 
         # Clear previous session data
         self.clear_user_data(context)
-        logging.info(f"User {user.id} ({user.username}) executed /start. User data cleared for chat {chat_id}.")
         self.set_user_data(context, 'session_started', True)
 
         self.db.set_all_users_inactive()
@@ -47,7 +46,6 @@ class CommandHandlers(BaseHandler):
                 text="💬",
                 reply_markup=ReplyKeyboardRemove()
             )
-            logging.info(f"Sent ReplyKeyboardRemove to chat {chat_id} as part of /start sequence.")
         except Exception as e:
             logging.error(f"Error sending ReplyKeyboardRemove during /start for chat {chat_id}: {e}")
 
@@ -56,7 +54,6 @@ class CommandHandlers(BaseHandler):
                 text=welcome_text,
                 reply_markup=self.main_menu_markup
             )
-            logging.info(f"Welcome message with main_menu_markup sent to chat {chat_id} for user {user.id}.")
         except Exception as e:
             logging.error(f"Error sending welcome message with main_menu_markup during /start for chat {chat_id}: {e}")
             try:
@@ -67,44 +64,37 @@ class CommandHandlers(BaseHandler):
                 logging.error(f"Error sending fallback error message during /start for chat {chat_id}: {e_fallback}")
 
     async def stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /stop command."""
-        user = update.effective_user
-        chat_id = update.effective_chat.id
-        user_id = user.id if user else None
-
-        # Всегда сбрасываем активность и очищаем user_data
-        if user_id:
-            self.db.set_user_inactive(user_id)
-            self.clear_user_data(context)
-            self.db.delete_all_user_data(user_id)
-
-        if not user:
-            logging.warning("stop_command received update without effective_user.")
-            if chat_id:
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text="Не удалось определить пользователя для остановки. Пожалуйста, убедитесь, что вы отправили команду из чата с ботом."
-                )
-            return
-
-        response_text = (
-            f"🗑️ Все ваши данные были удалены из моей памяти, {user.mention_html()}.\n\n"
-            "Я не могу удалить историю этого чата самостоятельно, но вы можете сделать это вручную, если хотите.\n\n"
-            "Если вы захотите начать заново, просто отправьте /start."
+        """Stop the bot and clear user data."""
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "unknown"
+        
+        # Clear user activity
+        self.db.clear_user_activity(user_id)
+        
+        # Clear context data
+        context.user_data.clear()
+        
+        await update.message.reply_text(
+            "🛑 Бот остановлен. Все данные очищены.\n\nДля нового старта используйте /start",
+            reply_markup=ReplyKeyboardRemove()
         )
-        try:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="💬",
-                reply_markup=ReplyKeyboardRemove()
-            )
-        except Exception as e_remove_keyboard:
-            logging.warning(f"Could not remove reply keyboard for user {user_id} during /stop: {e_remove_keyboard}")
-
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=response_text,
-            parse_mode='HTML'
+    
+    async def get_my_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Показать user_id пользователя (временная команда для настройки админа)."""
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "не указан"
+        first_name = update.effective_user.first_name or "не указано"
+        last_name = update.effective_user.last_name or ""
+        
+        full_name = f"{first_name} {last_name}".strip()
+        
+        await update.message.reply_text(
+            f"🆔 **Ваши данные:**\n\n"
+            f"**User ID:** `{user_id}`\n"
+            f"**Username:** @{username}\n"
+            f"**Имя:** {full_name}\n\n"
+            f"Используйте User ID `{user_id}` для добавления в качестве админа.",
+            parse_mode='Markdown'
         )
 
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
