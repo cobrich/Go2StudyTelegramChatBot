@@ -50,6 +50,9 @@ class PDFProcessor:
         current_options = []
         correct_answer = None
         
+        # Словарь для хранения первого вопроса каждой темы
+        topic_first_questions = {}
+        
         print(f"[DEBUG] Всего строк для обработки: {len(lines)}")
         
         i = 0
@@ -84,8 +87,14 @@ class PDFProcessor:
                     clean_question = clean_question.strip()
                     
                     if len(clean_question) >= 10:  # Минимальная длина вопроса
+                        topic_name = current_topic or 'Математика'
+                        
+                        # Сохраняем первый вопрос темы для анализа
+                        if topic_name not in topic_first_questions:
+                            topic_first_questions[topic_name] = clean_question
+                        
                         questions.append({
-                            'topic': current_topic or 'Математика',
+                            'topic': topic_name,
                             'question': clean_question,
                             'options': current_options,
                             'correct_answer': correct_answer
@@ -153,13 +162,34 @@ class PDFProcessor:
             clean_question = clean_question.strip()
             
             if len(clean_question) >= 10:  # Минимальная длина вопроса
+                topic_name = current_topic or 'Математика'
+                
+                # Сохраняем первый вопрос темы для анализа
+                if topic_name not in topic_first_questions:
+                    topic_first_questions[topic_name] = clean_question
+                
                 questions.append({
-                    'topic': current_topic or 'Математика',
+                    'topic': topic_name,
                     'question': clean_question,
                     'options': current_options,
                     'correct_answer': correct_answer
                 })
                 print(f"[SAVE] Сохранен последний вопрос: {clean_question[:50]}...")
+        
+        # Теперь обновляем темы в вопросах, используя первые вопросы для анализа
+        print(f"[DEBUG] Анализируем темы с помощью AI...")
+        for question in questions:
+            original_topic = question['topic']
+            sample_question = topic_first_questions.get(original_topic, question['question'])
+            
+            # Используем TopicManager для нормализации темы с примером вопроса
+            normalized_topic = self.topic_manager.ensure_topic_exists(
+                original_topic, 
+                sample_question=sample_question
+            )
+            
+            question['topic'] = normalized_topic
+            print(f"[TOPIC] '{original_topic}' → '{normalized_topic}'")
         
         print(f"[DEBUG] Итого извлечено вопросов: {len(questions)}")
         return questions
@@ -206,13 +236,8 @@ class PDFProcessor:
             invalid_count = 0
             
             for i, q in enumerate(extracted_questions):
-                # Определяем тему с помощью TopicManager
-                if has_topic_headers:
-                    # Если есть заголовки тем, используем их
-                    normalized_topic = self.topic_manager.ensure_topic_exists(q['topic'])
-                else:
-                    # Если заголовков нет, определяем по содержанию
-                    normalized_topic = self.topic_manager.get_topic_by_content(q['question'])
+                # Тема уже нормализована в extract_topics_and_questions или extract_questions_without_topics
+                normalized_topic = q['topic']
                 
                 question_data = {
                     'question': q['question'].strip(),

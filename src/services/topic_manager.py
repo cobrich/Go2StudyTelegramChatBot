@@ -68,11 +68,16 @@ class TopicManager:
             "Распределение по условиям"
         ]
     
-    def ensure_topic_exists(self, topic_name: str, description: str = None) -> str:
+    def ensure_topic_exists(self, topic_name: str, description: str = None, sample_question: str = None) -> str:
         """
         Убеждается, что тема существует в базе данных.
         Если темы нет - создает её.
         Возвращает нормализованное название темы.
+        
+        Args:
+            topic_name: Название темы из PDF
+            description: Описание темы (опционально)
+            sample_question: Пример вопроса из этой темы для лучшего анализа
         """
         if not topic_name or not topic_name.strip():
             return "Математика"
@@ -93,19 +98,19 @@ class TopicManager:
             logging.info(f"Используем существующую похожую тему '{similar_topic}' для '{topic_name}'")
             return similar_topic
         
-        # Нормализуем название темы с помощью AI
-        normalized_name = self._normalize_topic_with_ai(topic_name)
+        # Нормализуем название темы с помощью AI (передаем пример вопроса)
+        normalized_name = self._normalize_topic_with_ai(topic_name, sample_question)
         
         # Проверяем еще раз после нормализации
         if normalized_name in existing_names:
             return normalized_name
         
-        # Создаем новую тему
+        # Создаем новую тему только если AI действительно предложил уникальное название
         description = description or f"Тема: {normalized_name}"
         success = self.db.add_topic(normalized_name, description)
         
         if success:
-            logging.info(f"Создана новая тема: '{normalized_name}'")
+            logging.info(f"Создана новая тема: '{normalized_name}' (исходное название: '{topic_name}')")
             return normalized_name
         else:
             logging.warning(f"Не удалось создать тему '{normalized_name}', используем 'Математика'")
@@ -179,40 +184,104 @@ class TopicManager:
         
         return None
     
-    def _normalize_topic_with_ai(self, topic_name: str) -> str:
-        """Нормализует название темы с помощью AI."""
+    def _normalize_topic_with_ai(self, topic_name: str, sample_question: str = None) -> str:
+        """Нормализует название темы с помощью AI, анализируя содержание вопросов."""
         try:
             existing_topics = self.db.get_all_topics(active_only=False)
             existing_names = [t['name'] for t in existing_topics]
             
+            # Создаем более умный промпт
             prompt = f"""
-Дана тема: "{topic_name}"
+Ты эксперт по математическому образованию для подготовки к НИШ (5-6 классы).
 
-Существующие темы в системе:
-{chr(10).join(existing_names)}
+ЗАДАЧА: Определи ТОЧНО, к какой существующей теме относится данная тема из PDF файла.
 
-Базовые математические темы:
-{chr(10).join(self.base_topics)}
+ТЕМА ИЗ PDF: "{topic_name}"
 
-Задача: Определи наиболее подходящее название темы из существующих или предложи новое краткое и понятное название.
+СУЩЕСТВУЮЩИЕ ТЕМЫ В СИСТЕМЕ (ВЫБИРАЙ ТОЛЬКО ИЗ ЭТОГО СПИСКА):
+{chr(10).join([f"{i+1}. {name}" for i, name in enumerate(existing_names)])}
 
-Требования:
-1. Название должно быть кратким (1-3 слова)
-2. На русском языке
-3. Отражать математическую область
-4. Быть понятным для учеников
+{f'''
+ПРИМЕР ВОПРОСА ИЗ ЭТОЙ ТЕМЫ:
+"{sample_question}"
 
-Ответь только названием темы, без дополнительных объяснений.
+АНАЛИЗ ВОПРОСА:
+- Если вопрос содержит переменные (x, y) или "найдите значение" → "Простейшие уравнения"
+- Если вопрос про порядок операций, скобки → "Порядок действий"  
+- Если вопрос про дроби (3/4, 1/2) → "Действия с дробями"
+- Если вопрос про проценты (%, "процент от") → "Проценты" или "Нахождение процента от числа"
+- Если вопрос про площадь, периметр, фигуры → "Геометрические фигуры" или "Периметр и площадь"
+- Если вопрос про сложение, вычитание, умножение → "Арифметические операции"
+''' if sample_question else ''}
+
+СТРОГИЕ ПРАВИЛА:
+1. ОБЯЗАТЕЛЬНО выбери тему ТОЛЬКО из списка выше
+2. НЕ создавай новые темы
+3. Анализируй СОДЕРЖАНИЕ вопроса, а не только название темы
+4. Если сомневаешься между несколькими темами, выбери более общую
+
+ПРИМЕРЫ ПРАВИЛЬНОГО СОПОСТАВЛЕНИЯ:
+• "Найти значение 2x" + вопрос с переменными → "Простейшие уравнения"
+• "Порядок выполнения операций" + вопрос со скобками → "Порядок действий"
+• "Операции с дробями" + вопрос с дробями → "Действия с дробями"
+• "Вычисление процентов" + вопрос с % → "Проценты"
+• "Геометрические задачи" + вопрос про площадь → "Периметр и площадь"
+• "Арифметические примеры" + простые вычисления → "Арифметические операции"
+
+ОТВЕТ: Напиши ТОЛЬКО ТОЧНОЕ название темы из списка выше, без номера и дополнительных слов.
 """
             
             response = self.ai_service.model.generate_content(prompt)
             normalized = response.text.strip()
             
+            # Убираем возможные префиксы, номера и лишние символы
+            normalized = normalized.replace("•", "").replace("-", "").strip()
+            # Убираем номера в начале (если AI добавил)
+            import re
+            normalized = re.sub(r'^\d+\.\s*', '', normalized)
+            
             # Проверяем, что ответ разумный
             if len(normalized) > 50 or len(normalized) < 3:
+                logging.warning(f"AI вернул неподходящий ответ: '{normalized}', используем исходное название")
                 return topic_name
             
-            return normalized
+            # Проверяем точное совпадение с существующими темами
+            for existing in existing_names:
+                if normalized.lower() == existing.lower():
+                    logging.info(f"AI сопоставил '{topic_name}' с существующей темой '{existing}'")
+                    return existing
+            
+            # Проверяем частичное совпадение
+            for existing in existing_names:
+                if normalized.lower() in existing.lower() or existing.lower() in normalized.lower():
+                    logging.info(f"AI сопоставил '{topic_name}' с похожей темой '{existing}' (частичное совпадение)")
+                    return existing
+            
+            # Если AI предложил что-то не из списка, ищем наиболее похожую тему
+            best_match = None
+            max_similarity = 0
+            
+            for existing in existing_names:
+                # Простая мера схожести по общим словам
+                normalized_words = set(normalized.lower().split())
+                existing_words = set(existing.lower().split())
+                common_words = normalized_words.intersection(existing_words)
+                similarity = len(common_words) / max(len(normalized_words), len(existing_words))
+                
+                if similarity > max_similarity:
+                    max_similarity = similarity
+                    best_match = existing
+            
+            if best_match and max_similarity > 0.3:
+                logging.info(f"AI предложил '{normalized}', найдено похожее: '{best_match}' (схожесть: {max_similarity:.2f})")
+                return best_match
+            
+            # Если ничего не найдено, возвращаем первую тему из списка
+            if existing_names:
+                logging.warning(f"AI предложил '{normalized}', но это не из списка. Используем первую тему: '{existing_names[0]}'")
+                return existing_names[0]
+            
+            return topic_name
             
         except Exception as e:
             logging.error(f"Ошибка при нормализации темы с AI: {e}")
