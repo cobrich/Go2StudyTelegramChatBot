@@ -24,11 +24,21 @@ class CommandHandlers(BaseHandler):
         # Регистрируем пользователя в базе, если его нет
         self.db.register_user(user.id, user.username)
 
-        # Проверяем, есть ли ФИО и класс
+        # Проверяем, является ли пользователь админом
+        is_admin = self.db.is_admin(user.id)
+        
+        # Проверяем, есть ли ФИО и класс (для админов класс не обязателен)
         user_info = self.db.get_user_info(user.id)
-        if not user_info or not user_info[0] or not user_info[1] or not user_info[2]:
+        if not user_info or not user_info[0]:
+            # Если нет ФИО - спрашиваем у всех (включая админов)
             context.user_data['awaiting_full_name'] = True
             await update.message.reply_text("Пожалуйста, введите ваше ФИО:")
+            return
+        elif not is_admin and not user_info[1]:
+            # Если нет класса и пользователь НЕ админ - спрашиваем класс
+            context.user_data['awaiting_grade'] = True
+            context.user_data['full_name'] = user_info[0]  # Сохраняем ФИО
+            await update.message.reply_text("Пожалуйста, введите ваш класс (4, 5 или 6):")
             return
 
         # Clear previous session data
@@ -121,12 +131,30 @@ class CommandHandlers(BaseHandler):
             db_info = self.db.get_user_info(user_id)
             grade = db_info[1] if db_info else None
             language = db_info[2] if db_info else 'ru'
+            
+            # Проверяем, является ли пользователь админом
+            is_admin = self.db.is_admin(user_id)
+            
             self.db.set_user_info_with_language(user_id, full_name, grade, language)
             context.user_data['awaiting_full_name'] = False
-            await update.message.reply_text(
-                f"Спасибо! Ваше новое ФИО: {full_name}. Ваш класс: {grade}.",
-                reply_markup=self.main_menu_markup
-            )
+            
+            if is_admin:
+                # Для админов сразу разрешаем пользоваться ботом
+                await update.message.reply_text(
+                    f"Спасибо, {full_name}! Вы администратор системы. Теперь вы можете пользоваться ботом.",
+                    reply_markup=self.main_menu_markup
+                )
+            elif grade:
+                # Для обычных пользователей с уже указанным классом
+                await update.message.reply_text(
+                    f"Спасибо! Ваше новое ФИО: {full_name}. Ваш класс: {grade}.",
+                    reply_markup=self.main_menu_markup
+                )
+            else:
+                # Для обычных пользователей без класса - запрашиваем класс
+                context.user_data['awaiting_grade'] = True
+                context.user_data['full_name'] = full_name
+                await update.message.reply_text("Спасибо! Теперь введите ваш класс (4, 5 или 6):")
             return
         # Проверка на ввод класса
         if context.user_data.get('awaiting_grade'):

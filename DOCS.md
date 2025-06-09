@@ -17,6 +17,11 @@ Go2Study Bot is a Telegram bot designed to help students learn mathematics throu
   - Solution: Added automatic detection and clearing of stale sessions in `check_user_active`
   - Added `/reset` command for manual state reset when stuck
   - Added missing `clear_user_activity` method to Database class
+- ✅ **Fixed Admin Registration Logic**: Improved user data validation for administrators
+  - Problem: Bot was asking for class/grade from super admins who don't need this information
+  - Solution: Modified logic to skip grade requirement for admins and super admins
+  - Admins now only need to provide their full name to start using the bot
+  - Separate logic for admins vs regular students during registration and data updates
 
 ### Previously Completed:
 - ✅ Implemented complete admin system with supeadmin and regular admin roles
