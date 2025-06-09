@@ -1,219 +1,296 @@
 #!/usr/bin/env python3
 """
-Тест для проверки правильности определения тем ИИ.
-Тестирует логику TopicManager._normalize_topic_with_ai
+Comprehensive test suite for topic detection functionality.
+Tests both AI-based topic classification and file parsing.
 """
 
 import sys
 import os
-import re
 
-# Добавляем путь к src
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'))
+# Add the src directory to the Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from services.topic_manager import TopicManager
-from services.database import Database
+from config.constants import TOPIC_HIERARCHY
 
 class TopicDetectionTester:
     def __init__(self):
         self.topic_manager = TopicManager()
-        self.db = Database()
-        
-        # Тестовые случаи: (название_темы_из_pdf, первый_вопрос, ожидаемая_тема)
         self.test_cases = [
-            (
-                "Пропорция",
-                "Найдите значение x в пропорции 2:3 = x:12",
-                "Простейшие уравнения"
-            ),
-            (
-                "Процентные вычисления", 
-                "Найдите 25% от числа 80",
-                "Нахождение процента от числа"
-            ),
-            (
-                "Линейные уравнения",
-                "Решите уравнение 3x - 7 = 2x + 5",
-                "Простейшие уравнения"
-            ),
-            (
-                "Арифметика",
-                "Вычислите: 2 + 3 × 4",
-                "Порядок действий"
-            ),
-            (
-                "Дроби",
-                "Вычислите: 3/4 + 1/2",
-                "Действия с дробями"
-            ),
-            (
-                "Геометрические задачи",
-                "Найдите площадь прямоугольника со сторонами 5 см и 8 см",
-                "Периметр и площадь"
-            ),
-            (
-                "Десятичные числа",
-                "Вычислите: 31.4 ÷ 7.9",
-                "Натуральные числа"
-            ),
-            (
-                "Проценты",
-                "В магазине скидка 20%. Сколько стоит товар после скидки?",
-                "Проценты"
-            ),
-            (
-                "Числовые выражения",
-                "Найдите значение выражения 2x + 3, если x = 5",
-                "Арифметические выражения"
-            ),
-            (
-                "Четные числа",
-                "Какие из чисел 12, 15, 18, 21 являются четными?",
-                "Чётные и нечётные числа"
-            )
+            # Test case 1: Arithmetic expression should be classified as "Порядок действий"
+            {
+                "topic_name": "Арифметика",
+                "question": "38,3 − 24,16 : 4 + 3,78 × 3 = ?",
+                "expected": "Порядок действий",
+                "description": "Arithmetic expression with order of operations"
+            },
+            
+            # Test case 2: Percentage calculation should be "Нахождение процента от числа"
+            {
+                "topic_name": "Проценты",
+                "question": "Найдите 25% от 80",
+                "expected": "Нахождение процента от числа",
+                "description": "Finding percentage of a number"
+            },
+            
+            # Test case 3: Proportion should be "Простейшие уравнения"
+            {
+                "topic_name": "Пропорция",
+                "question": "Найдите x в пропорции 2:3 = x:12",
+                "expected": "Простейшие уравнения",
+                "description": "Proportion solving"
+            },
+            
+            # Test case 4: Fraction operations should be "Действия с дробями"
+            {
+                "topic_name": "Дроби",
+                "question": "Вычислите: 3/4 + 1/2",
+                "expected": "Действия с дробями",
+                "description": "Fraction addition"
+            },
+            
+            # Test case 5: Decimal operations should be "Десятичные дроби"
+            {
+                "topic_name": "Десятичные числа",
+                "question": "Вычислите: 2,5 × 1,4",
+                "expected": "Десятичные дроби",
+                "description": "Decimal multiplication"
+            },
+            
+            # Test case 6: Simple equation should be "Простейшие уравнения"
+            {
+                "topic_name": "Уравнения",
+                "question": "Решите уравнение: x + 5 = 12",
+                "expected": "Простейшие уравнения",
+                "description": "Simple linear equation"
+            },
+            
+            # Test case 7: Finding number by percentage should be "Нахождение числа по проценту"
+            {
+                "topic_name": "Процентные задачи",
+                "question": "25% от какого числа равны 15?",
+                "expected": "Нахождение числа по проценту",
+                "description": "Finding number by its percentage"
+            },
+            
+            # Test case 8: Comparison should be "Сравнение дробей"
+            {
+                "topic_name": "Сравнение",
+                "question": "Сравните дроби: 3/4 и 5/6",
+                "expected": "Сравнение дробей",
+                "description": "Comparing fractions"
+            },
+            
+            # Test case 9: Division with remainder should be "Деление с остатком"
+            {
+                "topic_name": "Деление",
+                "question": "Найдите остаток от деления 17 на 5",
+                "expected": "Деление с остатком",
+                "description": "Division with remainder"
+            },
+            
+            # Test case 10: Natural numbers should be "Натуральные числа"
+            {
+                "topic_name": "Числа",
+                "question": "Какие из чисел являются натуральными: 0, 1, 2, -3?",
+                "expected": "Натуральные числа",
+                "description": "Natural numbers identification"
+            }
+        ]
+        
+        # File parsing test cases
+        self.file_test_cases = [
+            {
+                "file_path": "test_files/file1.txt",
+                "expected_topic": "Простейшие уравнения",
+                "description": "Proportion questions should be classified as simple equations"
+            },
+            {
+                "file_path": "test_files/file2.txt", 
+                "expected_topic": "Нахождение процента от числа",
+                "description": "Percentage calculation questions"
+            },
+            {
+                "file_path": "test_files/file3.txt",
+                "expected_topic": "Десятичные дроби", 
+                "description": "Decimal multiplication questions despite broad topic name"
+            },
+            {
+                "file_path": "test_files/file4.txt",
+                "expected_topic": "Нахождение процента от числа",
+                "description": "Percentage questions despite generic topic name"
+            },
+            {
+                "file_path": "test_files/file5.txt",
+                "expected_topic": "Простейшие уравнения",
+                "description": "Simple equation questions despite vague topic name"
+            },
+            {
+                "file_path": "test_files/file6.txt",
+                "expected_topic": "Действия с дробями",
+                "description": "Fraction operations despite misleading topic name"
+            }
         ]
 
     def parse_test_file(self, file_path: str) -> tuple:
-        """Парсит тестовый файл и извлекает название темы и первый вопрос."""
+        """Parse a test file and return topic name and first question"""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+                content = f.read().strip()
             
-            # Ищем заголовок темы
-            topic_match = re.search(r'Тема:\s*([^(]+)\((\d+)\)', content)
-            if not topic_match:
-                return None, None
+            lines = content.split('\n')
+            topic_line = lines[0]
             
-            topic_name = topic_match.group(1).strip()
+            # Extract topic name from "Тема: Topic Name (count)"
+            if topic_line.startswith('Тема: '):
+                topic_name = topic_line[6:]  # Remove "Тема: "
+                if '(' in topic_name:
+                    topic_name = topic_name.split('(')[0].strip()
+            else:
+                topic_name = "Unknown"
             
-            # Ищем первый вопрос
-            question_match = re.search(r'1\.\s*(.+?)(?=\nA\))', content, re.DOTALL)
-            if not question_match:
-                return topic_name, None
+            # Find first question
+            question = ""
+            for line in lines[1:]:
+                line = line.strip()
+                if line and not line.startswith('A)') and not line.startswith('B)') and not line.startswith('C)') and not line.startswith('D)'):
+                    if line[0].isdigit():
+                        question = line
+                        break
             
-            first_question = question_match.group(1).strip()
-            
-            return topic_name, first_question
+            return topic_name, question
             
         except Exception as e:
-            print(f"Ошибка при парсинге файла {file_path}: {e}")
+            print(f"Error parsing file {file_path}: {e}")
             return None, None
 
     def test_ai_topic_detection(self):
-        """Тестирует определение тем ИИ на заранее подготовленных случаях."""
-        print("🧪 ТЕСТ ОПРЕДЕЛЕНИЯ ТЕМ ИИ")
-        print("=" * 60)
+        """Test AI-based topic detection with various question types"""
+        print("🧠 Testing AI Topic Detection...")
+        print("=" * 50)
         
-        correct_predictions = 0
-        total_tests = len(self.test_cases)
+        passed = 0
+        total = len(self.test_cases)
         
-        for i, (pdf_topic, sample_question, expected_topic) in enumerate(self.test_cases, 1):
-            print(f"\n📝 Тест {i}/{total_tests}")
-            print(f"Тема из PDF: '{pdf_topic}'")
-            print(f"Первый вопрос: '{sample_question}'")
-            print(f"Ожидаемая тема: '{expected_topic}'")
+        for i, test_case in enumerate(self.test_cases, 1):
+            print(f"\nTest {i}: {test_case['description']}")
+            print(f"Input topic: '{test_case['topic_name']}'")
+            print(f"Question: '{test_case['question']}'")
             
-            # Тестируем AI
-            predicted_topic = self.topic_manager._normalize_topic_with_ai(pdf_topic, sample_question)
-            print(f"Предсказанная тема: '{predicted_topic}'")
-            
-            if predicted_topic == expected_topic:
-                print("✅ ПРАВИЛЬНО")
-                correct_predictions += 1
-            else:
-                print("❌ НЕПРАВИЛЬНО")
-            
-            print("-" * 40)
+            try:
+                result = self.topic_manager._normalize_topic_with_ai(
+                    test_case['topic_name'], 
+                    test_case['question']
+                )
+                
+                print(f"Expected: '{test_case['expected']}'")
+                print(f"Got: '{result}'")
+                
+                if result == test_case['expected']:
+                    print("✅ PASSED")
+                    passed += 1
+                else:
+                    print("❌ FAILED")
+                    
+            except Exception as e:
+                print(f"❌ ERROR: {e}")
         
-        accuracy = correct_predictions / total_tests * 100
-        print(f"\n📊 РЕЗУЛЬТАТЫ:")
-        print(f"Правильных предсказаний: {correct_predictions}/{total_tests}")
-        print(f"Точность: {accuracy:.1f}%")
-        
-        return accuracy >= 80  # Считаем тест пройденным, если точность >= 80%
+        print(f"\n📊 AI Detection Results: {passed}/{total} tests passed ({passed/total*100:.1f}%)")
+        return passed == total
 
     def test_file_parsing(self, file_path: str):
-        """Тестирует парсинг конкретного файла и определение темы."""
-        print(f"\n🔍 ТЕСТ ФАЙЛА: {file_path}")
-        print("=" * 60)
+        """Test parsing of a specific file"""
+        print(f"\n📄 Testing file: {file_path}")
         
-        if not os.path.exists(file_path):
-            print(f"❌ Файл не найден: {file_path}")
+        topic_name, question = self.parse_test_file(file_path)
+        
+        if topic_name is None:
+            print("❌ Failed to parse file")
             return False
+            
+        print(f"Parsed topic: '{topic_name}'")
+        print(f"First question: '{question}'")
         
-        # Парсим файл
-        topic_name, first_question = self.parse_test_file(file_path)
-        
-        if not topic_name:
-            print("❌ Не удалось извлечь название темы")
-            return False
-        
-        if not first_question:
-            print("❌ Не удалось извлечь первый вопрос")
-            return False
-        
-        print(f"📋 Извлеченная тема: '{topic_name}'")
-        print(f"📝 Первый вопрос: '{first_question}'")
-        
-        # Определяем тему с помощью AI
-        predicted_topic = self.topic_manager._normalize_topic_with_ai(topic_name, first_question)
-        print(f"🤖 Предсказанная тема: '{predicted_topic}'")
-        
-        # Проверяем, что тема существует в системе
-        existing_topics = self.db.get_all_topics(active_only=True)
-        topic_names = [t['name'] for t in existing_topics]
-        
-        if predicted_topic in topic_names:
-            print("✅ Тема найдена в системе")
-            return True
+        if question:
+            try:
+                ai_result = self.topic_manager._normalize_topic_with_ai(topic_name, question)
+                print(f"AI classification: '{ai_result}'")
+                return True
+            except Exception as e:
+                print(f"❌ AI classification error: {e}")
+                return False
         else:
-            print("❌ Тема не найдена в системе")
-            print(f"Доступные темы: {', '.join(topic_names[:5])}...")
+            print("❌ No question found")
             return False
+
+    def test_all_file_parsing(self):
+        """Test parsing and classification of all test files"""
+        print("\n📁 Testing File Parsing and Classification...")
+        print("=" * 50)
+        
+        passed = 0
+        total = len(self.file_test_cases)
+        
+        for i, test_case in enumerate(self.file_test_cases, 1):
+            print(f"\nFile Test {i}: {test_case['description']}")
+            
+            topic_name, question = self.parse_test_file(test_case['file_path'])
+            
+            if topic_name is None or question is None:
+                print("❌ FAILED - Could not parse file")
+                continue
+                
+            print(f"Original topic: '{topic_name}'")
+            print(f"Sample question: '{question[:50]}...'")
+            
+            try:
+                result = self.topic_manager._normalize_topic_with_ai(topic_name, question)
+                print(f"Expected: '{test_case['expected_topic']}'")
+                print(f"Got: '{result}'")
+                
+                if result == test_case['expected_topic']:
+                    print("✅ PASSED")
+                    passed += 1
+                else:
+                    print("❌ FAILED")
+                    
+            except Exception as e:
+                print(f"❌ ERROR: {e}")
+        
+        print(f"\n📊 File Parsing Results: {passed}/{total} tests passed ({passed/total*100:.1f}%)")
+        return passed == total
 
     def run_all_tests(self):
-        """Запускает все тесты."""
-        print("🚀 ЗАПУСК ВСЕХ ТЕСТОВ ОПРЕДЕЛЕНИЯ ТЕМ")
-        print("=" * 80)
+        """Run all test suites"""
+        print("🚀 Starting Comprehensive Topic Detection Tests")
+        print("=" * 60)
         
-        # Тест 1: AI на заранее подготовленных случаях
-        ai_test_passed = self.test_ai_topic_detection()
+        # Test AI topic detection
+        ai_success = self.test_ai_topic_detection()
         
-        # Тест 2: Файлы
-        file1_passed = self.test_file_parsing("test_files/file1.txt")
-        file2_passed = self.test_file_parsing("test_files/file2.txt")
+        # Test file parsing and classification
+        file_success = self.test_all_file_parsing()
         
-        # Общий результат
-        print(f"\n🏁 ОБЩИЕ РЕЗУЛЬТАТЫ:")
-        print("=" * 40)
-        print(f"AI тест: {'✅ ПРОЙДЕН' if ai_test_passed else '❌ НЕ ПРОЙДЕН'}")
-        print(f"Файл 1: {'✅ ПРОЙДЕН' if file1_passed else '❌ НЕ ПРОЙДЕН'}")
-        print(f"Файл 2: {'✅ ПРОЙДЕН' if file2_passed else '❌ НЕ ПРОЙДЕН'}")
+        # Overall results
+        print("\n" + "=" * 60)
+        print("📋 FINAL RESULTS:")
+        print(f"AI Topic Detection: {'✅ PASSED' if ai_success else '❌ FAILED'}")
+        print(f"File Parsing Tests: {'✅ PASSED' if file_success else '❌ FAILED'}")
         
-        all_passed = ai_test_passed and file1_passed and file2_passed
-        print(f"\nИТОГ: {'🎉 ВСЕ ТЕСТЫ ПРОЙДЕНЫ' if all_passed else '⚠️  ЕСТЬ ПРОБЛЕМЫ'}")
-        
-        return all_passed
+        if ai_success and file_success:
+            print("\n🎉 ALL TESTS PASSED! Topic detection is working correctly.")
+            return True
+        else:
+            print("\n⚠️  Some tests failed. Please review the results above.")
+            return False
 
 def main():
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Тест определения тем ИИ')
-    parser.add_argument('--file', type=str, help='Тестировать конкретный файл')
-    parser.add_argument('--ai-only', action='store_true', help='Только AI тест')
-    args = parser.parse_args()
-    
+    """Main function to run the tests"""
     tester = TopicDetectionTester()
+    success = tester.run_all_tests()
     
-    if args.file:
-        # Тестируем конкретный файл
-        tester.test_file_parsing(args.file)
-    elif args.ai_only:
-        # Только AI тест
-        tester.test_ai_topic_detection()
-    else:
-        # Все тесты
-        tester.run_all_tests()
+    # Exit with appropriate code
+    sys.exit(0 if success else 1)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main() 
