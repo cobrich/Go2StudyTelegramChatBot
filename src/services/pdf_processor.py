@@ -25,8 +25,8 @@ class PDFProcessor:
         # Паттерн для поиска заголовков тем
         self.topic_header_pattern = r'Тема:\s*([^(]+)\((\d+)\)'
         
-        # Паттерн для поиска вопросов (поддерживает как точку, так и скобку)
-        self.question_pattern = r'^(\d+)[.)\s]\s*(.+)'
+        # Паттерн для поиска вопросов (более строгий - только в начале строки с точкой или скобкой)
+        self.question_pattern = r'^(\d+)[.)]\s+(.+)'
         
         # Паттерны для поиска вариантов ответов
         self.option_patterns = [
@@ -99,7 +99,7 @@ class PDFProcessor:
                             'options': current_options,
                             'correct_answer': correct_answer
                         })
-                        print(f"[SAVE] Сохранен вопрос: {clean_question[:50]}...")
+                        print(f"[SAVE] Сохранен вопрос: {clean_question[:100]}...")
                 
                 # Начинаем новый вопрос
                 question_number = question_match.group(1)
@@ -107,7 +107,7 @@ class PDFProcessor:
                 current_options = []
                 correct_answer = None
                 
-                print(f"[LOG] Вопрос {question_number}: {current_question[:50]}...")
+                print(f"[LOG] Вопрос {question_number}: {current_question[:100]}...")
                 i += 1
                 continue
             
@@ -146,8 +146,22 @@ class PDFProcessor:
                 # Возможно, это продолжение вопроса
                 clean_line = ''.join(char for char in line if char.isprintable() or char.isspace())
                 clean_line = clean_line.strip()
-                if clean_line:
-                    current_question += " " + clean_line
+                
+                # Проверяем, что строка не пустая и не является служебной информацией
+                if clean_line and len(clean_line) > 2:
+                    # Проверяем, что это не номер страницы, не вариант ответа, и не начало нового вопроса
+                    is_page_number = re.match(r'^\d+$', clean_line)
+                    is_option = re.match(r'^[A-ZА-Г]\).*', clean_line)
+                    is_new_question = re.match(r'^\d+[.)]\s+', clean_line)
+                    
+                    if not is_page_number and not is_option and not is_new_question:
+                        # Добавляем пробел только если предыдущая строка не заканчивается пробелом
+                        if not current_question.endswith(' '):
+                            current_question += " "
+                        current_question += clean_line
+                        print(f"[APPEND] Добавлено к вопросу: {clean_line[:50]}...")
+                    else:
+                        print(f"[SKIP] Пропущена строка (служебная): {clean_line[:50]}...")
             
             # Отладочная информация для первых 20 строк
             if i < 20:
@@ -174,7 +188,7 @@ class PDFProcessor:
                     'options': current_options,
                     'correct_answer': correct_answer
                 })
-                print(f"[SAVE] Сохранен последний вопрос: {clean_question[:50]}...")
+                print(f"[SAVE] Сохранен последний вопрос: {clean_question[:100]}...")
         
         # Теперь обновляем темы в вопросах, используя первые вопросы для анализа
         print(f"[DEBUG] Анализируем темы с помощью AI...")
@@ -257,10 +271,10 @@ class PDFProcessor:
                 if self.validate_question(question_data):
                     questions.append(question_data)
                     valid_count += 1
-                    print(f"[VALID][{i+1}] Тема: {normalized_topic} | {q['question'][:50]}...")
+                    print(f"[VALID][{i+1}] Тема: {normalized_topic} | {q['question'][:100]}...")
                 else:
                     invalid_count += 1
-                    print(f"[SKIP][{i+1}] Невалидный вопрос: {q['question'][:50]}...")
+                    print(f"[SKIP][{i+1}] Невалидный вопрос: {q['question'][:100]}...")
             
             print(f"[DEBUG] Валидных вопросов: {valid_count}, Невалидных: {invalid_count}")
             logging.info(f"Извлечено {len(questions)} валидных вопросов из {pdf_path}")
@@ -314,13 +328,13 @@ class PDFProcessor:
         
         # Проверяем наличие правильного ответа
         if not question.get('correct_answer'):
-            logging.warning(f"Вопрос без правильного ответа: {question_text[:50]}...")
+            logging.warning(f"Вопрос без правильного ответа: {question_text[:100]}...")
             return False
         
         # Проверяем, что правильный ответ соответствует одному из вариантов
         correct_index = ord(question['correct_answer']) - ord('A')
         if correct_index >= len(question['options']):
-            logging.warning(f"Неверный индекс правильного ответа: {question['correct_answer']} для вопроса: {question_text[:50]}...")
+            logging.warning(f"Неверный индекс правильного ответа: {question['correct_answer']} для вопроса: {question_text[:100]}...")
             return False
         
         # Проверяем, что варианты ответов не пустые
@@ -330,7 +344,7 @@ class PDFProcessor:
             option_text = option_text.strip()
             
             if len(option_text) < 1:
-                logging.warning(f"Пустой вариант ответа {i+1} для вопроса: {question_text[:50]}...")
+                logging.warning(f"Пустой вариант ответа {i+1} для вопроса: {question_text[:100]}...")
                 return False
         
         return True
@@ -379,7 +393,7 @@ class PDFProcessor:
                 current_options = []
                 correct_answer = None
                 
-                print(f"[LOG] Вопрос {question_number}: {current_question[:50]}...")
+                print(f"[LOG] Вопрос {question_number}: {current_question[:100]}...")
                 i += 1
                 continue
             
@@ -418,8 +432,22 @@ class PDFProcessor:
                 # Возможно, это продолжение вопроса
                 clean_line = ''.join(char for char in line if char.isprintable() or char.isspace())
                 clean_line = clean_line.strip()
-                if clean_line:
-                    current_question += " " + clean_line
+                
+                # Проверяем, что строка не пустая и не является служебной информацией
+                if clean_line and len(clean_line) > 2:
+                    # Проверяем, что это не номер страницы, не вариант ответа, и не начало нового вопроса
+                    is_page_number = re.match(r'^\d+$', clean_line)
+                    is_option = re.match(r'^[A-ZА-Г]\).*', clean_line)
+                    is_new_question = re.match(r'^\d+[.)]\s+', clean_line)
+                    
+                    if not is_page_number and not is_option and not is_new_question:
+                        # Добавляем пробел только если предыдущая строка не заканчивается пробелом
+                        if not current_question.endswith(' '):
+                            current_question += " "
+                        current_question += clean_line
+                        print(f"[APPEND] Добавлено к вопросу: {clean_line[:50]}...")
+                    else:
+                        print(f"[SKIP] Пропущена строка (служебная): {clean_line[:50]}...")
             
             i += 1
         
@@ -439,10 +467,13 @@ class PDFProcessor:
         return questions
 
 def add_questions_to_db(questions: List[Dict], db: Database):
-    """Добавление вопросов в базу данных."""
+    """Добавление вопросов в базу данных с генерацией подробных объяснений."""
     total = len(questions)
     print(f"[LOG] Начинаю добавление {total} вопросов в базу...")
     saved_count = 0
+    
+    # Инициализируем AI сервис для генерации объяснений
+    ai_service = AIService()
     
     # Статистика по темам
     topic_stats = {}
@@ -458,7 +489,7 @@ def add_questions_to_db(questions: List[Dict], db: Database):
             # Проверяем уникальность по тексту вопроса
             exists = db.get_explanation_by_question_text(question_text)
             if exists:
-                print(f"[SKIP][{idx}/{total}] Вопрос уже существует: {question_text[:50]}...")
+                print(f"[SKIP][{idx}/{total}] Вопрос уже существует: {question_text[:100]}...")
                 continue
             
             # Подготавливаем данные для базы
@@ -471,11 +502,24 @@ def add_questions_to_db(questions: List[Dict], db: Database):
                 if i != correct_answer_index:
                     incorrect_options.append(option)
             
+            # Генерируем подробное объяснение с помощью AI
+            print(f"[AI][{idx}/{total}] Генерирую объяснение для вопроса...")
+            try:
+                detailed_explanation = ai_service.generate_detailed_explanation(
+                    question_text, 
+                    correct_answer_text, 
+                    topic
+                )
+                print(f"[AI][{idx}/{total}] Объяснение сгенерировано: {detailed_explanation[:100]}...")
+            except Exception as e:
+                print(f"[AI][{idx}/{total}] Ошибка генерации объяснения: {e}")
+                detailed_explanation = f"Правильный ответ: {q['correct_answer']}) {correct_answer_text}"
+            
             db_question = {
                 'topic': topic,
                 'question': question_text,
                 'answer': correct_answer_text,
-                'explanation': f"Правильный ответ: {q['correct_answer']}) {correct_answer_text}",
+                'explanation': detailed_explanation,
                 'incorrect_options': '\n'.join(incorrect_options),
                 'question_type': 'standard',
                 'source': 'pdf'
@@ -485,7 +529,7 @@ def add_questions_to_db(questions: List[Dict], db: Database):
                 db.add_question(db_question)
                 logf.write(f"{idx} | {topic} | {question_text}\n")
                 saved_count += 1
-                print(f"[SAVED][{idx}/{total}] Тема: {topic} | {question_text[:50]}...")
+                print(f"[SAVED][{idx}/{total}] Тема: {topic} | {question_text[:100]}...")
             except Exception as e:
                 print(f"[ERROR][{idx}/{total}] Ошибка сохранения: {e}")
     

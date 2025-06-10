@@ -6,7 +6,7 @@ load_dotenv()
 
 # Bot Configuration
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY1')
 GEMINI_MODEL = os.getenv('GEMINI_MODEL')
 
 # Test Configuration
