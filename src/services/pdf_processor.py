@@ -25,8 +25,8 @@ class PDFProcessor:
         # Паттерн для поиска заголовков тем
         self.topic_header_pattern = r'Тема:\s*([^(]+)\((\d+)\)'
         
-        # Паттерн для поиска вопросов (более строгий - только в начале строки с точкой или скобкой)
-        self.question_pattern = r'^(\d+)[.)]\s+(.+)'
+        # Паттерн для поиска вопросов (более гибкий - учитывает невидимые символы)
+        self.question_pattern = r'^(\d+)[.)\s]*\s*(.+)'
         
         # Паттерны для поиска вариантов ответов
         self.option_patterns = [
@@ -71,9 +71,33 @@ class PDFProcessor:
             # Проверяем на заголовок темы
             topic_match = re.match(self.topic_header_pattern, line)
             if topic_match:
+                # Сохраняем предыдущий вопрос, если он был
+                if current_question and current_options and correct_answer:
+                    # Очищаем текст вопроса
+                    clean_question = ''.join(char for char in current_question if char.isprintable() or char.isspace())
+                    clean_question = clean_question.strip()
+                    
+                    if len(clean_question) >= 10:  # Минимальная длина вопроса
+                        topic_name = current_topic or 'Математика'
+                        
+                        questions.append({
+                            'topic': topic_name,
+                            'question': clean_question,
+                            'options': current_options,
+                            'correct_answer': correct_answer
+                        })
+                        print(f"[SAVE] Сохранен вопрос: {clean_question[:100]}...")
+                
+                # Устанавливаем новую тему
                 current_topic = topic_match.group(1).strip()
                 expected_questions = int(topic_match.group(2))
                 print(f"[LOG] Найдена тема: '{current_topic}' ({expected_questions} вопросов)")
+                
+                # Сбрасываем текущий вопрос
+                current_question = None
+                current_options = []
+                correct_answer = None
+                
                 i += 1
                 continue
             
@@ -89,10 +113,6 @@ class PDFProcessor:
                     if len(clean_question) >= 10:  # Минимальная длина вопроса
                         topic_name = current_topic or 'Математика'
                         
-                        # Сохраняем первый вопрос темы для анализа
-                        if topic_name not in topic_first_questions:
-                            topic_first_questions[topic_name] = clean_question
-                        
                         questions.append({
                             'topic': topic_name,
                             'question': clean_question,
@@ -106,6 +126,31 @@ class PDFProcessor:
                 current_question = question_match.group(2).strip()
                 current_options = []
                 correct_answer = None
+                
+                # Сохраняем первый вопрос темы для анализа (сразу при начале вопроса)
+                topic_name = current_topic or 'Математика'
+                if topic_name not in topic_first_questions and current_question:
+                    # Создаем предварительную версию вопроса для анализа
+                    temp_question = current_question
+                    # Пытаемся найти продолжение вопроса в следующих строках
+                    j = i + 1
+                    while j < len(lines) and j < i + 5:  # Смотрим максимум 5 строк вперед
+                        next_line = lines[j].strip()
+                        next_line = ''.join(char for char in next_line if char.isprintable() or char.isspace())
+                        next_line = next_line.strip()
+                        
+                        # Если это не вариант ответа и не новый вопрос, добавляем к тексту
+                        if (next_line and 
+                            not re.match(r'^[A-ZА-Г]\).*', next_line) and 
+                            not re.match(r'^\d+[.)\s]*\s*', next_line) and
+                            not re.match(r'^\d+$', next_line)):
+                            temp_question += " " + next_line
+                        else:
+                            break
+                        j += 1
+                    
+                    topic_first_questions[topic_name] = temp_question
+                    print(f"[FIRST_Q] Сохранен первый вопрос темы '{topic_name}': {temp_question[:100]}...")
                 
                 print(f"[LOG] Вопрос {question_number}: {current_question[:100]}...")
                 i += 1
@@ -152,7 +197,7 @@ class PDFProcessor:
                     # Проверяем, что это не номер страницы, не вариант ответа, и не начало нового вопроса
                     is_page_number = re.match(r'^\d+$', clean_line)
                     is_option = re.match(r'^[A-ZА-Г]\).*', clean_line)
-                    is_new_question = re.match(r'^\d+[.)]\s+', clean_line)
+                    is_new_question = re.match(r'^\d+[.)\s]*\s*', clean_line)
                     
                     if not is_page_number and not is_option and not is_new_question:
                         # Добавляем пробел только если предыдущая строка не заканчивается пробелом
@@ -177,10 +222,6 @@ class PDFProcessor:
             
             if len(clean_question) >= 10:  # Минимальная длина вопроса
                 topic_name = current_topic or 'Математика'
-                
-                # Сохраняем первый вопрос темы для анализа
-                if topic_name not in topic_first_questions:
-                    topic_first_questions[topic_name] = clean_question
                 
                 questions.append({
                     'topic': topic_name,
@@ -371,8 +412,8 @@ class PDFProcessor:
                 i += 1
                 continue
             
-            # Проверяем на начало вопроса (любое число с закрывающей скобкой)
-            question_match = re.match(r'^(\d+)[.)\s]\s*(.+)', line)
+            # Проверяем на начало вопроса (любое число с закрывающей скобкой или точкой)
+            question_match = re.match(r'^(\d+)[.)\s]*\s*(.+)', line)
             if question_match:
                 # Сохраняем предыдущий вопрос, если он был
                 if current_question and current_options and correct_answer:
@@ -438,7 +479,7 @@ class PDFProcessor:
                     # Проверяем, что это не номер страницы, не вариант ответа, и не начало нового вопроса
                     is_page_number = re.match(r'^\d+$', clean_line)
                     is_option = re.match(r'^[A-ZА-Г]\).*', clean_line)
-                    is_new_question = re.match(r'^\d+[.)]\s+', clean_line)
+                    is_new_question = re.match(r'^\d+[.)\s]*\s*', clean_line)
                     
                     if not is_page_number and not is_option and not is_new_question:
                         # Добавляем пробел только если предыдущая строка не заканчивается пробелом
