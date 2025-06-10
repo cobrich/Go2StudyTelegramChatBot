@@ -178,18 +178,24 @@ class PDFProcessor:
         
         # Теперь обновляем темы в вопросах, используя первые вопросы для анализа
         print(f"[DEBUG] Анализируем темы с помощью AI...")
-        for question in questions:
-            original_topic = question['topic']
-            sample_question = topic_first_questions.get(original_topic, question['question'])
-            
-            # Используем TopicManager для нормализации темы с примером вопроса
+        
+        # Сначала анализируем первые вопросы каждой темы для определения правильных тем
+        topic_mappings = {}  # original_topic -> normalized_topic
+        
+        for original_topic, first_question in topic_first_questions.items():
+            # Используем TopicManager для нормализации темы с первым вопросом темы
             normalized_topic = self.topic_manager.ensure_topic_exists(
                 original_topic, 
-                sample_question=sample_question
+                sample_question=first_question
             )
-            
+            topic_mappings[original_topic] = normalized_topic
+            print(f"[TOPIC] '{original_topic}' → '{normalized_topic}' (на основе первого вопроса)")
+        
+        # Теперь применяем найденные темы ко всем вопросам
+        for question in questions:
+            original_topic = question['topic']
+            normalized_topic = topic_mappings.get(original_topic, original_topic)
             question['topic'] = normalized_topic
-            print(f"[TOPIC] '{original_topic}' → '{normalized_topic}'")
         
         print(f"[DEBUG] Итого извлечено вопросов: {len(questions)}")
         return questions
