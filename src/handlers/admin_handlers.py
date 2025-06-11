@@ -1475,6 +1475,10 @@ class AdminHandlers(BaseHandler):
             await self._handle_add_topic(update, context, text)
         elif action == 'add_admin':
             await self._handle_add_admin(update, context, text)
+        elif action == 'add_admin_username':
+            await self._handle_add_admin_username(update, context, text)
+        elif action == 'add_admin_fullname':
+            await self._handle_add_admin_fullname(update, context, text)
         elif action == 'student_fullname':
             await self._handle_student_fullname(update, context, text)
         elif action == 'student_by_id_fullname':
@@ -1658,7 +1662,7 @@ class AdminHandlers(BaseHandler):
         context.user_data.pop('new_topic_name', None)
     
     async def _handle_add_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id_text: str) -> None:
-        """Обработка добавления админа."""
+        """Обработка добавления админа - этап 1 (user_id)."""
         try:
             new_admin_id = int(user_id_text)
         except ValueError:
@@ -1673,14 +1677,67 @@ class AdminHandlers(BaseHandler):
             context.user_data.pop('admin_action', None)
             return
         
-        success = self.db.add_admin(new_admin_id, "unknown", "Новый админ", False, admin_id)
+        # Проверяем, что пользователь еще не является админом
+        if self.db.is_admin(new_admin_id):
+            await update.message.reply_text(f"❌ Пользователь {new_admin_id} уже является администратором.")
+            context.user_data.pop('admin_action', None)
+            return
+        
+        # Сохраняем user_id и переходим к следующему этапу
+        context.user_data['new_admin_id'] = new_admin_id
+        context.user_data['admin_action'] = 'add_admin_username'
+        
+        await update.message.reply_text(f"👤 <b>Добавление администратора</b>\n\nUser ID: {new_admin_id}\n\nВведите username нового администратора (без @):", parse_mode='HTML')
+
+    async def _handle_add_admin_username(self, update: Update, context: ContextTypes.DEFAULT_TYPE, username: str) -> None:
+        """Обработка добавления админа - этап 2 (username)."""
+        # Убираем @ если пользователь его добавил
+        username = username.lstrip('@').strip()
+        
+        if not username:
+            await update.message.reply_text("❌ Username не может быть пустым. Введите username:")
+            return
+        
+        # Сохраняем username и переходим к следующему этапу
+        context.user_data['new_admin_username'] = username
+        context.user_data['admin_action'] = 'add_admin_fullname'
+        
+        new_admin_id = context.user_data.get('new_admin_id')
+        await update.message.reply_text(f"👤 <b>Добавление администратора</b>\n\nUser ID: {new_admin_id}\nUsername: @{username}\n\nВведите полное имя администратора:", parse_mode='HTML')
+
+    async def _handle_add_admin_fullname(self, update: Update, context: ContextTypes.DEFAULT_TYPE, fullname: str) -> None:
+        """Обработка добавления админа - этап 3 (полное имя) - финальный."""
+        fullname = fullname.strip()
+        
+        if not fullname:
+            await update.message.reply_text("❌ Полное имя не может быть пустым. Введите полное имя:")
+            return
+        
+        # Получаем все данные
+        new_admin_id = context.user_data.get('new_admin_id')
+        username = context.user_data.get('new_admin_username')
+        admin_id = update.effective_user.id
+        
+        # Добавляем администратора
+        success = self.db.add_admin(new_admin_id, username, fullname, False, admin_id)
         
         if success:
-            await update.message.reply_text(f"✅ Пользователь {new_admin_id} успешно добавлен в качестве админа!")
+            text = f"✅ <b>Администратор успешно добавлен!</b>\n\n"
+            text += f"👨‍💼 <b>Новый администратор:</b>\n"
+            text += f"• ID: {new_admin_id}\n"
+            text += f"• Username: @{username}\n"
+            text += f"• Имя: {fullname}\n"
+            text += f"• Роль: Обычный администратор\n\n"
+            text += f"Пользователь получил права управления учениками, темами, вопросами и статистикой."
+            
+            await update.message.reply_text(text, parse_mode='HTML')
         else:
             await update.message.reply_text(f"❌ Ошибка при добавлении админа. Возможно, пользователь {new_admin_id} уже является админом.")
         
+        # Очищаем все данные
         context.user_data.pop('admin_action', None)
+        context.user_data.pop('new_admin_id', None)
+        context.user_data.pop('new_admin_username', None)
     
     async def _handle_search_questions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_text: str) -> None:
         """Обработка поиска вопросов."""
