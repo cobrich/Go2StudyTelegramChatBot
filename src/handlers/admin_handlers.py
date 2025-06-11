@@ -1303,7 +1303,7 @@ class AdminHandlers(BaseHandler):
         text += f"• Администраторы: {total_admins}\n\n"
         
         text += f"❓ <b>Вопросы:</b>\n"
-            text += f"• Всего вопросов: {total_questions}\n"
+        text += f"• Всего вопросов: {total_questions}\n"
         text += f"• Из базы данных: {pdf_questions}\n"
         text += f"• Сгенерированы ИИ: {ai_questions}\n\n"
         
@@ -1383,7 +1383,7 @@ class AdminHandlers(BaseHandler):
         keyboard = []
         for topic in topics:
             question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
-                status = "✅" if topic['is_active'] else "❌"
+            status = "✅" if topic['is_active'] else "❌"
             keyboard.append([InlineKeyboardButton(
                 f"{status} {topic['name']} ({question_count} вопросов)",
                 callback_data=f"merge_source_{topic['id']}"
@@ -1427,7 +1427,7 @@ class AdminHandlers(BaseHandler):
                 continue  # Пропускаем исходную тему
             
             question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
-                    status = "✅" if topic['is_active'] else "❌"
+            status = "✅" if topic['is_active'] else "❌"
             keyboard.append([InlineKeyboardButton(
                 f"{status} {topic['name']} ({question_count} вопросов)",
                 callback_data=f"merge_target_{topic['id']}"
@@ -2596,8 +2596,8 @@ class AdminHandlers(BaseHandler):
         await query.answer("🔄 Обновляем статистику...")
         
         try:
-            # Принудительно обновляем статистику
-            self.topic_manager.refresh_statistics()
+            # Принудительно обновляем статистику через сброс кэша
+            self.topic_manager._invalidate_cache()
             
             # Возвращаемся к списку тем с обновленной статистикой
             # Создаем новый query с callback_data для list_topics
