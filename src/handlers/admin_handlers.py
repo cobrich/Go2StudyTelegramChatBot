@@ -10,6 +10,8 @@ import asyncio
 import sqlite3
 from handlers.base_handler import BaseHandler
 from services.topic_manager import TopicManager
+from typing import Dict, List
+from datetime import datetime
 
 class AdminHandlers(BaseHandler):
     def __init__(self, db: Database, question_service: QuestionService):
@@ -204,6 +206,13 @@ class AdminHandlers(BaseHandler):
         # Получаем базовые темы из базы данных вместо constants.py
         base_structure = self.db.get_base_topic_structure()
         
+        # Если база данных пуста, инициализируем из constants.py
+        if not base_structure:
+            from config.constants import TOPIC_HIERARCHY
+            for main_topic, subtopics in TOPIC_HIERARCHY.items():
+                self.db.add_base_topic_section(main_topic, subtopics)
+            base_structure = self.db.get_base_topic_structure()
+        
         missing_topics = []
         existing_base_topics = []
         
@@ -266,13 +275,13 @@ class AdminHandlers(BaseHandler):
         
         admin_id = update.effective_user.id
         
-        # Находим полное название и описание темы
-        from config.constants import TOPIC_HIERARCHY
+        # Находим полное название и описание темы в базовой структуре БД
+        base_structure = self.db.get_base_topic_structure()
         
         full_topic_name = None
         main_topic_name = None
         
-        for main_topic, subtopics in TOPIC_HIERARCHY.items():
+        for main_topic, subtopics in base_structure.items():
             for subtopic in subtopics:
                 if subtopic.startswith(topic_name) or topic_name in subtopic:
                     full_topic_name = subtopic

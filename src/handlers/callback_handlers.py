@@ -1,16 +1,11 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 import logging
-from handlers.base_handler import BaseHandler
-from utils.keyboards import (
-    build_topic_selection_keyboard,
-    build_subtopic_selection_keyboard,
-    build_question_keyboard,
-    build_results_keyboard,
-    build_continue_keyboard,
-    get_main_menu_markup
-)
-from config.constants import DEFAULT_QUESTIONS_PER_TEST, get_active_topics, get_main_topics, get_subtopics
+from .base_handler import BaseHandler
+from utils.keyboards import get_main_menu_markup, build_topic_selection_keyboard, build_subtopic_selection_keyboard, build_question_keyboard, build_results_keyboard, build_continue_keyboard
+from config.constants import DEFAULT_QUESTIONS_PER_TEST
+from services.ai_service import AIService
+from services.topic_manager import TopicManager
 
 class CallbackHandlers(BaseHandler):
     async def handle_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -60,7 +55,8 @@ class CallbackHandlers(BaseHandler):
         logging.info(f"[handle_topic_selection] after retake check: is_retake={is_retake}, topic_index={topic_index}")
         try:
             topic_index = int(topic_index)
-            topics = get_active_topics()
+            # Используем БД вместо констант
+            topics = self.db.get_topic_names(active_only=True)
             topic = topics[topic_index]
             logging.info(f"[handle_topic_selection] topic_index={topic_index}, topic={topic}")
         except (ValueError, IndexError):
@@ -647,7 +643,9 @@ class CallbackHandlers(BaseHandler):
         # Извлекаем индекс основной темы
         try:
             main_topic_index = int(query.data.replace('main_topic_', ''))
-            main_topics = get_main_topics()
+            # Получаем основные разделы из БД
+            base_structure = self.db.get_base_topic_structure()
+            main_topics = list(base_structure.keys())
             main_topic = main_topics[main_topic_index]
             logging.info(f"[handle_main_topic_selection] main_topic_index={main_topic_index}, main_topic={main_topic}")
         except (ValueError, IndexError):

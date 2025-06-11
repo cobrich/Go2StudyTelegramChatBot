@@ -1,9 +1,16 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
-from config.constants import MAIN_MENU_KEYBOARD, get_active_topics, get_main_topics, get_subtopics
+from config.constants import MAIN_MENU_KEYBOARD
+from services.database import Database
+
+# Инициализируем БД для получения тем
+_db = Database()
 
 def build_topic_selection_keyboard() -> InlineKeyboardMarkup:
     """Create InlineKeyboardMarkup for main topic categories selection."""
-    main_topics = get_main_topics()
+    # Получаем основные разделы из БД
+    base_structure = _db.get_base_topic_structure()
+    main_topics = list(base_structure.keys())
+    
     keyboard = [
         [InlineKeyboardButton(main_topic, callback_data=f"main_topic_{i}")]
         for i, main_topic in enumerate(main_topics)
@@ -14,18 +21,23 @@ def build_topic_selection_keyboard() -> InlineKeyboardMarkup:
 
 def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int) -> InlineKeyboardMarkup:
     """Create InlineKeyboardMarkup for subtopic selection within a main topic."""
-    subtopics = get_subtopics(main_topic)
-    all_topics = get_active_topics()  # Плоский список всех тем
+    # Получаем подтемы из БД
+    base_structure = _db.get_base_topic_structure()
+    subtopics = base_structure.get(main_topic, [])
+    
+    # Получаем активные темы из БД  
+    all_active_topics = _db.get_topic_names(active_only=True)
     
     keyboard = []
     for subtopic in subtopics:
-        # Находим индекс подтемы в общем списке тем
-        try:
-            subtopic_index = all_topics.index(subtopic)
-            keyboard.append([InlineKeyboardButton(subtopic, callback_data=f"topic_{subtopic_index}")])
-        except ValueError:
-            # Если подтема не найдена в активных темах, пропускаем
-            continue
+        # Проверяем, активна ли подтема в БД
+        if subtopic in all_active_topics:
+            # Находим индекс подтемы в общем списке активных тем
+            try:
+                subtopic_index = all_active_topics.index(subtopic)
+                keyboard.append([InlineKeyboardButton(subtopic, callback_data=f"topic_{subtopic_index}")])
+            except ValueError:
+                continue
     
     # Add navigation buttons
     keyboard.append([InlineKeyboardButton("🔙 Назад к разделам", callback_data="back_to_main_topics")])
@@ -73,7 +85,7 @@ def build_results_keyboard(errors_list: list, current_topic: str) -> InlineKeybo
                 callback_data=f"show_expl_{err['q_num']}"
             )])
     else:
-        topics = get_active_topics()
+        topics = _db.get_topic_names(active_only=True)
         if current_topic in topics:
             topic_index = topics.index(current_topic)
             buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", 
