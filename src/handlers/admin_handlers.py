@@ -37,6 +37,25 @@ class AdminHandlers(BaseHandler):
                 await update.message.delete()
             except Exception:
                 pass  # Игнорируем ошибки удаления (например, если сообщение уже удалено)
+            
+            # Пытаемся удалить предыдущие сообщения с inline-клавиатурами
+            chat_id = update.message.chat_id
+            message_id = update.message.message_id
+            
+            # Пытаемся удалить несколько предыдущих сообщений (обычно там выбор тем)
+            for i in range(1, 6):  # Проверяем 5 предыдущих сообщений
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=message_id - i)
+                except Exception:
+                    # Если не удалось удалить, пытаемся убрать клавиатуру
+                    try:
+                        await context.bot.edit_message_reply_markup(
+                            chat_id=chat_id, 
+                            message_id=message_id - i, 
+                            reply_markup=None
+                        )
+                    except Exception:
+                        pass  # Игнорируем ошибки
         
         is_super = self.db.is_super_admin(user_id)
         
@@ -62,7 +81,7 @@ class AdminHandlers(BaseHandler):
         text = f"🔧 <b>Админ-панель</b>\n\nВаша роль: {role}\n\nВыберите действие:"
         
         if update.message:
-            # Отправляем новое сообщение (старое уже удалено)
+            # Отправляем новое сообщение (старые уже удалены/очищены)
             await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
             query = update.callback_query
