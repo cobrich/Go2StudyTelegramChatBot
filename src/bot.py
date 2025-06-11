@@ -127,6 +127,22 @@ def main() -> None:
         pattern="^add_topic$"
     ))
     application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_custom_topic_start,
+        pattern="^add_custom_topic$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_base_topics_start,
+        pattern="^add_base_topics$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_base_topic_execute,
+        pattern="^add_base_topic_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_all_missing_topics_execute,
+        pattern="^add_all_missing_topics$"
+    ))
+    application.add_handler(CallbackQueryHandler(
         admin_handlers.list_topics,
         pattern="^list_topics$"
     ))

@@ -2,7 +2,7 @@ import sqlite3
 import logging
 import os
 from typing import List, Dict, Any, Optional, Tuple
-from config.constants import TOPICS
+from config.constants import TOPICS, TOPIC_HIERARCHY
 
 class Database:
     def __init__(self, db_path: str = None):
@@ -154,11 +154,15 @@ class Database:
             # Инициализация тем из constants.py если таблица пустая
             cursor.execute('SELECT COUNT(*) FROM topics')
             if cursor.fetchone()[0] == 0:
-                for topic in TOPICS:
-                    cursor.execute('''
-                        INSERT INTO topics (name, description, is_active)
-                        VALUES (?, ?, 1)
-                    ''', (topic, f"Тема: {topic}"))
+                # Добавляем все подтемы из иерархической структуры
+                for main_topic, subtopics in TOPIC_HIERARCHY.items():
+                    for subtopic in subtopics:
+                        cursor.execute('''
+                            INSERT INTO topics (name, description, is_active)
+                            VALUES (?, ?, 1)
+                        ''', (subtopic, f"Подтема раздела '{main_topic}': {subtopic}"))
+                
+                print(f"[LOG] Инициализированы темы из иерархической структуры: {len(TOPICS)} тем")
             
             conn.commit()
 

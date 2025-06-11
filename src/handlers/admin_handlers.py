@@ -167,13 +167,179 @@ class AdminHandlers(BaseHandler):
         query = update.callback_query
         await query.answer()
         
+        # Очищаем состояние при возврате в меню
+        context.user_data.pop('admin_action', None)
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ Добавить новую тему", callback_data="add_custom_topic")],
+            [InlineKeyboardButton("📋 Добавить из базовых тем", callback_data="add_base_topics")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text("➕ <b>Добавление темы</b>\n\nВыберите способ добавления:", 
+                                     reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def add_custom_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало добавления пользовательской темы."""
+        query = update.callback_query
+        await query.answer()
+        
         context.user_data['admin_action'] = 'add_topic'
         
-        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")]]
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="add_topic")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text("➕ <b>Добавление темы</b>\n\nВведите название новой темы:", 
+        await query.edit_message_text("➕ <b>Добавление новой темы</b>\n\nВведите название новой темы:", 
                                      reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def add_base_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Показать базовые темы для добавления."""
+        query = update.callback_query
+        await query.answer()
+        
+        # Получаем существующие темы из базы
+        existing_topics = [topic['name'] for topic in self.db.get_all_topics(active_only=False)]
+        
+        # Получаем базовые темы из constants.py
+        from config.constants import TOPIC_HIERARCHY
+        
+        missing_topics = []
+        existing_base_topics = []
+        
+        for main_topic, subtopics in TOPIC_HIERARCHY.items():
+            for subtopic in subtopics:
+                if subtopic in existing_topics:
+                    existing_base_topics.append((main_topic, subtopic))
+                else:
+                    missing_topics.append((main_topic, subtopic))
+        
+        if not missing_topics:
+            text = "📋 <b>Базовые темы</b>\n\n"
+            text += "✅ Все базовые темы уже добавлены в систему!\n\n"
+            text += f"Всего базовых тем: {len(existing_base_topics)}\n"
+            text += "Используйте 'Добавить новую тему' для создания собственных тем."
+            
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="add_topic")]]
+        else:
+            text = "📋 <b>Базовые темы</b>\n\n"
+            text += f"✅ Добавлено: {len(existing_base_topics)}\n"
+            text += f"⏳ Не добавлено: {len(missing_topics)}\n\n"
+            text += "Выберите недостающие темы для добавления:\n\n"
+            
+            keyboard = []
+            
+            # Группируем по основным разделам
+            current_main = None
+            for main_topic, subtopic in missing_topics[:15]:  # Ограничиваем до 15 для удобства
+                if main_topic != current_main:
+                    text += f"\n<b>{main_topic}</b>\n"
+                    current_main = main_topic
+                
+                # Убираем эмодзи из основной темы для краткости
+                clean_main = main_topic.split(' ', 1)[-1] if ' ' in main_topic else main_topic
+                keyboard.append([InlineKeyboardButton(
+                    f"➕ {subtopic}",
+                    callback_data=f"add_base_topic_{subtopic[:30]}"  # Ограничиваем длину
+                )])
+            
+            if len(missing_topics) > 15:
+                text += f"\n... и еще {len(missing_topics) - 15} тем"
+            
+            keyboard.append([InlineKeyboardButton("✅ Добавить ВСЕ недостающие", callback_data="add_all_missing_topics")])
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="add_topic")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def add_base_topic_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Добавить выбранную базовую тему."""
+        query = update.callback_query
+        topic_name = query.data.replace('add_base_topic_', '')
+        await query.answer()
+        
+        admin_id = update.effective_user.id
+        
+        # Находим полное название и описание темы
+        from config.constants import TOPIC_HIERARCHY
+        
+        full_topic_name = None
+        main_topic_name = None
+        
+        for main_topic, subtopics in TOPIC_HIERARCHY.items():
+            for subtopic in subtopics:
+                if subtopic.startswith(topic_name) or topic_name in subtopic:
+                    full_topic_name = subtopic
+                    main_topic_name = main_topic
+                    break
+            if full_topic_name:
+                break
+        
+        if not full_topic_name:
+            await query.edit_message_text("❌ Тема не найдена в базовых темах.")
+            return
+        
+        # Добавляем тему
+        description = f"Подтема раздела '{main_topic_name}': {full_topic_name}"
+        success = self.db.add_topic(full_topic_name, description, admin_id)
+        
+        if success:
+            text = f"✅ <b>Базовая тема добавлена!</b>\n\n"
+            text += f"<b>Тема:</b> {full_topic_name}\n"
+            text += f"<b>Раздел:</b> {main_topic_name}\n"
+            text += f"<b>Описание:</b> {description}"
+        else:
+            text = f"❌ <b>Ошибка</b>\n\n"
+            text += f"Тема '{full_topic_name}' уже существует или произошла ошибка."
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ Добавить еще", callback_data="add_base_topics")],
+            [InlineKeyboardButton("📋 К управлению темами", callback_data="admin_topics")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def add_all_missing_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Добавить все недостающие базовые темы."""
+        query = update.callback_query
+        await query.answer()
+        
+        admin_id = update.effective_user.id
+        
+        # Получаем существующие темы
+        existing_topics = [topic['name'] for topic in self.db.get_all_topics(active_only=False)]
+        
+        # Получаем базовые темы
+        from config.constants import TOPIC_HIERARCHY
+        
+        added_count = 0
+        failed_count = 0
+        
+        for main_topic, subtopics in TOPIC_HIERARCHY.items():
+            for subtopic in subtopics:
+                if subtopic not in existing_topics:
+                    description = f"Подтема раздела '{main_topic}': {subtopic}"
+                    success = self.db.add_topic(subtopic, description, admin_id)
+                    if success:
+                        added_count += 1
+                    else:
+                        failed_count += 1
+        
+        if added_count > 0:
+            text = f"✅ <b>Базовые темы добавлены!</b>\n\n"
+            text += f"Добавлено: {added_count} тем\n"
+            if failed_count > 0:
+                text += f"Ошибок: {failed_count} тем\n"
+            text += "\nВсе базовые темы из структуры НИШ теперь доступны в системе!"
+        else:
+            text = f"ℹ️ <b>Нет новых тем для добавления</b>\n\n"
+            text += "Все базовые темы уже присутствуют в системе."
+        
+        keyboard = [[InlineKeyboardButton("📋 К управлению темами", callback_data="admin_topics")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def list_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Список всех тем."""
