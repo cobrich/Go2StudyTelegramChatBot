@@ -361,6 +361,14 @@ class AdminHandlers(BaseHandler):
         query = update.callback_query
         await query.answer()
         
+        # Получаем номер страницы из callback_data или используем 0 по умолчанию
+        page = 0
+        if query.data.startswith('list_topics_page_'):
+            try:
+                page = int(query.data.replace('list_topics_page_', ''))
+            except ValueError:
+                page = 0
+        
         topics = self.db.get_all_topics(active_only=False)
         topic_stats = self.topic_manager.get_topic_statistics()
         
@@ -371,51 +379,79 @@ class AdminHandlers(BaseHandler):
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
             return
         
-        # Ограничиваем количество тем для отображения
-        max_topics_per_page = 15
+        # Настройки пагинации
+        topics_per_page = 10
         total_topics = len(topics)
+        total_pages = (total_topics + topics_per_page - 1) // topics_per_page
         
-        if total_topics <= max_topics_per_page:
-            # Показываем все темы
-            text = f"📋 <b>Список тем</b> (всего: {total_topics})\n\n"
-            for i, topic in enumerate(topics, 1):
-                status = "✅" if topic['is_active'] else "❌"
-                question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
-                text += f"{i}. {status} <b>{topic['name']}</b>\n"
-                text += f"   ID: {topic['id']} | Вопросов: {question_count}\n"
-                # Ограничиваем длину описания
-                description = topic['description']
-                if len(description) > 50:
-                    description = description[:50] + "..."
-                text += f"   Описание: {description}\n\n"
-        else:
-            # Показываем краткую статистику
-            active_count = sum(1 for t in topics if t['is_active'])
-            inactive_count = total_topics - active_count
-            total_questions = sum(topic_stats.get(t['name'], {}).get('question_count', 0) for t in topics)
-            
-            text = f"📋 <b>Список тем</b>\n\n"
-            text += f"📊 <b>Статистика:</b>\n"
-            text += f"• Всего тем: {total_topics}\n"
-            text += f"• Активных: {active_count} ✅\n"
-            text += f"• Неактивных: {inactive_count} ❌\n"
-            text += f"• Всего вопросов: {total_questions}\n\n"
-            
-            text += f"<b>Первые {max_topics_per_page} тем:</b>\n\n"
-            for i, topic in enumerate(topics[:max_topics_per_page], 1):
-                status = "✅" if topic['is_active'] else "❌"
-                question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
-                text += f"{i}. {status} <b>{topic['name']}</b> ({question_count} вопр.)\n"
-            
-            if total_topics > max_topics_per_page:
-                text += f"\n... и еще {total_topics - max_topics_per_page} тем"
+        # Проверяем корректность номера страницы
+        if page < 0:
+            page = 0
+        elif page >= total_pages:
+            page = total_pages - 1
         
-        keyboard = [
-            [InlineKeyboardButton("🔄 Обновить статистику", callback_data="refresh_topics")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]
-        ]
+        # Вычисляем индексы для текущей страницы
+        start_idx = page * topics_per_page
+        end_idx = min(start_idx + topics_per_page, total_topics)
+        current_topics = topics[start_idx:end_idx]
+        
+        # Общая статистика
+        active_count = sum(1 for t in topics if t['is_active'])
+        inactive_count = total_topics - active_count
+        total_questions = sum(topic_stats.get(t['name'], {}).get('question_count', 0) for t in topics)
+        
+        # Формируем текст
+        text = f"📋 <b>Список тем</b> (страница {page + 1} из {total_pages})\n\n"
+        text += f"📊 <b>Общая статистика:</b>\n"
+        text += f"• Всего тем: {total_topics}\n"
+        text += f"• Активных: {active_count} ✅\n"
+        text += f"• Неактивных: {inactive_count} ❌\n"
+        text += f"• Всего вопросов: {total_questions}\n\n"
+        
+        text += f"<b>Темы {start_idx + 1}-{end_idx}:</b>\n\n"
+        
+        for i, topic in enumerate(current_topics, start_idx + 1):
+            status = "✅" if topic['is_active'] else "❌"
+            question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
+            text += f"{i}. {status} <b>{topic['name']}</b>\n"
+            text += f"   ID: {topic['id']} | Вопросов: {question_count}\n"
+            # Ограничиваем длину описания
+            description = topic['description']
+            if len(description) > 60:
+                description = description[:60] + "..."
+            text += f"   Описание: {description}\n\n"
+        
+        # Создаем клавиатуру с навигацией
+        keyboard = []
+        
+        # Кнопки навигации по страницам
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(InlineKeyboardButton("⬅️ Предыдущая", callback_data=f"list_topics_page_{page - 1}"))
+        if page < total_pages - 1:
+            nav_buttons.append(InlineKeyboardButton("Следующая ➡️", callback_data=f"list_topics_page_{page + 1}"))
+        
+        if nav_buttons:
+            keyboard.append(nav_buttons)
+        
+        # Кнопка быстрого перехода к первой/последней странице (если есть много страниц)
+        if total_pages > 3:
+            quick_nav = []
+            if page > 1:
+                quick_nav.append(InlineKeyboardButton("⏮️ Первая", callback_data="list_topics_page_0"))
+            if page < total_pages - 2:
+                quick_nav.append(InlineKeyboardButton("Последняя ⏭️", callback_data=f"list_topics_page_{total_pages - 1}"))
+            if quick_nav:
+                keyboard.append(quick_nav)
+        
+        # Функциональные кнопки
+        keyboard.append([
+            InlineKeyboardButton("🔄 Обновить статистику", callback_data="refresh_topics_stats"),
+            InlineKeyboardButton("📊 Подробная статистика", callback_data="detailed_topics_stats")
+        ])
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")])
+        
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def edit_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1267,7 +1303,7 @@ class AdminHandlers(BaseHandler):
         text += f"• Администраторы: {total_admins}\n\n"
         
         text += f"❓ <b>Вопросы:</b>\n"
-        text += f"• Всего вопросов: {total_questions}\n"
+            text += f"• Всего вопросов: {total_questions}\n"
         text += f"• Из базы данных: {pdf_questions}\n"
         text += f"• Сгенерированы ИИ: {ai_questions}\n\n"
         
@@ -1347,7 +1383,7 @@ class AdminHandlers(BaseHandler):
         keyboard = []
         for topic in topics:
             question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
-            status = "✅" if topic['is_active'] else "❌"
+                status = "✅" if topic['is_active'] else "❌"
             keyboard.append([InlineKeyboardButton(
                 f"{status} {topic['name']} ({question_count} вопросов)",
                 callback_data=f"merge_source_{topic['id']}"
@@ -1391,7 +1427,7 @@ class AdminHandlers(BaseHandler):
                 continue  # Пропускаем исходную тему
             
             question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
-            status = "✅" if topic['is_active'] else "❌"
+                    status = "✅" if topic['is_active'] else "❌"
             keyboard.append([InlineKeyboardButton(
                 f"{status} {topic['name']} ({question_count} вопросов)",
                 callback_data=f"merge_target_{topic['id']}"
@@ -2187,9 +2223,9 @@ class AdminHandlers(BaseHandler):
             f"Подтема 1\n"
             f"Подтема 2\n"
             f"Подтема 3",
-            parse_mode='HTML'
-        )
-    
+                parse_mode='HTML'
+            )
+
     async def _handle_add_base_section_subtopics(self, update: Update, context: ContextTypes.DEFAULT_TYPE, subtopics_text: str) -> None:
         """Обработка подтем нового раздела."""
         section_name = context.user_data.get('new_base_section_name')
@@ -2550,6 +2586,95 @@ class AdminHandlers(BaseHandler):
             text += f"Возможно, администратор уже был удален."
         
         keyboard = [[InlineKeyboardButton("🔙 К управлению админами", callback_data="admins_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def refresh_topics_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Обновление статистики тем."""
+        query = update.callback_query
+        await query.answer("🔄 Обновляем статистику...")
+        
+        try:
+            # Принудительно обновляем статистику
+            self.topic_manager.refresh_statistics()
+            
+            # Возвращаемся к списку тем с обновленной статистикой
+            # Создаем новый query с callback_data для list_topics
+            class MockQuery:
+                def __init__(self):
+                    self.data = "list_topics"
+                    
+                async def answer(self, text=None):
+                    pass
+                    
+                async def edit_message_text(self, text, reply_markup=None, parse_mode=None):
+                    return await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+            
+            # Создаем новый update с mock query
+            mock_query = MockQuery()
+            mock_update = type('MockUpdate', (), {'callback_query': mock_query, 'effective_user': update.effective_user})()
+            
+            await self.list_topics(mock_update, context)
+            
+        except Exception as e:
+            await query.edit_message_text(
+                f"❌ <b>Ошибка обновления статистики</b>\n\n{str(e)}",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="list_topics")]]),
+                parse_mode='HTML'
+            )
+
+    async def detailed_topics_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подробная статистика по темам."""
+        query = update.callback_query
+        await query.answer()
+        
+        topics = self.db.get_all_topics(active_only=False)
+        topic_stats = self.topic_manager.get_topic_statistics()
+        
+        if not topics:
+            text = "📊 <b>Подробная статистика</b>\n\nТемы не найдены."
+        else:
+            # Сортируем темы по количеству вопросов (по убыванию)
+            topics_with_stats = []
+            for topic in topics:
+                question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
+                topics_with_stats.append((topic, question_count))
+            
+            topics_with_stats.sort(key=lambda x: x[1], reverse=True)
+            
+            active_count = sum(1 for t, _ in topics_with_stats if t['is_active'])
+            inactive_count = len(topics_with_stats) - active_count
+            total_questions = sum(count for _, count in topics_with_stats)
+            
+            text = f"📊 <b>Подробная статистика тем</b>\n\n"
+            text += f"📈 <b>Общие показатели:</b>\n"
+            text += f"• Всего тем: {len(topics_with_stats)}\n"
+            text += f"• Активных: {active_count} ✅\n"
+            text += f"• Неактивных: {inactive_count} ❌\n"
+            text += f"• Всего вопросов: {total_questions}\n"
+            text += f"• Среднее вопросов на тему: {total_questions / len(topics_with_stats):.1f}\n\n"
+            
+            # Топ-10 тем по количеству вопросов
+            text += f"🏆 <b>Топ-10 тем по вопросам:</b>\n"
+            for i, (topic, count) in enumerate(topics_with_stats[:10], 1):
+                status = "✅" if topic['is_active'] else "❌"
+                text += f"{i}. {status} <b>{topic['name']}</b> - {count} вопр.\n"
+            
+            # Темы без вопросов
+            empty_topics = [topic for topic, count in topics_with_stats if count == 0]
+            if empty_topics:
+                text += f"\n⚠️ <b>Темы без вопросов ({len(empty_topics)}):</b>\n"
+                for topic in empty_topics[:5]:  # Показываем первые 5
+                    status = "✅" if topic['is_active'] else "❌"
+                    text += f"• {status} {topic['name']}\n"
+                if len(empty_topics) > 5:
+                    text += f"... и еще {len(empty_topics) - 5}\n"
+        
+        keyboard = [
+            [InlineKeyboardButton("🔄 Обновить", callback_data="detailed_topics_stats")],
+            [InlineKeyboardButton("🔙 К списку тем", callback_data="list_topics")]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
