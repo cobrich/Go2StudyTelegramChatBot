@@ -16,6 +16,23 @@ class CallbackHandlers(BaseHandler):
     async def handle_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle topic selection callback."""
         query = update.callback_query
+        try:
+            await query.answer()
+        except Exception as e:
+            logging.error(f"Error in query.answer() (topic_selection): {e}")
+        
+        user_id = query.from_user.id
+        
+        # Проверяем доступ пользователя перед обработкой выбора темы
+        if not self.db.check_user_access(user_id, query.from_user.username):
+            await query.message.edit_text(
+                f"❌ Извините, у вас нет доступа к этому боту.\n\n"
+                f"Ваш ID: {user_id}\n"
+                f"Username: @{query.from_user.username or 'не указан'}\n\n"
+                f"Для получения доступа обратитесь к администратору."
+            )
+            return
+        
         topic_data = query.data.replace('topic_', '')
         is_retake = False
         logging.info(f"[handle_topic_selection] query.data={query.data}, topic_data={topic_data}, is_retake={is_retake}")
@@ -57,7 +74,6 @@ class CallbackHandlers(BaseHandler):
                 pass
             return
         
-        user_id = query.from_user.id
         chat_id = query.message.chat_id
         
         # Check if user is already taking a test
@@ -97,7 +113,8 @@ class CallbackHandlers(BaseHandler):
         # Display first question
         question = questions[0]
         source = question[4] if len(question) > 4 else 'db'
-        source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
+        # PDF вопросы считаются как из базы данных
+        source_text = '🟢 (из базы)' if source in ['db', 'pdf'] else '🤖 (ИИ)'
         logging.info(f"[DEBUG] question tuple: {question}")
         logging.info(f"[DEBUG] source: {source}, source_text: {source_text}")
         keyboard = build_question_keyboard(question[3], 0, 0, len(questions))
@@ -128,7 +145,19 @@ class CallbackHandlers(BaseHandler):
             await query.answer()
         except Exception as e:
             logging.error(f"Error in query.answer() (answer): {e}")
+        
         user_id = query.from_user.id
+        
+        # Проверяем доступ пользователя перед обработкой ответа
+        if not self.db.check_user_access(user_id, query.from_user.username):
+            await query.message.edit_text(
+                f"❌ Извините, у вас нет доступа к этому боту.\n\n"
+                f"Ваш ID: {user_id}\n"
+                f"Username: @{query.from_user.username or 'не указан'}\n\n"
+                f"Для получения доступа обратитесь к администратору."
+            )
+            return
+        
         questions = self.get_user_data(context).get('questions', [])
         current_index = self.get_user_data(context).get('current_question_index', 0)
         if not questions or current_index >= len(questions):
@@ -143,7 +172,8 @@ class CallbackHandlers(BaseHandler):
             return
         question = questions[current_index]
         source = question[4] if len(question) > 4 else 'db'
-        source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
+        # PDF вопросы считаются как из базы данных
+        source_text = '🟢 (из базы)' if source in ['db', 'pdf'] else '🤖 (ИИ)'
         try:
             selected_index = int(query.data.replace('answer_', '').split('_')[0])
         except Exception:
@@ -261,7 +291,8 @@ class CallbackHandlers(BaseHandler):
             return
         question = questions[current_index]
         source = question[4] if len(question) > 4 else 'db'
-        source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
+        # PDF вопросы считаются как из базы данных
+        source_text = '🟢 (из базы)' if source in ['db', 'pdf'] else '🤖 (ИИ)'
         keyboard = build_question_keyboard(question[3], current_index, current_index, len(questions))
         topic = self.get_user_data(context).get('current_topic', '')
         try:
@@ -489,7 +520,8 @@ class CallbackHandlers(BaseHandler):
         self.set_user_data(context, 'current_question_index', prev_index)
         question = questions[prev_index]
         source = question[4] if len(question) > 4 else 'db'
-        source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
+        # PDF вопросы считаются как из базы данных
+        source_text = '🟢 (из базы)' if source in ['db', 'pdf'] else '🤖 (ИИ)'
         user_results = context.user_data.get('user_results', [])
         user_answer = None
         correct_answer = question[1]
@@ -535,7 +567,8 @@ class CallbackHandlers(BaseHandler):
         self.set_user_data(context, 'current_question_index', next_index)
         question = questions[next_index]
         source = question[4] if len(question) > 4 else 'db'
-        source_text = '🟢 (из базы)' if source == 'db' else '🤖 (ИИ)'
+        # PDF вопросы считаются как из базы данных
+        source_text = '🟢 (из базы)' if source in ['db', 'pdf'] else '🤖 (ИИ)'
         user_results = context.user_data.get('user_results', [])
         user_answer = None
         correct_answer = question[1]
@@ -573,7 +606,19 @@ class CallbackHandlers(BaseHandler):
             await query.answer()
         except Exception as e:
             logging.error(f"Error in query.answer() (main_menu): {e}")
+        
         user_id = query.from_user.id
+        
+        # Проверяем доступ пользователя перед отправкой главного меню
+        if not self.db.check_user_access(user_id, query.from_user.username):
+            await query.message.edit_text(
+                f"❌ Извините, у вас нет доступа к этому боту.\n\n"
+                f"Ваш ID: {user_id}\n"
+                f"Username: @{query.from_user.username or 'не указан'}\n\n"
+                f"Для получения доступа обратитесь к администратору."
+            )
+            return
+        
         self.db.set_user_inactive(user_id)
         self.clear_user_data(context)
         try:

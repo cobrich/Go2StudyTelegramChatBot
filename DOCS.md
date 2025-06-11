@@ -3,55 +3,39 @@
 ## Project Overview
 Go2Study Bot is a Telegram bot designed to help students learn mathematics through interactive tests and quizzes. The bot provides a structured learning experience with immediate feedback and explanations.
 
-## Current Status: Security Issue Fixed - Whitelist Bypass (2025-01-11)
+## Current Status: CRITICAL SECURITY PATCH - Access Control Bypass Fixed (2025-01-11)
 
-### ⚠️ CRITICAL SECURITY FIX:
-- **FIXED WHITELIST BYPASS**: Users without Telegram username could bypass access control
-- **ENHANCED ACCESS CONTROL**: New comprehensive system supporting both username and user_id
-- **ADMIN FUNCTIONALITY**: Added ability to whitelist users by user_id for users without username
-- **DATABASE SCHEMA UPDATE**: Added user_id column to allowed_users table
-- **UNAUTHORIZED USER REMOVED**: Cleaned up user who gained access without permission
+### 🚨 EMERGENCY SECURITY FIX COMPLETED:
+- **FIXED CALLBACK HANDLER BYPASS**: Unauthorized users could access bot functions through inline buttons
+- **FIXED TEXT HANDLER BYPASS**: Users without access got main menu when sending any text message
+- **COMPREHENSIVE ACCESS CONTROL**: All entry points now properly check user permissions
+- **ENHANCED SECURITY**: Added access checks to all major callback and command handlers
 
-### What was fixed:
-1. **Access Control Logic**: `check_user_access()` now checks:
-   - Admin status (by user_id)
-   - Username whitelist (if username exists)
-   - User_id whitelist (for users without username)
+### 🔧 RECENT FIXES (2025-01-11):
+- **FIXED ADMIN STATISTICS**: Исправлена ошибка в получении статистики вопросов по темам
+  - Заменен неправильный доступ к базе данных `self.db.conn.cursor()` на корректный `sqlite3.connect(self.db.db_path)`
+  - Теперь статистика корректно показывает 326 вопросов из базы данных
+- **FIXED USER HISTORY**: Исправлена ошибка TypeError в истории пользователей
+  - Добавлена безопасная обработка None значений в avg_percentage
+  - Предотвращена ошибка при форматировании None в строку с плавающей точкой
 
-2. **New Admin Functions**:
-   - "Add student by username" (existing)
-   - "Add student by ID" (new) - for users without Telegram username
+### What was the vulnerability:
+1. **Text Handler Bypass**: `handle_text()` function had no access control - users got main menu for any text
+2. **Callback Handler Bypass**: `handle_topic_selection()`, `handle_main_menu()`, `handle_answer()` had no access checks
+3. **User Journey**: User gets denied access → sends any text → receives main menu → can use inline buttons
 
-3. **Database Updates**:
-   - Added `user_id` column to `allowed_users` table
-   - New functions: `is_user_allowed_by_id()`, `add_allowed_user_by_id()`
-   - Enhanced `get_all_allowed_users()` to show both username and user_id
+### Security fixes implemented:
+- ✅ **Text Handler Protection**: Added `check_user_access()` at start of `handle_text()` 
+- ✅ **Callback Handler Protection**: Added access checks to all major callback functions
+- ✅ **Command Handler Protection**: Added access checks to `reset()` and `get_my_id()`
+- ✅ **Comprehensive Coverage**: All user-facing functions now verify permissions
+- ✅ **Fallback Security**: Multiple layers of protection against unauthorized access
 
-4. **Security Improvements**:
-   - Fixed start command to properly check access before registration
-   - Better error messages showing user ID and username status
-   - Comprehensive access validation
-
-### Technical Details:
-
-**Problem**: Users without Telegram username (`user.username = None`) would bypass whitelist check:
-```python
-# OLD (vulnerable):
-if not self.db.is_admin(user.id):
-    if not self.db.is_user_allowed(user.username):  # None bypassed this
-        # access denied
-        return
-# Code continued anyway! ❌
-```
-
-**Solution**: New comprehensive access check:
-```python
-# NEW (secure):
-if not self.db.check_user_access(user.id, user.username):
-    # access denied with clear error message
-    return
-# Code only continues if access granted ✅
-```
+### 🔧 ADDITIONAL IMPROVEMENT - PDF Question Source Display:
+- **FIXED PDF SOURCE LABELING**: PDF questions now correctly show as "🟢 (из базы)" instead of "🤖 (ИИ)"
+- **CONSISTENT SOURCE LOGIC**: PDF and database questions both considered as "from database"
+- **UPDATED DISPLAY**: All test interfaces now properly categorize question sources
+- **IMPROVED USER CLARITY**: Users now see accurate information about question origins
 
 ## Previous Status: Test Interface Improved (2025-01-11)
 

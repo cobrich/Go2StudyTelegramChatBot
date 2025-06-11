@@ -93,6 +93,16 @@ class CommandHandlers(BaseHandler):
         """Reset user state if stuck in a test."""
         user_id = update.effective_user.id
         
+        # Проверяем доступ пользователя
+        if not self.db.check_user_access(user_id, update.effective_user.username):
+            await update.message.reply_text(
+                f"❌ Извините, у вас нет доступа к этому боту.\n\n"
+                f"Ваш ID: {user_id}\n"
+                f"Username: @{update.effective_user.username or 'не указан'}\n\n"
+                f"Для получения доступа обратитесь к администратору."
+            )
+            return
+        
         # Clear user activity
         self.db.set_user_inactive(user_id)
         
@@ -125,6 +135,17 @@ class CommandHandlers(BaseHandler):
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         text = update.message.text.strip()
         user_id = update.effective_user.id
+        
+        # Проверяем доступ пользователя перед обработкой любых сообщений
+        if not self.db.check_user_access(user_id, update.effective_user.username):
+            await update.message.reply_text(
+                f"❌ Извините, у вас нет доступа к этому боту.\n\n"
+                f"Ваш ID: {user_id}\n"
+                f"Username: @{update.effective_user.username or 'не указан'}\n\n"
+                f"Для получения доступа обратитесь к администратору."
+            )
+            return
+        
         # Проверка на ввод ФИО
         if context.user_data.get('awaiting_full_name'):
             full_name = text

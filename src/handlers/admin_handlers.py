@@ -226,39 +226,40 @@ class AdminHandlers(BaseHandler):
         
         # Получаем статистику вопросов из базы данных
         try:
-            cursor = self.db.conn.cursor()
-            cursor.execute("""
-                SELECT topic, COUNT(*) as count, 
-                       SUM(CASE WHEN source = 'pdf' THEN 1 ELSE 0 END) as pdf_count,
-                       SUM(CASE WHEN source = 'ai' THEN 1 ELSE 0 END) as ai_count
-                FROM questions 
-                GROUP BY topic 
-                ORDER BY count DESC
-            """)
-            stats = cursor.fetchall()
-            
-            if not stats:
-                text = "📋 **Статистика вопросов**\n\nВопросы не найдены."
-            else:
-                text = "📋 **Статистика вопросов**\n\n"
-                total_questions = 0
-                total_pdf = 0
-                total_ai = 0
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT topic, COUNT(*) as count, 
+                           SUM(CASE WHEN source = 'pdf' THEN 1 ELSE 0 END) as pdf_count,
+                           SUM(CASE WHEN source = 'ai' THEN 1 ELSE 0 END) as ai_count
+                    FROM questions 
+                    GROUP BY topic 
+                    ORDER BY count DESC
+                """)
+                stats = cursor.fetchall()
                 
-                for topic, count, pdf_count, ai_count in stats:
-                    text += f"📚 **{topic}**\n"
-                    text += f"   Всего: {count}\n"
-                    text += f"   📄 PDF: {pdf_count}\n"
-                    text += f"   🤖 AI: {ai_count}\n\n"
+                if not stats:
+                    text = "📋 **Статистика вопросов**\n\nВопросы не найдены."
+                else:
+                    text = "📋 **Статистика вопросов**\n\n"
+                    total_questions = 0
+                    total_pdf = 0
+                    total_ai = 0
                     
-                    total_questions += count
-                    total_pdf += pdf_count
-                    total_ai += ai_count
-                
-                text += f"**📊 Общая статистика:**\n"
-                text += f"Всего вопросов: {total_questions}\n"
-                text += f"Из PDF: {total_pdf}\n"
-                text += f"Сгенерировано AI: {total_ai}"
+                    for topic, count, pdf_count, ai_count in stats:
+                        text += f"📚 **{topic}**\n"
+                        text += f"   Всего: {count}\n"
+                        text += f"   📄 PDF: {pdf_count}\n"
+                        text += f"   🤖 AI: {ai_count}\n\n"
+                        
+                        total_questions += count
+                        total_pdf += pdf_count
+                        total_ai += ai_count
+                    
+                    text += f"**📊 Общая статистика:**\n"
+                    text += f"Всего вопросов: {total_questions}\n"
+                    text += f"Из PDF: {total_pdf}\n"
+                    text += f"Сгенерировано AI: {total_ai}"
             
         except Exception as e:
             text = f"❌ Ошибка при получении статистики: {e}"
@@ -725,9 +726,13 @@ class AdminHandlers(BaseHandler):
                 is_whitelisted = self.db.is_user_allowed(user['username']) if user['username'] else False
                 status = "✅ Активен" if is_whitelisted else "❌ Не в whitelist"
                 
+                # Безопасное форматирование avg_percentage
+                avg_percentage = user.get('avg_percentage') or 0
+                avg_percentage = float(avg_percentage) if avg_percentage is not None else 0.0
+                
                 text += f"{i}. **@{username}** ({status})\n"
                 text += f"   ФИО: {full_name}\n"
-                text += f"   Тестов: {user['total_tests']}, Средний балл: {user['avg_percentage']:.1f}%\n"
+                text += f"   Тестов: {user['total_tests']}, Средний балл: {avg_percentage:.1f}%\n"
                 text += f"   Ошибок: {user['unique_errors']} уникальных\n"
                 if user['last_activity']:
                     text += f"   Последняя активность: {user['last_activity'][:10]}\n"
