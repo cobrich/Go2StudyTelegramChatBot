@@ -584,7 +584,7 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT is_super FROM admins WHERE user_id = ?
+                SELECT is_super_admin FROM admins WHERE user_id = ?
             ''', (user_id,))
             result = cursor.fetchone()
             return result[0] == 1 if result else False
@@ -626,9 +626,9 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT user_id, username, name, is_super, added_at
+                SELECT user_id, username, full_name, is_super_admin, created_at
                 FROM admins
-                ORDER BY is_super DESC, added_at ASC
+                ORDER BY is_super_admin DESC, created_at ASC
             ''')
             rows = cursor.fetchall()
             return [
