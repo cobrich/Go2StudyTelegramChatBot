@@ -22,6 +22,10 @@ Go2Study Bot is a Telegram bot designed to help students learn mathematics throu
   - Заменен parse_mode='Markdown' на parse_mode='HTML' в методах show_user_history и merge_topics
   - Исправлено форматирование: `**текст**` → `<b>текст</b>`, `*текст*` → `<i>текст</i>`
   - Устранены ошибки "Can't parse entities" при отображении истории пользователей и объединении тем
+- **FIXED ADMIN STATISTICS SOURCE COUNT**: Исправлен подсчет вопросов по источникам в статистике
+  - Заменен поиск `source = "db"` на `source = "pdf"` для корректного отображения вопросов из PDF файлов
+  - Теперь статистика корректно показывает 321 вопрос из PDF вместо 0 из базы данных
+  - Правильное отображение источников: PDF (321) и AI (5) вопросов
 
 ### What was the vulnerability:
 1. **Text Handler Bypass**: `handle_text()` function had no access control - users got main menu for any text

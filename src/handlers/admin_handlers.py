@@ -660,8 +660,8 @@ class AdminHandlers(BaseHandler):
             cursor.execute('SELECT COUNT(*) FROM questions WHERE source = "ai"')
             ai_questions = cursor.fetchone()[0]
             
-            cursor.execute('SELECT COUNT(*) FROM questions WHERE source = "db"')
-            db_questions = cursor.fetchone()[0]
+            cursor.execute('SELECT COUNT(*) FROM questions WHERE source = "pdf" OR source = "db"')
+            pdf_questions = cursor.fetchone()[0]
             
             # Статистика тестов
             cursor.execute('SELECT COUNT(*) FROM test_results')
@@ -688,7 +688,7 @@ class AdminHandlers(BaseHandler):
         
         text += f"❓ **Вопросы:**\n"
         text += f"• Всего вопросов: {total_questions}\n"
-        text += f"• Из базы данных: {db_questions}\n"
+        text += f"• Из базы данных: {pdf_questions}\n"
         text += f"• Сгенерированы ИИ: {ai_questions}\n\n"
         
         text += f"📝 **Тестирование:**\n"
