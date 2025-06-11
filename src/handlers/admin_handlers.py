@@ -1721,7 +1721,20 @@ class AdminHandlers(BaseHandler):
         success = self.db.add_allowed_user(username, fullname, grade, admin_id)
         
         if success:
-            await update.message.reply_text(f"✅ Ученик @{username} успешно добавлен!\n\nФИО: {fullname}\nКласс: {grade}")
+            # Показываем сообщение об успехе и возвращаемся в меню управления учениками
+            keyboard = [
+                [InlineKeyboardButton("➕ Добавить ученика (по username)", callback_data="add_student")],
+                [InlineKeyboardButton("🆔 Добавить ученика (по ID)", callback_data="add_student_by_id")],
+                [InlineKeyboardButton("📋 Список учеников", callback_data="list_students")],
+                [InlineKeyboardButton("🗑️ Удалить ученика", callback_data="remove_student")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            text = f"✅ Ученик @{username} успешно добавлен!\n\nФИО: {fullname}\nКласс: {grade}\n\n"
+            text += "👥 <b>Управление учениками</b>\n\nВыберите действие:"
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
             await update.message.reply_text(f"❌ Ошибка при добавлении ученика. Возможно, @{username} уже существует.")
         
@@ -1748,7 +1761,20 @@ class AdminHandlers(BaseHandler):
         success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id)
         
         if success:
-            await update.message.reply_text(f"✅ Ученик с ID {student_user_id} успешно добавлен!\n\nФИО: {fullname}\nКласс: {grade}")
+            # Показываем сообщение об успехе и возвращаемся в меню управления учениками
+            keyboard = [
+                [InlineKeyboardButton("➕ Добавить ученика (по username)", callback_data="add_student")],
+                [InlineKeyboardButton("🆔 Добавить ученика (по ID)", callback_data="add_student_by_id")],
+                [InlineKeyboardButton("📋 Список учеников", callback_data="list_students")],
+                [InlineKeyboardButton("🗑️ Удалить ученика", callback_data="remove_student")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            text = f"✅ Ученик с ID {student_user_id} успешно добавлен!\n\nФИО: {fullname}\nКласс: {grade}\n\n"
+            text += "👥 <b>Управление учениками</b>\n\nВыберите действие:"
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
             await update.message.reply_text(f"❌ Ошибка при добавлении ученика. Возможно, пользователь с ID {student_user_id} уже существует.")
         
@@ -1775,7 +1801,21 @@ class AdminHandlers(BaseHandler):
         success = self.db.add_topic(topic_name, description, admin_id)
         
         if success:
-            await update.message.reply_text(f"✅ Тема '{topic_name}' успешно добавлена!")
+            # Показываем сообщение об успехе и возвращаемся в меню управления темами
+            keyboard = [
+                [InlineKeyboardButton("➕ Добавить тему", callback_data="add_topic")],
+                [InlineKeyboardButton("📋 Список тем", callback_data="list_topics")],
+                [InlineKeyboardButton("✏️ Редактировать тему", callback_data="edit_topic")],
+                [InlineKeyboardButton("🗑️ Удалить тему", callback_data="remove_topic")],
+                [InlineKeyboardButton("🔗 Объединить темы", callback_data="merge_topics")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            text = f"✅ Тема '{topic_name}' успешно добавлена!\n\n"
+            text += "📚 <b>Управление темами</b>\n\nВыберите действие:"
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
             await update.message.reply_text(f"❌ Ошибка при добавлении темы. Возможно, тема '{topic_name}' уже существует.")
         
