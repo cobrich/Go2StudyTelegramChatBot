@@ -264,7 +264,20 @@ class CommandHandlers(BaseHandler):
                 reply_markup=None
             )
             return
+            
+        # Проверяем, находится ли пользователь в режиме выбора темы
+        if context.user_data.get('in_topic_selection'):
+            # Если пользователь в режиме выбора темы, возвращаем к списку тем
+            await update.message.reply_text(
+                "📚 **Выберите раздел математики:**",
+                reply_markup=build_topic_selection_keyboard(),
+                parse_mode='Markdown'
+            )
+            return
+            
         if text == "📚 Выбрать тему и начать":
+            # Устанавливаем флаг выбора темы
+            context.user_data['in_topic_selection'] = True
             # Сначала убираем обычную клавиатуру
             await update.message.reply_text(
                 "💬",

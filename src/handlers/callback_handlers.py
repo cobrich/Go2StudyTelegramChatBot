@@ -78,6 +78,8 @@ class CallbackHandlers(BaseHandler):
             
         # Очищаем user_data при выборе новой темы
         self.clear_user_data(context)
+        # Очищаем флаг выбора темы так как тест начинается
+        context.user_data.pop('in_topic_selection', None)
         # Set user as active and store topic
         self.db.set_user_active(user_id, topic)
         self.set_user_data(context, 'current_topic', topic)
@@ -481,11 +483,25 @@ class CallbackHandlers(BaseHandler):
             await query.answer()
         except Exception as e:
             logging.error(f"Error in query.answer() (back_to_topics): {e}")
+        
         user_id = query.from_user.id
+        
+        # Проверяем доступ пользователя перед возвратом к темам
+        if not self.db.check_user_access(user_id, query.from_user.username):
+            await query.message.edit_text(
+                f"❌ Извините, у вас нет доступа к этому боту.\n\n"
+                f"Ваш ID: {user_id}\n"
+                f"Username: @{query.from_user.username or 'не указан'}\n\n"
+                f"Для получения доступа обратитесь к администратору."
+            )
+            return
+        
         self.db.set_user_inactive(user_id)
         self.clear_user_data(context)
+        # Устанавливаем флаг выбора темы
+        context.user_data['in_topic_selection'] = True
         try:
-            # Удаляем inline-клавиатуру у старого сообщения (опционально)
+            # Удаляем inline-клавиатуру у старого сообщения
             await query.message.edit_reply_markup(reply_markup=None)
         except Exception:
             pass
@@ -615,6 +631,8 @@ class CallbackHandlers(BaseHandler):
         
         self.db.set_user_inactive(user_id)
         self.clear_user_data(context)
+        # Очищаем флаг выбора темы
+        context.user_data.pop('in_topic_selection', None)
         try:
             # Удаляем inline-клавиатуру у старого сообщения
             await query.message.edit_reply_markup(reply_markup=None)
