@@ -689,6 +689,17 @@ class Database:
                 return cursor.rowcount > 0
         except Exception:
             return False
+
+    def remove_allowed_user_by_id(self, user_id: int) -> bool:
+        """Remove user from whitelist by user_id."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM allowed_users WHERE user_id = ?', (user_id,))
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception:
+            return False
     
     def update_allowed_user(self, username: str, full_name: str = None, grade: int = None, is_active: bool = None) -> bool:
         """Update allowed user info."""

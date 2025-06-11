@@ -108,6 +108,18 @@ def main() -> None:
         admin_handlers.list_students,
         pattern="^list_students$"
     ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_student_start,
+        pattern="^remove_student$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_student_confirm,
+        pattern="^remove_student_(username|id)_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_student_execute,
+        pattern="^remove_student_execute_"
+    ))
     
     # Topic management handlers
     application.add_handler(CallbackQueryHandler(
@@ -117,6 +129,38 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(
         admin_handlers.list_topics,
         pattern="^list_topics$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_topic_start,
+        pattern="^edit_topic$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_topic_select,
+        pattern="^edit_topic_select_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_topic_name_start,
+        pattern="^edit_topic_name_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_topic_desc_start,
+        pattern="^edit_topic_desc_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_topic_toggle_status,
+        pattern="^edit_topic_(activate|deactivate)_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_topic_start,
+        pattern="^remove_topic$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_topic_confirm,
+        pattern="^remove_topic_confirm_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_topic_execute,
+        pattern="^remove_topic_execute_"
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.merge_topics_start,
@@ -143,6 +187,34 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(
         admin_handlers.questions_stats,
         pattern="^questions_stats$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.search_questions_start,
+        pattern="^search_questions$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_questions_start,
+        pattern="^delete_questions$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_questions_confirm,
+        pattern="^delete_questions_topic_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_questions_execute,
+        pattern="^delete_questions_execute_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_question_start,
+        pattern="^add_question$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_question_topic_selected,
+        pattern="^add_question_topic_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_question_start,
+        pattern="^edit_question$"
     ))
     
     # Admin management handlers
