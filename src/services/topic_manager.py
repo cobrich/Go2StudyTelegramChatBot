@@ -1,10 +1,8 @@
 import logging
-import sqlite3
 from typing import List, Dict, Optional
 from difflib import SequenceMatcher
 from services.database import Database
 from services.ai_service import AIService
-from config.constants import TOPIC_HIERARCHY
 
 logger = logging.getLogger(__name__)
 
@@ -14,71 +12,31 @@ class TopicManager:
     def __init__(self):
         self.db = Database()
         self.ai_service = AIService()
-        
-        # Базовые темы для подготовки к НИШ (5-6 классы)
-        self.base_topics = [
-            # Арифметика и числа
-            "Натуральные числа",
-            "Чётные и нечётные числа", 
-            "Делимость чисел",
-            "Простые и составные числа",
-            "НОК и НОД",
-            "Сравнение и округление чисел",
-            
-            # Операции с числами
-            "Арифметические операции",
-            "Порядок действий",
-            "Деление с остатком",
-            "Свойства операций",
-            
-            # Дроби
-            "Обыкновенные дроби",
-            "Десятичные дроби",
-            "Сравнение дробей",
-            "Действия с дробями",
-            
-            # Проценты
-            "Проценты",
-            "Нахождение процента от числа",
-            "Нахождение числа по проценту",
-            
-            # Уравнения и выражения
-            "Простейшие уравнения",
-            "Арифметические выражения",
-            "Составление уравнений",
-            
-            # Логика и закономерности
-            "Числовые последовательности",
-            "Логические задачи",
-            "Задачи на смекалку",
-            
-            # Геометрия
-            "Геометрические фигуры",
-            "Периметр и площадь",
-            "Углы",
-            "Координатная плоскость",
-            
-            # Единицы измерения
-            "Единицы времени",
-            "Единицы длины и массы",
-            "Перевод единиц",
-            "Масштаб и расстояние",
-            
-            # Работа с данными
-            "Таблицы и диаграммы",
-            "Анализ графиков",
-            
-            # Практические задачи
-            "Задачи на практическое мышление",
-            "Оптимизация",
-            "Распределение по условиям"
-        ]
+        # Кэш для часто используемых данных
+        self._topics_cache = None
+        self._structure_cache = None
+    
+    def _invalidate_cache(self):
+        """Сбросить кэш при изменении данных."""
+        self._topics_cache = None
+        self._structure_cache = None
+    
+    def get_base_topic_structure(self) -> Dict[str, List[str]]:
+        """Получить базовую структуру тем с кэшированием."""
+        if self._structure_cache is None:
+            self._structure_cache = self.db.get_base_topic_structure()
+        return self._structure_cache
+    
+    def get_available_topics(self) -> List[str]:
+        """Получить список доступных тем с кэшированием."""
+        if self._topics_cache is None:
+            self._topics_cache = self.db.get_topic_names(active_only=True)
+        return self._topics_cache
     
     def find_best_topic_match(self, query: str, threshold: float = 0.6) -> Optional[str]:
         """Найти наиболее подходящую тему по запросу."""
         try:
-            # Получаем активные темы из нормализованной структуры
-            available_topics = self.db.get_topic_names(active_only=True)
+            available_topics = self.get_available_topics()
             
             if not available_topics:
                 return None
@@ -108,8 +66,7 @@ class TopicManager:
     def get_topic_by_similarity(self, question_text: str) -> Optional[str]:
         """Определить тему по содержанию вопроса."""
         try:
-            # Получаем активные темы
-            available_topics = self.db.get_topic_names(active_only=True)
+            available_topics = self.get_available_topics()
             
             if not available_topics:
                 return None
@@ -177,44 +134,91 @@ class TopicManager:
                 return True
             
             # Создаем новую тему в указанном разделе или в первом доступном
-            return self.db.add_topic(topic_name, main_topic_name=main_topic_name)
+            success = self.db.add_topic(topic_name, main_topic_name=main_topic_name)
+            
+            if success:
+                # Сбрасываем кэш после добавления
+                self._invalidate_cache()
+            
+            return success
             
         except Exception as e:
             logging.error(f"Ошибка при создании темы: {e}")
             return False
     
-    def get_available_topics(self) -> List[str]:
-        """Получить список доступных тем."""
-        return self.db.get_topic_names(active_only=True)
-    
     def get_topics_with_questions_count(self) -> List[Dict]:
-        """Получить темы с количеством вопросов."""
+        """Получить темы с количеством вопросов (оптимизированная версия)."""
         try:
-            topics = self.db.get_all_topics(active_only=True)
-            result = []
-            
-            for topic in topics:
-                # Считаем вопросы для каждой темы
-                with self.db._get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        'SELECT COUNT(*) FROM questions WHERE topic = ?',
-                        (topic['name'],)
-                    )
-                    question_count = cursor.fetchone()[0]
+            # Получаем все данные одним запросом
+            with self.db._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT 
+                        st.id,
+                        st.name,
+                        mt.name as main_topic,
+                        st.is_active,
+                        st.created_at,
+                        COUNT(q.id) as question_count
+                    FROM subtopics st
+                    JOIN main_topics mt ON st.main_topic_id = mt.id
+                    LEFT JOIN questions q ON st.name = q.topic
+                    WHERE st.is_active = 1 AND mt.is_active = 1
+                    GROUP BY st.id, st.name, mt.name, st.is_active, st.created_at
+                    ORDER BY mt.order_index, st.order_index
+                ''')
                 
-                result.append({
-                    'id': topic['id'],
-                    'name': topic['name'],
-                    'main_topic': topic['main_topic'],
-                    'question_count': question_count,
-                    'is_active': topic['is_active']
-                })
-            
-            return result
+                results = cursor.fetchall()
+                return [
+                    {
+                        'id': row[0],
+                        'name': row[1],
+                        'main_topic': row[2],
+                        'is_active': bool(row[3]),
+                        'created_at': row[4],
+                        'question_count': row[5]
+                    }
+                    for row in results
+                ]
             
         except Exception as e:
             logging.error(f"Ошибка при получении тем с количеством вопросов: {e}")
+            return []
+    
+    def get_main_topics_with_stats(self) -> List[Dict]:
+        """Получить статистику по основным разделам."""
+        try:
+            with self.db._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT 
+                        mt.id,
+                        mt.name,
+                        mt.order_index,
+                        COUNT(st.id) as subtopics_count,
+                        COUNT(q.id) as total_questions
+                    FROM main_topics mt
+                    LEFT JOIN subtopics st ON mt.id = st.main_topic_id AND st.is_active = 1
+                    LEFT JOIN questions q ON st.name = q.topic
+                    WHERE mt.is_active = 1
+                    GROUP BY mt.id, mt.name, mt.order_index
+                    ORDER BY mt.order_index
+                ''')
+                
+                results = cursor.fetchall()
+                return [
+                    {
+                        'id': row[0],
+                        'name': row[1],
+                        'order_index': row[2],
+                        'subtopics_count': row[3],
+                        'total_questions': row[4]
+                    }
+                    for row in results
+                ]
+            
+        except Exception as e:
+            logging.error(f"Ошибка при получении статистики основных разделов: {e}")
             return []
     
     def merge_topics(self, source_topic: str, target_topic: str) -> bool:
@@ -250,6 +254,9 @@ class TopicManager:
                 
                 conn.commit()
             
+            # Сбрасываем кэш после изменений
+            self._invalidate_cache()
+            
             logging.info(f"Темы объединены: '{source_topic}' -> '{target_topic}'")
             return True
             
@@ -258,33 +265,74 @@ class TopicManager:
             return False
     
     def get_topic_statistics(self) -> Dict[str, Dict]:
-        """Возвращает статистику по темам."""
+        """Возвращает статистику по темам (оптимизированная версия)."""
         try:
-            topics = self.db.get_all_topics(active_only=False)
-            stats = {}
-            
-            for topic in topics:
-                topic_name = topic['name']
+            # Получаем все данные одним запросом
+            with self.db._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT 
+                        st.name,
+                        st.id,
+                        mt.name as main_topic,
+                        st.is_active,
+                        st.created_at,
+                        COUNT(q.id) as question_count
+                    FROM subtopics st
+                    JOIN main_topics mt ON st.main_topic_id = mt.id
+                    LEFT JOIN questions q ON st.name = q.topic
+                    GROUP BY st.id, st.name, mt.name, st.is_active, st.created_at
+                    ORDER BY mt.order_index, st.order_index
+                ''')
                 
-                # Считаем количество вопросов
-                with self.db._get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        'SELECT COUNT(*) FROM questions WHERE topic = ?',
-                        (topic_name,)
-                    )
-                    question_count = cursor.fetchone()[0]
+                results = cursor.fetchall()
+                stats = {}
                 
-                stats[topic_name] = {
-                    'id': topic['id'],
-                    'main_topic': topic['main_topic'],
-                    'is_active': topic['is_active'],
-                    'question_count': question_count,
-                    'created_at': topic['created_at']
-                }
-            
-            return stats
+                for row in results:
+                    topic_name = row[0]
+                    stats[topic_name] = {
+                        'id': row[1],
+                        'main_topic': row[2],
+                        'is_active': bool(row[3]),
+                        'created_at': row[4],
+                        'question_count': row[5]
+                    }
+                
+                return stats
             
         except Exception as e:
             logging.error(f"Ошибка при получении статистики тем: {e}")
-            return {} 
+            return {}
+    
+    def add_main_topic_section(self, main_topic_name: str, subtopics: List[str]) -> bool:
+        """Добавить новый основной раздел с подтемами."""
+        try:
+            success = self.db.add_base_topic_section(main_topic_name, subtopics)
+            if success:
+                self._invalidate_cache()
+            return success
+        except Exception as e:
+            logging.error(f"Ошибка при добавлении раздела: {e}")
+            return False
+    
+    def update_main_topic_section(self, old_name: str, new_name: str = None, new_subtopics: List[str] = None) -> bool:
+        """Обновить основной раздел."""
+        try:
+            success = self.db.update_base_topic_section(old_name, new_name, new_subtopics)
+            if success:
+                self._invalidate_cache()
+            return success
+        except Exception as e:
+            logging.error(f"Ошибка при обновлении раздела: {e}")
+            return False
+    
+    def delete_main_topic_section(self, main_topic_name: str, hard_delete: bool = False) -> bool:
+        """Удалить основной раздел."""
+        try:
+            success = self.db.delete_base_topic_section(main_topic_name, hard_delete)
+            if success:
+                self._invalidate_cache()
+            return success
+        except Exception as e:
+            logging.error(f"Ошибка при удалении раздела: {e}")
+            return False 

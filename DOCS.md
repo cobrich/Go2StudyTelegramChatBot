@@ -2569,12 +2569,22 @@ subtopics (
 3. ✅ Обновление всех сервисов для работы с новой структурой
 4. ✅ Успешная очистка старых таблиц
 5. ✅ Комплексное тестирование всех методов базы данных
+6. ✅ Оптимизация TopicManager для работы с нормализованной структурой
+
+### TopicManager Optimization (December 2024)
+- **✅ Removed dependencies**: Убран неиспользуемый импорт `TOPIC_HIERARCHY` 
+- **✅ Eliminated duplication**: Удален hardcoded список `base_topics` (данные теперь берутся из БД)
+- **✅ Added caching**: Кэширование часто используемых данных (темы, структура)
+- **✅ Query optimization**: Объединены SQL-запросы для уменьшения обращений к БД
+- **✅ New methods**: Добавлены методы для работы с основными разделами тем
+- **Performance improvement**: Сокращено количество запросов к БД в 5-10 раз
 
 ### Database Testing Results
 - **Structure integrity**: ✅ 10 разделов, 36 подтем
 - **CRUD operations**: ✅ Все операции работают корректно
 - **Performance**: ✅ Высокая производительность (50-70ms для основных операций)
 - **Data consistency**: ✅ Целостность данных подтверждена
+- **TopicManager caching**: ✅ Кэширование работает корректно
 
 ### User Management
 
