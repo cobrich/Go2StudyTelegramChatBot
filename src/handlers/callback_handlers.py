@@ -356,7 +356,7 @@ class CallbackHandlers(BaseHandler):
                         callback_data=f"show_expl_{err['q_num']}"
                     )
                 ])
-            buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{get_active_topics().index(topic)}")])
+            buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{self.db.get_topic_names(active_only=True).index(topic)}")])
             buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
             keyboard = InlineKeyboardMarkup(buttons)
             
@@ -376,7 +376,7 @@ class CallbackHandlers(BaseHandler):
         else:
             # Отправляем полный результат
             buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]]
-            buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{get_active_topics().index(topic)}")])
+            buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{self.db.get_topic_names(active_only=True).index(topic)}")])
             buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
             keyboard = InlineKeyboardMarkup(buttons)
             
@@ -469,7 +469,7 @@ class CallbackHandlers(BaseHandler):
                     callback_data=f"show_expl_{err['q_num']}"
                 )
             ])
-        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{get_active_topics().index(topic)}")])
+        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{self.db.get_topic_names(active_only=True).index(topic)}")])
         buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
         keyboard = InlineKeyboardMarkup(buttons)
         try:

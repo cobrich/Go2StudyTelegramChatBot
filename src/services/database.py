@@ -81,16 +81,30 @@ class Database:
                 # Column already exists
                 pass
             
-            # Topics table - для управления темами
+            # Main topics table - основные разделы
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS topics (
+                CREATE TABLE IF NOT EXISTS main_topics (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE NOT NULL,
-                    description TEXT,
+                    order_index INTEGER DEFAULT 0,
                     is_active BOOLEAN DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     created_by INTEGER,
                     FOREIGN KEY (created_by) REFERENCES admins(user_id)
+                )
+            ''')
+            
+            # Subtopics table - подтемы
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS subtopics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    main_topic_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    order_index INTEGER DEFAULT 0,
+                    is_active BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(main_topic_id, name),
+                    FOREIGN KEY (main_topic_id) REFERENCES main_topics(id) ON DELETE CASCADE
                 )
             ''')
             
@@ -151,18 +165,30 @@ class Database:
                 )
             ''')
             
-            # Инициализация тем из constants.py если таблица пустая
-            cursor.execute('SELECT COUNT(*) FROM topics')
+            # Инициализация нормализованной структуры из constants.py если таблицы пустые
+            cursor.execute('SELECT COUNT(*) FROM main_topics')
             if cursor.fetchone()[0] == 0:
-                # Добавляем все подтемы из иерархической структуры
-                for main_topic, subtopics in TOPIC_HIERARCHY.items():
-                    for subtopic in subtopics:
-                        cursor.execute('''
-                            INSERT INTO topics (name, description, is_active)
-                            VALUES (?, ?, 1)
-                        ''', (subtopic, f"Подтема раздела '{main_topic}': {subtopic}"))
+                from config.constants import TOPIC_HIERARCHY
+                # Добавляем основные разделы
+                for order_index, main_topic in enumerate(TOPIC_HIERARCHY.keys()):
+                    cursor.execute('''
+                        INSERT INTO main_topics (name, order_index, is_active)
+                        VALUES (?, ?, 1)
+                    ''', (main_topic, order_index))
                 
-                print(f"[LOG] Инициализированы темы из иерархической структуры: {len(TOPICS)} тем")
+                # Получаем ID основных тем и добавляем подтемы
+                cursor.execute('SELECT id, name FROM main_topics')
+                main_topics_map = {name: id for id, name in cursor.fetchall()}
+                
+                for main_topic, subtopics in TOPIC_HIERARCHY.items():
+                    main_topic_id = main_topics_map[main_topic]
+                    for subtopic_order, subtopic in enumerate(subtopics):
+                        cursor.execute('''
+                            INSERT INTO subtopics (main_topic_id, name, order_index, is_active)
+                            VALUES (?, ?, ?, 1)
+                        ''', (main_topic_id, subtopic, subtopic_order))
+                
+                print(f"[LOG] Инициализированы темы из иерархической структуры: {len(TOPIC_HIERARCHY)} основных разделов")
             
             conn.commit()
 
@@ -557,9 +583,11 @@ class Database:
         """Check if user is super admin."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT is_super_admin FROM admins WHERE user_id = ?', (user_id,))
+            cursor.execute('''
+                SELECT is_super FROM admins WHERE user_id = ?
+            ''', (user_id,))
             result = cursor.fetchone()
-            return bool(result and result[0])
+            return result[0] == 1 if result else False
     
     def is_admin(self, user_id: int) -> bool:
         """Check if user is admin (regular or super)."""
@@ -593,25 +621,25 @@ class Database:
         except Exception:
             return False
     
-    def get_all_admins(self) -> List[Dict[str, Any]]:
-        """Get all admins."""
+    def get_all_admins(self) -> List[Dict]:
+        """Get list of all admins."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT user_id, username, full_name, is_super_admin, created_at
+                SELECT user_id, username, name, is_super, added_at
                 FROM admins
-                ORDER BY is_super_admin DESC, created_at ASC
+                ORDER BY is_super DESC, added_at ASC
             ''')
-            results = cursor.fetchall()
+            rows = cursor.fetchall()
             return [
                 {
                     'user_id': row[0],
                     'username': row[1],
-                    'full_name': row[2],
-                    'is_super_admin': bool(row[3]),
-                    'created_at': row[4]
+                    'name': row[2],
+                    'is_super': bool(row[3]),
+                    'added_at': row[4]
                 }
-                for row in results
+                for row in rows
             ]
     
     # === ALLOWED USERS MANAGEMENT ===
@@ -758,16 +786,20 @@ class Database:
                 for row in results
             ]
     
-    # === TOPICS MANAGEMENT ===
+    # === TOPICS MANAGEMENT (Updated to use normalized structure) ===
     
     def get_all_topics(self, active_only: bool = True) -> List[Dict[str, Any]]:
-        """Get all topics."""
+        """Get all subtopics as flat list for compatibility."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            query = 'SELECT id, name, description, is_active, created_at FROM topics'
+            query = '''
+                SELECT st.id, st.name, mt.name as main_topic, st.is_active, st.created_at
+                FROM subtopics st
+                JOIN main_topics mt ON st.main_topic_id = mt.id
+            '''
             if active_only:
-                query += ' WHERE is_active = 1'
-            query += ' ORDER BY name'
+                query += ' WHERE st.is_active = 1 AND mt.is_active = 1'
+            query += ' ORDER BY mt.order_index, st.order_index'
             
             cursor.execute(query)
             results = cursor.fetchall()
@@ -775,29 +807,50 @@ class Database:
                 {
                     'id': row[0],
                     'name': row[1],
-                    'description': row[2],
+                    'description': f"Подтема раздела '{row[2]}': {row[1]}",
+                    'main_topic': row[2],
                     'is_active': bool(row[3]),
                     'created_at': row[4]
                 }
                 for row in results
             ]
     
-    def add_topic(self, name: str, description: str = None, created_by: int = None) -> bool:
-        """Add new topic."""
+    def add_topic(self, name: str, description: str = None, created_by: int = None, main_topic_name: str = None) -> bool:
+        """Add new subtopic."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
+                
+                # Если указан основной раздел, найдем его ID
+                if main_topic_name:
+                    cursor.execute('SELECT id FROM main_topics WHERE name = ?', (main_topic_name,))
+                    result = cursor.fetchone()
+                    if not result:
+                        return False
+                    main_topic_id = result[0]
+                else:
+                    # Если не указан, создаем в первом доступном разделе
+                    cursor.execute('SELECT id FROM main_topics WHERE is_active = 1 ORDER BY order_index LIMIT 1')
+                    result = cursor.fetchone()
+                    if not result:
+                        return False
+                    main_topic_id = result[0]
+                
+                # Получаем следующий order_index
+                cursor.execute('SELECT MAX(order_index) FROM subtopics WHERE main_topic_id = ?', (main_topic_id,))
+                max_order = cursor.fetchone()[0] or 0
+                
                 cursor.execute('''
-                    INSERT INTO topics (name, description, created_by)
+                    INSERT INTO subtopics (main_topic_id, name, order_index)
                     VALUES (?, ?, ?)
-                ''', (name, description or f"Тема: {name}", created_by))
+                ''', (main_topic_id, name, max_order + 1))
                 conn.commit()
                 return True
         except sqlite3.IntegrityError:
             return False
     
     def update_topic(self, topic_id: int, name: str = None, description: str = None, is_active: bool = None) -> bool:
-        """Update topic."""
+        """Update subtopic."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -807,9 +860,6 @@ class Database:
                 if name is not None:
                     updates.append("name = ?")
                     params.append(name)
-                if description is not None:
-                    updates.append("description = ?")
-                    params.append(description)
                 if is_active is not None:
                     updates.append("is_active = ?")
                     params.append(is_active)
@@ -817,7 +867,7 @@ class Database:
                 if updates:
                     params.append(topic_id)
                     cursor.execute(f'''
-                        UPDATE topics 
+                        UPDATE subtopics 
                         SET {", ".join(updates)}
                         WHERE id = ?
                     ''', params)
@@ -828,52 +878,27 @@ class Database:
             return False
     
     def delete_topic(self, topic_id: int) -> bool:
-        """Delete topic (soft delete - set is_active to 0)."""
+        """Delete subtopic (soft delete - set is_active to 0)."""
         return self.update_topic(topic_id, is_active=False)
     
     def get_topic_names(self, active_only: bool = True) -> List[str]:
-        """Get list of topic names for compatibility with existing code."""
+        """Get list of subtopic names for compatibility with existing code."""
         topics = self.get_all_topics(active_only)
         return [topic['name'] for topic in topics]
     
-    # === BASE TOPIC STRUCTURE MANAGEMENT ===
+    # === BASE TOPIC STRUCTURE MANAGEMENT (Updated for normalized structure) ===
     
     def get_base_topic_structure(self) -> Dict[str, List[str]]:
-        """Get the current base topic structure from database."""
+        """Get the current base topic structure from normalized database tables."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS base_topic_structure (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    main_topic TEXT NOT NULL,
-                    subtopic TEXT NOT NULL,
-                    order_index INTEGER DEFAULT 0,
-                    is_active BOOLEAN DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(main_topic, subtopic)
-                )
-            ''')
             
-            # Если таблица пустая, инициализируем из constants.py
-            cursor.execute('SELECT COUNT(*) FROM base_topic_structure')
-            if cursor.fetchone()[0] == 0:
-                from config.constants import TOPIC_HIERARCHY
-                order_index = 0
-                for main_topic, subtopics in TOPIC_HIERARCHY.items():
-                    for subtopic in subtopics:
-                        cursor.execute('''
-                            INSERT INTO base_topic_structure (main_topic, subtopic, order_index)
-                            VALUES (?, ?, ?)
-                        ''', (main_topic, subtopic, order_index))
-                        order_index += 1
-                conn.commit()
-            
-            # Получаем структуру из базы
             cursor.execute('''
-                SELECT main_topic, subtopic 
-                FROM base_topic_structure 
-                WHERE is_active = 1 
-                ORDER BY order_index
+                SELECT mt.name, st.name
+                FROM main_topics mt
+                JOIN subtopics st ON mt.id = st.main_topic_id
+                WHERE mt.is_active = 1 AND st.is_active = 1
+                ORDER BY mt.order_index, st.order_index
             ''')
             
             structure = {}
@@ -890,15 +915,24 @@ class Database:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Получаем следующий order_index
-                cursor.execute('SELECT MAX(order_index) FROM base_topic_structure')
-                max_order = cursor.fetchone()[0] or 0
+                # Получаем следующий order_index для основной темы
+                cursor.execute('SELECT MAX(order_index) FROM main_topics')
+                max_main_order = cursor.fetchone()[0] or 0
                 
+                # Добавляем основную тему
+                cursor.execute('''
+                    INSERT INTO main_topics (name, order_index)
+                    VALUES (?, ?)
+                ''', (main_topic, max_main_order + 1))
+                
+                main_topic_id = cursor.lastrowid
+                
+                # Добавляем подтемы
                 for i, subtopic in enumerate(subtopics):
                     cursor.execute('''
-                        INSERT INTO base_topic_structure (main_topic, subtopic, order_index)
+                        INSERT INTO subtopics (main_topic_id, name, order_index)
                         VALUES (?, ?, ?)
-                    ''', (main_topic, subtopic, max_order + i + 1))
+                    ''', (main_topic_id, subtopic, i))
                 
                 conn.commit()
                 return True
@@ -912,29 +946,30 @@ class Database:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
+                # Находим ID основной темы
+                cursor.execute('SELECT id FROM main_topics WHERE name = ?', (old_main_topic,))
+                result = cursor.fetchone()
+                if not result:
+                    return False
+                main_topic_id = result[0]
+                
                 if new_main_topic and new_main_topic != old_main_topic:
                     cursor.execute('''
-                        UPDATE base_topic_structure 
-                        SET main_topic = ? 
-                        WHERE main_topic = ?
-                    ''', (new_main_topic, old_main_topic))
+                        UPDATE main_topics 
+                        SET name = ? 
+                        WHERE id = ?
+                    ''', (new_main_topic, main_topic_id))
                 
                 if new_subtopics is not None:
                     # Удаляем старые подтемы
-                    cursor.execute('''
-                        DELETE FROM base_topic_structure 
-                        WHERE main_topic = ?
-                    ''', (new_main_topic or old_main_topic,))
+                    cursor.execute('DELETE FROM subtopics WHERE main_topic_id = ?', (main_topic_id,))
                     
                     # Добавляем новые
-                    cursor.execute('SELECT MAX(order_index) FROM base_topic_structure')
-                    max_order = cursor.fetchone()[0] or 0
-                    
                     for i, subtopic in enumerate(new_subtopics):
                         cursor.execute('''
-                            INSERT INTO base_topic_structure (main_topic, subtopic, order_index)
+                            INSERT INTO subtopics (main_topic_id, name, order_index)
                             VALUES (?, ?, ?)
-                        ''', (new_main_topic or old_main_topic, subtopic, max_order + i + 1))
+                        ''', (main_topic_id, subtopic, i))
                 
                 conn.commit()
                 return True
@@ -947,14 +982,18 @@ class Database:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
+                cursor.execute('SELECT id FROM main_topics WHERE name = ?', (main_topic,))
+                result = cursor.fetchone()
+                if not result:
+                    return False
+                main_topic_id = result[0]
+                
                 if hard_delete:
-                    cursor.execute('DELETE FROM base_topic_structure WHERE main_topic = ?', (main_topic,))
+                    # При hard delete подтемы удалятся автоматически через CASCADE
+                    cursor.execute('DELETE FROM main_topics WHERE id = ?', (main_topic_id,))
                 else:
-                    cursor.execute('''
-                        UPDATE base_topic_structure 
-                        SET is_active = 0 
-                        WHERE main_topic = ?
-                    ''', (main_topic,))
+                    cursor.execute('UPDATE main_topics SET is_active = 0 WHERE id = ?', (main_topic_id,))
+                    cursor.execute('UPDATE subtopics SET is_active = 0 WHERE main_topic_id = ?', (main_topic_id,))
                 
                 conn.commit()
                 return cursor.rowcount > 0
@@ -967,17 +1006,21 @@ class Database:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
+                # Находим ID основной темы
+                cursor.execute('SELECT id FROM main_topics WHERE name = ?', (main_topic,))
+                result = cursor.fetchone()
+                if not result:
+                    return False
+                main_topic_id = result[0]
+                
                 # Получаем максимальный order_index для данной главной темы
-                cursor.execute('''
-                    SELECT MAX(order_index) FROM base_topic_structure 
-                    WHERE main_topic = ?
-                ''', (main_topic,))
+                cursor.execute('SELECT MAX(order_index) FROM subtopics WHERE main_topic_id = ?', (main_topic_id,))
                 max_order = cursor.fetchone()[0] or 0
                 
                 cursor.execute('''
-                    INSERT INTO base_topic_structure (main_topic, subtopic, order_index)
+                    INSERT INTO subtopics (main_topic_id, name, order_index)
                     VALUES (?, ?, ?)
-                ''', (main_topic, subtopic, max_order + 1))
+                ''', (main_topic_id, subtopic, max_order + 1))
                 
                 conn.commit()
                 return True
@@ -989,10 +1032,17 @@ class Database:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
+                
                 cursor.execute('''
-                    DELETE FROM base_topic_structure 
-                    WHERE main_topic = ? AND subtopic = ?
+                    SELECT st.id FROM subtopics st
+                    JOIN main_topics mt ON st.main_topic_id = mt.id
+                    WHERE mt.name = ? AND st.name = ?
                 ''', (main_topic, subtopic))
+                result = cursor.fetchone()
+                if not result:
+                    return False
+                
+                cursor.execute('DELETE FROM subtopics WHERE id = ?', (result[0],))
                 conn.commit()
                 return cursor.rowcount > 0
         except Exception:

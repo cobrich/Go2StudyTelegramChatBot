@@ -2098,3 +2098,63 @@ class AdminHandlers(BaseHandler):
         # Очищаем данные
         context.user_data.pop('admin_action', None)
         context.user_data.pop('new_base_section_name', None) 
+    
+    # === УПРАВЛЕНИЕ АДМИНАМИ ===
+    
+    async def admins_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Меню управления админами (только для суперадмина)."""
+        query = update.callback_query
+        await query.answer()
+        
+        user_id = update.effective_user.id
+        
+        if not self.db.is_super_admin(user_id):
+            await query.edit_message_text("❌ Доступ запрещен. Только для суперадминистратора.")
+            return
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ Добавить админа", callback_data="add_admin")],
+            [InlineKeyboardButton("📋 Список админов", callback_data="list_admins")],
+            [InlineKeyboardButton("🗑️ Удалить админа", callback_data="remove_admin")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text("👑 <b>Управление администраторами</b>\n\nВыберите действие:", 
+                                     reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def add_admin_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало добавления админа."""
+        query = update.callback_query
+        await query.answer()
+        
+        context.user_data['admin_action'] = 'add_admin'
+        
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admins_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text("➕ <b>Добавление администратора</b>\n\nВведите Telegram user_id нового админа:", 
+                                     reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def list_admins(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Список всех админов."""
+        query = update.callback_query
+        await query.answer()
+        
+        admins = self.db.get_all_admins()
+        
+        if not admins:
+            text = "👑 <b>Список администраторов</b>\n\nАдминистраторы не найдены."
+        else:
+            text = "👑 <b>Список администраторов</b>\n\n"
+            for i, admin in enumerate(admins, 1):
+                role = "👑 Суперадмин" if admin['is_super'] else "👨‍💼 Админ"
+                text += f"{i}. {role}\n"
+                text += f"   ID: {admin['user_id']}\n"
+                text += f"   Username: @{admin['username']}\n"
+                text += f"   Имя: {admin['name']}\n\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admins_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
