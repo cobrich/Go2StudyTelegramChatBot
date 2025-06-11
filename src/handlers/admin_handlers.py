@@ -376,7 +376,15 @@ class AdminHandlers(BaseHandler):
             text = "📋 <b>Список тем</b>\n\nТемы не найдены."
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            try:
+                await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            except Exception as e:
+                # Если сообщение не изменилось, просто игнорируем ошибку
+                if "Message is not modified" in str(e):
+                    pass  # Сообщение уже актуальное
+                else:
+                    # Для других ошибок пытаемся отправить новое сообщение
+                    await query.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
             return
         
         # Настройки пагинации
@@ -452,7 +460,15 @@ class AdminHandlers(BaseHandler):
         keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        try:
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        except Exception as e:
+            # Если сообщение не изменилось, просто игнорируем ошибку
+            if "Message is not modified" in str(e):
+                pass  # Сообщение уже актуальное
+            else:
+                # Для других ошибок пытаемся отправить новое сообщение
+                await query.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def edit_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало редактирования темы."""
@@ -2593,36 +2609,30 @@ class AdminHandlers(BaseHandler):
     async def refresh_topics_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обновление статистики тем."""
         query = update.callback_query
-        await query.answer("🔄 Обновляем статистику...")
+        await query.answer("🔄 Статистика обновлена!")
         
         try:
             # Принудительно обновляем статистику через сброс кэша
             self.topic_manager._invalidate_cache()
             
-            # Возвращаемся к списку тем с обновленной статистикой
-            # Создаем новый query с callback_data для list_topics
-            class MockQuery:
-                def __init__(self):
-                    self.data = "list_topics"
-                    
-                async def answer(self, text=None):
-                    pass
-                    
-                async def edit_message_text(self, text, reply_markup=None, parse_mode=None):
-                    return await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
-            
-            # Создаем новый update с mock query
-            mock_query = MockQuery()
-            mock_update = type('MockUpdate', (), {'callback_query': mock_query, 'effective_user': update.effective_user})()
-            
-            await self.list_topics(mock_update, context)
+            # Просто вызываем list_topics напрямую с текущими данными
+            await self.list_topics(update, context)
             
         except Exception as e:
-            await query.edit_message_text(
-                f"❌ <b>Ошибка обновления статистики</b>\n\n{str(e)}",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="list_topics")]]),
-                parse_mode='HTML'
-            )
+            # Если произошла ошибка, показываем сообщение об ошибке
+            try:
+                await query.edit_message_text(
+                    f"❌ <b>Ошибка обновления статистики</b>\n\n{str(e)}",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="list_topics")]]),
+                    parse_mode='HTML'
+                )
+            except Exception:
+                # Если и это не сработало, отправляем новое сообщение
+                await query.message.reply_text(
+                    f"❌ <b>Ошибка обновления статистики</b>\n\n{str(e)}",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="list_topics")]]),
+                    parse_mode='HTML'
+                )
 
     async def detailed_topics_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Подробная статистика по темам."""
