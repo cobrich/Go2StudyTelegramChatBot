@@ -147,22 +147,62 @@ class AdminHandlers(BaseHandler):
             text = "📋 <b>Список учеников</b>\n\nУченики не найдены."
         else:
             text = "📋 <b>Список учеников</b>\n\n"
+            
+            # Подсчитываем статистику
+            total_students = len(students)
+            active_students = sum(1 for s in students if s['is_active'])
+            synced_students = 0
+            
             for i, student in enumerate(students, 1):
                 status = "✅" if student['is_active'] else "❌"
                 
-                # Проверяем, есть ли username или user_id
-                identifier = ""
-                if student.get('username'):
-                    identifier = f"@{student['username']}"
-                elif student.get('user_id'):
-                    identifier = f"ID: {student['user_id']}"
-                else:
-                    identifier = "Не указан"
+                # Проверяем синхронизацию данных
+                is_synced = False
+                if student.get('user_id') and student.get('username'):
+                    # Проверяем, есть ли пользователь в таблице users
+                    try:
+                        with sqlite3.connect(self.db.db_path) as conn:
+                            cursor = conn.cursor()
+                            cursor.execute('''
+                                SELECT username, full_name FROM users 
+                                WHERE user_id = ?
+                            ''', (student['user_id'],))
+                            user_data = cursor.fetchone()
+                            if user_data:
+                                is_synced = True
+                                synced_students += 1
+                    except Exception:
+                        pass
                 
-                text += f"{i}. {status} {identifier}\n"
+                # Определяем идентификатор
+                identifier_parts = []
+                if student.get('username'):
+                    identifier_parts.append(f"@{student['username']}")
+                if student.get('user_id'):
+                    identifier_parts.append(f"ID: {student['user_id']}")
+                
+                identifier = " | ".join(identifier_parts) if identifier_parts else "Не указан"
+                
+                # Добавляем индикатор синхронизации
+                sync_indicator = "🔄" if is_synced else "⚠️"
+                
+                text += f"{i}. {status} {sync_indicator} {identifier}\n"
                 text += f"   ФИО: {student['full_name']}\n"
                 text += f"   Класс: {student['grade']}\n"
-                text += f"   Добавлен: {student['added_at'][:10]}\n\n"
+                text += f"   Добавлен: {student['added_at'][:10]}\n"
+                
+                if not is_synced and student.get('user_id'):
+                    text += f"   <i>Требуется синхронизация с таблицей users</i>\n"
+                
+                text += "\n"
+            
+            # Добавляем статистику в конец
+            text += f"📊 <b>Статистика:</b>\n"
+            text += f"Всего учеников: {total_students}\n"
+            text += f"Активных: {active_students}\n"
+            text += f"Синхронизированных: {synced_students}\n\n"
+            text += f"🔄 - данные синхронизированы\n"
+            text += f"⚠️ - требуется синхронизация"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1718,9 +1758,61 @@ class AdminHandlers(BaseHandler):
         fullname = context.user_data.get('new_student_fullname')
         admin_id = update.effective_user.id
         
+        # Пытаемся найти user_id по username через Telegram API
+        student_user_id = None
+        username_exists = False
+        
+        try:
+            # Пытаемся получить информацию о пользователе через username
+            chat_member = await context.bot.get_chat_member(f"@{username}", f"@{username}")
+            if chat_member and chat_member.user:
+                student_user_id = chat_member.user.id
+                username_exists = True
+                logging.info(f"Found user_id {student_user_id} for username @{username}")
+        except Exception as e:
+            # Если не удалось найти через get_chat_member, пробуем другой способ
+            try:
+                # Альтернативный способ - через поиск в чатах бота (если пользователь писал боту)
+                # Проверяем, есть ли пользователь в базе данных users
+                with sqlite3.connect(self.db.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('SELECT user_id FROM users WHERE username = ?', (username,))
+                    result = cursor.fetchone()
+                    if result:
+                        student_user_id = result[0]
+                        username_exists = True
+                        logging.info(f"Found user_id {student_user_id} for username @{username} in local database")
+            except Exception as e2:
+                logging.warning(f"Could not verify username @{username}: {e2}")
+        
+        # Добавляем ученика в allowed_users
         success = self.db.add_allowed_user(username, fullname, grade, admin_id)
         
         if success:
+            # Если удалось найти user_id, обновляем запись
+            if student_user_id:
+                try:
+                    with sqlite3.connect(self.db.db_path) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute('''
+                            UPDATE allowed_users 
+                            SET user_id = ? 
+                            WHERE username = ?
+                        ''', (student_user_id, username))
+                        conn.commit()
+                        logging.info(f"Updated allowed_users with user_id {student_user_id} for @{username}")
+                        
+                        # Также создаем/обновляем запись в users для синхронизации
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO users (user_id, username, full_name, grade)
+                            VALUES (?, ?, ?, ?)
+                        ''', (student_user_id, username, fullname, grade))
+                        conn.commit()
+                        logging.info(f"Synced user data in users table for user_id {student_user_id}")
+                        
+                except Exception as e:
+                    logging.error(f"Error updating user_id for @{username}: {e}")
+            
             # Показываем сообщение об успехе и возвращаемся в меню управления учениками
             keyboard = [
                 [InlineKeyboardButton("➕ Добавить ученика (по username)", callback_data="add_student")],
@@ -1731,8 +1823,18 @@ class AdminHandlers(BaseHandler):
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            text = f"✅ Ученик @{username} успешно добавлен!\n\nФИО: {fullname}\nКласс: {grade}\n\n"
-            text += "👥 <b>Управление учениками</b>\n\nВыберите действие:"
+            text = f"✅ Ученик @{username} успешно добавлен!\n\n"
+            text += f"ФИО: {fullname}\nКласс: {grade}\n"
+            
+            if student_user_id:
+                text += f"🆔 Telegram ID: {student_user_id}\n"
+                text += f"✅ Username подтвержден и ID автоматически добавлен\n"
+                text += f"📊 Данные синхронизированы в обеих таблицах\n"
+            else:
+                text += f"⚠️ Username не подтвержден (пользователь не найден)\n"
+                text += f"💡 ID будет добавлен автоматически при первом использовании бота\n"
+            
+            text += f"\n👥 <b>Управление учениками</b>\n\nВыберите действие:"
             
             await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
@@ -1758,9 +1860,42 @@ class AdminHandlers(BaseHandler):
         fullname = context.user_data.get('new_student_fullname')
         admin_id = update.effective_user.id
         
-        success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id)
+        # Пытаемся получить username пользователя через Telegram API
+        username = None
+        try:
+            user_info = await context.bot.get_chat(student_user_id)
+            if user_info and user_info.username:
+                username = user_info.username
+                logging.info(f"Found username @{username} for user_id {student_user_id}")
+        except Exception as e:
+            # Если не удалось получить через API, проверяем локальную базу
+            try:
+                with sqlite3.connect(self.db.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('SELECT username FROM users WHERE user_id = ?', (student_user_id,))
+                    result = cursor.fetchone()
+                    if result and result[0]:
+                        username = result[0]
+                        logging.info(f"Found username @{username} for user_id {student_user_id} in local database")
+            except Exception as e2:
+                logging.warning(f"Could not find username for user_id {student_user_id}: {e2}")
+        
+        success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id, username)
         
         if success:
+            # Синхронизируем данные в таблице users
+            try:
+                with sqlite3.connect(self.db.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO users (user_id, username, full_name, grade)
+                        VALUES (?, ?, ?, ?)
+                    ''', (student_user_id, username, fullname, grade))
+                    conn.commit()
+                    logging.info(f"Synced user data in users table for user_id {student_user_id}")
+            except Exception as e:
+                logging.error(f"Error syncing user data for user_id {student_user_id}: {e}")
+            
             # Показываем сообщение об успехе и возвращаемся в меню управления учениками
             keyboard = [
                 [InlineKeyboardButton("➕ Добавить ученика (по username)", callback_data="add_student")],
@@ -1771,8 +1906,18 @@ class AdminHandlers(BaseHandler):
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            text = f"✅ Ученик с ID {student_user_id} успешно добавлен!\n\nФИО: {fullname}\nКласс: {grade}\n\n"
-            text += "👥 <b>Управление учениками</b>\n\nВыберите действие:"
+            text = f"✅ Ученик с ID {student_user_id} успешно добавлен!\n\n"
+            text += f"ФИО: {fullname}\nКласс: {grade}\n"
+            
+            if username:
+                text += f"👤 Username: @{username}\n"
+                text += f"✅ Username автоматически найден и добавлен\n"
+            else:
+                text += f"⚠️ Username не найден\n"
+                text += f"💡 Username будет добавлен автоматически при первом использовании бота\n"
+            
+            text += f"📊 Данные синхронизированы в обеих таблицах\n"
+            text += f"\n👥 <b>Управление учениками</b>\n\nВыберите действие:"
             
             await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
