@@ -201,13 +201,13 @@ class AdminHandlers(BaseHandler):
         # Получаем существующие темы из базы
         existing_topics = [topic['name'] for topic in self.db.get_all_topics(active_only=False)]
         
-        # Получаем базовые темы из constants.py
-        from config.constants import TOPIC_HIERARCHY
+        # Получаем базовые темы из базы данных вместо constants.py
+        base_structure = self.db.get_base_topic_structure()
         
         missing_topics = []
         existing_base_topics = []
         
-        for main_topic, subtopics in TOPIC_HIERARCHY.items():
+        for main_topic, subtopics in base_structure.items():
             for subtopic in subtopics:
                 if subtopic in existing_topics:
                     existing_base_topics.append((main_topic, subtopic))
@@ -218,9 +218,14 @@ class AdminHandlers(BaseHandler):
             text = "📋 <b>Базовые темы</b>\n\n"
             text += "✅ Все базовые темы уже добавлены в систему!\n\n"
             text += f"Всего базовых тем: {len(existing_base_topics)}\n"
-            text += "Используйте 'Добавить новую тему' для создания собственных тем."
+            text += "Используйте 'Добавить новую тему' для создания собственных тем.\n\n"
+            text += "<b>🔧 Управление базовой структурой тем:</b>\n"
+            text += "Теперь базовые темы управляются через базу данных."
             
-            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="add_topic")]]
+            keyboard = [
+                [InlineKeyboardButton("🏗️ Управление базовой структурой", callback_data="manage_base_structure")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="add_topic")]
+            ]
         else:
             text = "📋 <b>Базовые темы</b>\n\n"
             text += f"✅ Добавлено: {len(existing_base_topics)}\n"
@@ -247,6 +252,7 @@ class AdminHandlers(BaseHandler):
                 text += f"\n... и еще {len(missing_topics) - 15} тем"
             
             keyboard.append([InlineKeyboardButton("✅ Добавить ВСЕ недостающие", callback_data="add_all_missing_topics")])
+            keyboard.append([InlineKeyboardButton("🏗️ Управление базовой структурой", callback_data="manage_base_structure")])
             keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="add_topic")])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -310,13 +316,13 @@ class AdminHandlers(BaseHandler):
         # Получаем существующие темы
         existing_topics = [topic['name'] for topic in self.db.get_all_topics(active_only=False)]
         
-        # Получаем базовые темы
-        from config.constants import TOPIC_HIERARCHY
+        # Получаем базовые темы из базы данных
+        base_structure = self.db.get_base_topic_structure()
         
         added_count = 0
         failed_count = 0
         
-        for main_topic, subtopics in TOPIC_HIERARCHY.items():
+        for main_topic, subtopics in base_structure.items():
             for subtopic in subtopics:
                 if subtopic not in existing_topics:
                     description = f"Подтема раздела '{main_topic}': {subtopic}"
@@ -1496,6 +1502,10 @@ class AdminHandlers(BaseHandler):
             await self._handle_edit_question_id(update, context, text)
         elif action == 'edit_question_explanation':
             await self._handle_edit_question_explanation(update, context, text)
+        elif action == 'add_base_section_name':
+            await self._handle_add_base_section_name(update, context, text)
+        elif action == 'add_base_section_subtopics':
+            await self._handle_add_base_section_subtopics(update, context, text)
     
     # === ОБРАБОТКА ДОКУМЕНТОВ ===
     
@@ -1910,3 +1920,172 @@ class AdminHandlers(BaseHandler):
         context.user_data.pop('admin_action', None)
         context.user_data.pop('edit_question_id', None)
         context.user_data.pop('edit_question_answer', None) 
+    
+    # === УПРАВЛЕНИЕ БАЗОВОЙ СТРУКТУРЫ ТЕМ ===
+    
+    async def manage_base_structure_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Меню управления базовой структурой тем."""
+        query = update.callback_query
+        await query.answer()
+        
+        # Получаем статистику базовой структуры
+        base_structure = self.db.get_base_topic_structure()
+        total_sections = len(base_structure)
+        total_subtopics = sum(len(subtopics) for subtopics in base_structure.values())
+        
+        text = f"🏗️ <b>Управление базовой структурой тем</b>\n\n"
+        text += f"📊 <b>Текущая структура:</b>\n"
+        text += f"• Разделов: {total_sections}\n"
+        text += f"• Подтем: {total_subtopics}\n\n"
+        text += "Выберите действие:"
+        
+        keyboard = [
+            [InlineKeyboardButton("📋 Просмотр структуры", callback_data="view_base_structure")],
+            [InlineKeyboardButton("➕ Добавить раздел", callback_data="add_base_section")],
+            [InlineKeyboardButton("✏️ Редактировать раздел", callback_data="edit_base_section")],
+            [InlineKeyboardButton("🗑️ Удалить раздел", callback_data="delete_base_section")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="add_topic")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def view_base_structure(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Просмотр базовой структуры тем."""
+        query = update.callback_query
+        await query.answer()
+        
+        base_structure = self.db.get_base_topic_structure()
+        
+        text = f"📋 <b>Базовая структура тем</b>\n\n"
+        
+        if not base_structure:
+            text += "Структура пустая."
+        else:
+            for i, (main_topic, subtopics) in enumerate(base_structure.items(), 1):
+                text += f"{i}. <b>{main_topic}</b> ({len(subtopics)} подтем)\n"
+                for j, subtopic in enumerate(subtopics[:3], 1):  # Показываем первые 3
+                    text += f"   {j}. {subtopic}\n"
+                if len(subtopics) > 3:
+                    text += f"   ... и еще {len(subtopics) - 3}\n"
+                text += "\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="manage_base_structure")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def add_base_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало добавления нового раздела."""
+        query = update.callback_query
+        await query.answer()
+        
+        context.user_data['admin_action'] = 'add_base_section_name'
+        
+        text = f"➕ <b>Добавление нового раздела</b>\n\n"
+        text += "Введите название основного раздела (например: '📊 Статистика и вероятность'):"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="manage_base_structure")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def edit_base_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало редактирования раздела."""
+        query = update.callback_query
+        await query.answer()
+        
+        base_structure = self.db.get_base_topic_structure()
+        
+        if not base_structure:
+            text = "✏️ <b>Редактирование раздела</b>\n\nНет разделов для редактирования."
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="manage_base_structure")]]
+        else:
+            text = "✏️ <b>Редактирование раздела</b>\n\nВыберите раздел для редактирования:\n\n"
+            keyboard = []
+            
+            for main_topic in base_structure.keys():
+                keyboard.append([InlineKeyboardButton(
+                    f"✏️ {main_topic}",
+                    callback_data=f"edit_base_section_select_{main_topic[:30]}"
+                )])
+            
+            keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="manage_base_structure")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def delete_base_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало удаления раздела."""
+        query = update.callback_query
+        await query.answer()
+        
+        base_structure = self.db.get_base_topic_structure()
+        
+        if not base_structure:
+            text = "🗑️ <b>Удаление раздела</b>\n\nНет разделов для удаления."
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="manage_base_structure")]]
+        else:
+            text = "🗑️ <b>Удаление раздела</b>\n\nВыберите раздел для удаления:\n\n"
+            text += "⚠️ <i>Удаление раздела не удаляет созданные темы</i>\n\n"
+            keyboard = []
+            
+            for main_topic, subtopics in base_structure.items():
+                keyboard.append([InlineKeyboardButton(
+                    f"🗑️ {main_topic} ({len(subtopics)} подтем)",
+                    callback_data=f"delete_base_section_confirm_{main_topic[:30]}"
+                )])
+            
+            keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="manage_base_structure")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')    # === ОБРАБОТЧИКИ ДЛЯ БАЗОВОЙ СТРУКТУРЫ ТЕМ ===
+    
+    async def _handle_add_base_section_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE, section_name: str) -> None:
+        """Обработка названия нового раздела."""
+        context.user_data['new_base_section_name'] = section_name
+        context.user_data['admin_action'] = 'add_base_section_subtopics'
+        
+        await update.message.reply_text(
+            f"Введите подтемы для раздела '<b>{section_name}</b>':\n\n"
+            f"Формат: каждая подтема с новой строки\n"
+            f"Пример:\n"
+            f"Подтема 1\n"
+            f"Подтема 2\n"
+            f"Подтема 3",
+            parse_mode='HTML'
+        )
+    
+    async def _handle_add_base_section_subtopics(self, update: Update, context: ContextTypes.DEFAULT_TYPE, subtopics_text: str) -> None:
+        """Обработка подтем нового раздела."""
+        section_name = context.user_data.get('new_base_section_name')
+        if not section_name:
+            await update.message.reply_text("❌ Ошибка: название раздела не найдено.")
+            return
+        
+        # Парсим подтемы
+        subtopics = [line.strip() for line in subtopics_text.split('\n') if line.strip()]
+        
+        if not subtopics:
+            await update.message.reply_text("❌ Введите хотя бы одну подтему. Попробуйте еще раз:")
+            return
+        
+        # Добавляем в базу
+        success = self.db.add_base_topic_section(section_name, subtopics)
+        
+        if success:
+            text = f"✅ <b>Раздел добавлен!</b>\n\n"
+            text += f"<b>Раздел:</b> {section_name}\n"
+            text += f"<b>Подтем:</b> {len(subtopics)}\n\n"
+            text += "<b>Подтемы:</b>\n"
+            for i, subtopic in enumerate(subtopics, 1):
+                text += f"{i}. {subtopic}\n"
+        else:
+            text = f"❌ <b>Ошибка добавления раздела</b>\n\n"
+            text += "Возможно, некоторые подтемы уже существуют."
+        
+        await update.message.reply_text(text, parse_mode='HTML')
+        
+        # Очищаем данные
+        context.user_data.pop('admin_action', None)
+        context.user_data.pop('new_base_section_name', None) 

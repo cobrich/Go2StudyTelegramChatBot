@@ -835,6 +835,168 @@ class Database:
         """Get list of topic names for compatibility with existing code."""
         topics = self.get_all_topics(active_only)
         return [topic['name'] for topic in topics]
+    
+    # === BASE TOPIC STRUCTURE MANAGEMENT ===
+    
+    def get_base_topic_structure(self) -> Dict[str, List[str]]:
+        """Get the current base topic structure from database."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS base_topic_structure (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    main_topic TEXT NOT NULL,
+                    subtopic TEXT NOT NULL,
+                    order_index INTEGER DEFAULT 0,
+                    is_active BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(main_topic, subtopic)
+                )
+            ''')
+            
+            # Если таблица пустая, инициализируем из constants.py
+            cursor.execute('SELECT COUNT(*) FROM base_topic_structure')
+            if cursor.fetchone()[0] == 0:
+                from config.constants import TOPIC_HIERARCHY
+                order_index = 0
+                for main_topic, subtopics in TOPIC_HIERARCHY.items():
+                    for subtopic in subtopics:
+                        cursor.execute('''
+                            INSERT INTO base_topic_structure (main_topic, subtopic, order_index)
+                            VALUES (?, ?, ?)
+                        ''', (main_topic, subtopic, order_index))
+                        order_index += 1
+                conn.commit()
+            
+            # Получаем структуру из базы
+            cursor.execute('''
+                SELECT main_topic, subtopic 
+                FROM base_topic_structure 
+                WHERE is_active = 1 
+                ORDER BY order_index
+            ''')
+            
+            structure = {}
+            for main_topic, subtopic in cursor.fetchall():
+                if main_topic not in structure:
+                    structure[main_topic] = []
+                structure[main_topic].append(subtopic)
+            
+            return structure
+    
+    def add_base_topic_section(self, main_topic: str, subtopics: List[str], created_by: int = None) -> bool:
+        """Add a new base topic section."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Получаем следующий order_index
+                cursor.execute('SELECT MAX(order_index) FROM base_topic_structure')
+                max_order = cursor.fetchone()[0] or 0
+                
+                for i, subtopic in enumerate(subtopics):
+                    cursor.execute('''
+                        INSERT INTO base_topic_structure (main_topic, subtopic, order_index)
+                        VALUES (?, ?, ?)
+                    ''', (main_topic, subtopic, max_order + i + 1))
+                
+                conn.commit()
+                return True
+        except sqlite3.IntegrityError:
+            return False
+    
+    def update_base_topic_section(self, old_main_topic: str, new_main_topic: str = None, 
+                                 new_subtopics: List[str] = None) -> bool:
+        """Update a base topic section."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                if new_main_topic and new_main_topic != old_main_topic:
+                    cursor.execute('''
+                        UPDATE base_topic_structure 
+                        SET main_topic = ? 
+                        WHERE main_topic = ?
+                    ''', (new_main_topic, old_main_topic))
+                
+                if new_subtopics is not None:
+                    # Удаляем старые подтемы
+                    cursor.execute('''
+                        DELETE FROM base_topic_structure 
+                        WHERE main_topic = ?
+                    ''', (new_main_topic or old_main_topic,))
+                    
+                    # Добавляем новые
+                    cursor.execute('SELECT MAX(order_index) FROM base_topic_structure')
+                    max_order = cursor.fetchone()[0] or 0
+                    
+                    for i, subtopic in enumerate(new_subtopics):
+                        cursor.execute('''
+                            INSERT INTO base_topic_structure (main_topic, subtopic, order_index)
+                            VALUES (?, ?, ?)
+                        ''', (new_main_topic or old_main_topic, subtopic, max_order + i + 1))
+                
+                conn.commit()
+                return True
+        except Exception:
+            return False
+    
+    def delete_base_topic_section(self, main_topic: str, hard_delete: bool = False) -> bool:
+        """Delete a base topic section."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                if hard_delete:
+                    cursor.execute('DELETE FROM base_topic_structure WHERE main_topic = ?', (main_topic,))
+                else:
+                    cursor.execute('''
+                        UPDATE base_topic_structure 
+                        SET is_active = 0 
+                        WHERE main_topic = ?
+                    ''', (main_topic,))
+                
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception:
+            return False
+    
+    def add_base_subtopic(self, main_topic: str, subtopic: str) -> bool:
+        """Add a single subtopic to existing main topic."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Получаем максимальный order_index для данной главной темы
+                cursor.execute('''
+                    SELECT MAX(order_index) FROM base_topic_structure 
+                    WHERE main_topic = ?
+                ''', (main_topic,))
+                max_order = cursor.fetchone()[0] or 0
+                
+                cursor.execute('''
+                    INSERT INTO base_topic_structure (main_topic, subtopic, order_index)
+                    VALUES (?, ?, ?)
+                ''', (main_topic, subtopic, max_order + 1))
+                
+                conn.commit()
+                return True
+        except sqlite3.IntegrityError:
+            return False
+    
+    def remove_base_subtopic(self, main_topic: str, subtopic: str) -> bool:
+        """Remove a subtopic from base structure."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    DELETE FROM base_topic_structure 
+                    WHERE main_topic = ? AND subtopic = ?
+                ''', (main_topic, subtopic))
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception:
+            return False
 
     # === USER DATA MANAGEMENT ===
     

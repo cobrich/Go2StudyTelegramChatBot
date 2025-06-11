@@ -293,6 +293,28 @@ def main() -> None:
         pattern="^back_to_results$"
     ))
     
+    # Base structure management handlers
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.manage_base_structure_menu,
+        pattern="^manage_base_structure$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.view_base_structure,
+        pattern="^view_base_structure$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_base_section_start,
+        pattern="^add_base_section$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_base_section_start,
+        pattern="^edit_base_section$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_base_section_start,
+        pattern="^delete_base_section$"
+    ))
+    
     # Start the Bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
