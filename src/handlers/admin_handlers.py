@@ -2127,9 +2127,16 @@ class AdminHandlers(BaseHandler):
                                      reply_markup=reply_markup, parse_mode='HTML')
     
     async def add_admin_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Начало добавления админа."""
+        """Начало добавления админа (только для суперадмина)."""
         query = update.callback_query
         await query.answer()
+        
+        user_id = update.effective_user.id
+        
+        # Проверяем, что пользователь является суперадмином
+        if not self.db.is_super_admin(user_id):
+            await query.edit_message_text("❌ Доступ запрещен. Только суперадминистратор может добавлять админов.")
+            return
         
         context.user_data['admin_action'] = 'add_admin'
         
@@ -2158,6 +2165,149 @@ class AdminHandlers(BaseHandler):
                 text += f"   Имя: {admin['name']}\n\n"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admins_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def remove_admin_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало удаления админа (только для суперадмина)."""
+        query = update.callback_query
+        await query.answer()
+        
+        user_id = update.effective_user.id
+        
+        if not self.db.is_super_admin(user_id):
+            await query.edit_message_text("❌ Доступ запрещен. Только суперадминистратор может удалять админов.")
+            return
+        
+        admins = self.db.get_all_admins()
+        current_admin_id = user_id
+        
+        # Фильтруем список: убираем суперадминов и текущего пользователя
+        removable_admins = [admin for admin in admins if not admin['is_super'] and admin['user_id'] != current_admin_id]
+        
+        if not removable_admins:
+            text = "🗑️ <b>Удаление администратора</b>\n\nНет администраторов, которых можно удалить.\n\n"
+            text += "ℹ️ <i>Суперадминистратор не может удалить себя или других суперадминистраторов.</i>"
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admins_menu")]]
+        else:
+            text = "🗑️ <b>Удаление администратора</b>\n\nВыберите администратора для удаления:\n\n"
+            text += "⚠️ <i>Можно удалить только обычных админов</i>\n\n"
+            keyboard = []
+            
+            for admin in removable_admins:
+                display_text = f"👨‍💼 @{admin['username']} - {admin['name']}"
+                keyboard.append([InlineKeyboardButton(
+                    display_text,
+                    callback_data=f"remove_admin_confirm_{admin['user_id']}"
+                )])
+            
+            keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="admins_menu")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def remove_admin_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение удаления админа."""
+        query = update.callback_query
+        admin_id_to_remove = int(query.data.replace('remove_admin_confirm_', ''))
+        await query.answer()
+        
+        current_user_id = update.effective_user.id
+        
+        # Дополнительная проверка прав
+        if not self.db.is_super_admin(current_user_id):
+            await query.edit_message_text("❌ Доступ запрещен. Только суперадминистратор может удалять админов.")
+            return
+        
+        # Получаем информацию об админе
+        admins = self.db.get_all_admins()
+        admin_to_remove = next((admin for admin in admins if admin['user_id'] == admin_id_to_remove), None)
+        
+        if not admin_to_remove:
+            await query.edit_message_text(
+                "❌ Администратор не найден.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admins_menu")]])
+            )
+            return
+        
+        # Проверяем, что не пытаемся удалить суперадмина или себя
+        if admin_to_remove['is_super']:
+            await query.edit_message_text(
+                "❌ Нельзя удалить суперадминистратора.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="remove_admin")]])
+            )
+            return
+        
+        if admin_id_to_remove == current_user_id:
+            await query.edit_message_text(
+                "❌ Нельзя удалить самого себя.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="remove_admin")]])
+            )
+            return
+        
+        text = f"🗑️ <b>Подтверждение удаления</b>\n\n"
+        text += f"<b>Администратор:</b> @{admin_to_remove['username']}\n"
+        text += f"<b>Имя:</b> {admin_to_remove['name']}\n"
+        text += f"<b>ID:</b> {admin_to_remove['user_id']}\n"
+        text += f"<b>Роль:</b> {'👑 Суперадмин' if admin_to_remove['is_super'] else '👨‍💼 Админ'}\n\n"
+        text += "⚠️ <b>ВНИМАНИЕ:</b> Это действие нельзя отменить!\n"
+        text += "Пользователь потеряет права администратора.\n\n"
+        text += "Подтвердите удаление:"
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ Да, удалить", callback_data=f"remove_admin_execute_{admin_id_to_remove}")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="remove_admin")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def remove_admin_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение удаления админа."""
+        query = update.callback_query
+        admin_id_to_remove = int(query.data.replace('remove_admin_execute_', ''))
+        await query.answer()
+        
+        current_user_id = update.effective_user.id
+        
+        # Финальная проверка прав
+        if not self.db.is_super_admin(current_user_id):
+            await query.edit_message_text("❌ Доступ запрещен. Только суперадминистратор может удалять админов.")
+            return
+        
+        # Получаем информацию об админе перед удалением
+        admins = self.db.get_all_admins()
+        admin_to_remove = next((admin for admin in admins if admin['user_id'] == admin_id_to_remove), None)
+        
+        if not admin_to_remove:
+            await query.edit_message_text(
+                "❌ Администратор не найден.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admins_menu")]])
+            )
+            return
+        
+        # Финальные проверки безопасности
+        if admin_to_remove['is_super'] or admin_id_to_remove == current_user_id:
+            await query.edit_message_text(
+                "❌ Операция запрещена по соображениям безопасности.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admins_menu")]])
+            )
+            return
+        
+        # Удаляем админа
+        success = self.db.remove_admin(admin_id_to_remove)
+        
+        if success:
+            text = f"✅ <b>Администратор удален</b>\n\n"
+            text += f"Пользователь @{admin_to_remove['username']} ({admin_to_remove['name']}) больше не является администратором.\n"
+            text += f"ID: {admin_id_to_remove}"
+        else:
+            text = f"❌ <b>Ошибка удаления</b>\n\n"
+            text += f"Не удалось удалить администратора @{admin_to_remove['username']}.\n"
+            text += f"Возможно, администратор уже был удален."
+        
+        keyboard = [[InlineKeyboardButton("🔙 К управлению админами", callback_data="admins_menu")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')

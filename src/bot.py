@@ -246,6 +246,18 @@ def main() -> None:
         admin_handlers.admins_menu,
         pattern="^admins_menu$"
     ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_admin_start,
+        pattern="^remove_admin$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_admin_confirm,
+        pattern="^remove_admin_confirm_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_admin_execute,
+        pattern="^remove_admin_execute_"
+    ))
     
     # Add callback query handlers
     application.add_handler(CallbackQueryHandler(
