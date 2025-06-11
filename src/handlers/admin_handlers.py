@@ -713,10 +713,10 @@ class AdminHandlers(BaseHandler):
         users_with_history = self.db.get_all_users_with_history()
         
         if not users_with_history:
-            text = "📈 **История пользователей**\n\nПользователей с историей тестов не найдено."
+            text = "📈 <b>История пользователей</b>\n\nПользователей с историей тестов не найдено."
         else:
-            text = "📈 **История пользователей**\n\n"
-            text += "*(включая удаленных из whitelist)*\n\n"
+            text = "📈 <b>История пользователей</b>\n\n"
+            text += "<i>(включая удаленных из whitelist)</i>\n\n"
             
             for i, user in enumerate(users_with_history[:10], 1):  # Показываем первых 10
                 username = user['username'] or f"ID_{user['user_id']}"
@@ -730,7 +730,7 @@ class AdminHandlers(BaseHandler):
                 avg_percentage = user.get('avg_percentage') or 0
                 avg_percentage = float(avg_percentage) if avg_percentage is not None else 0.0
                 
-                text += f"{i}. **@{username}** ({status})\n"
+                text += f"{i}. <b>@{username}</b> ({status})\n"
                 text += f"   ФИО: {full_name}\n"
                 text += f"   Тестов: {user['total_tests']}, Средний балл: {avg_percentage:.1f}%\n"
                 text += f"   Ошибок: {user['unique_errors']} уникальных\n"
@@ -744,7 +744,7 @@ class AdminHandlers(BaseHandler):
         keyboard = [[InlineKeyboardButton("🔙 Назад к статистике", callback_data="admin_stats")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def merge_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало объединения тем."""
@@ -761,7 +761,7 @@ class AdminHandlers(BaseHandler):
             )
             return
         
-        text = "🔗 **Объединение тем**\n\n"
+        text = "🔗 <b>Объединение тем</b>\n\n"
         text += "Выберите исходную тему (из которой будут перенесены вопросы):\n\n"
         
         keyboard = []
@@ -776,7 +776,7 @@ class AdminHandlers(BaseHandler):
         keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")])
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def merge_topics_select_target(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выбор целевой темы для объединения."""
@@ -800,8 +800,8 @@ class AdminHandlers(BaseHandler):
         
         topic_stats = self.topic_manager.get_topic_statistics()
         
-        text = f"🔗 **Объединение тем**\n\n"
-        text += f"Исходная тема: **{source_topic['name']}**\n"
+        text = f"🔗 <b>Объединение тем</b>\n\n"
+        text += f"Исходная тема: <b>{source_topic['name']}</b>\n"
         text += f"Вопросов: {topic_stats.get(source_topic['name'], {}).get('question_count', 0)}\n\n"
         text += "Выберите целевую тему (в которую будут перенесены вопросы):\n\n"
         
@@ -820,7 +820,7 @@ class AdminHandlers(BaseHandler):
         keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")])
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def merge_topics_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Подтверждение объединения тем."""
@@ -852,13 +852,13 @@ class AdminHandlers(BaseHandler):
         source_count = topic_stats.get(source_topic['name'], {}).get('question_count', 0)
         target_count = topic_stats.get(target_topic['name'], {}).get('question_count', 0)
         
-        text = f"🔗 **Подтверждение объединения**\n\n"
-        text += f"**Исходная тема:** {source_topic['name']}\n"
+        text = f"🔗 <b>Подтверждение объединения</b>\n\n"
+        text += f"<b>Исходная тема:</b> {source_topic['name']}\n"
         text += f"Вопросов: {source_count}\n\n"
-        text += f"**Целевая тема:** {target_topic['name']}\n"
+        text += f"<b>Целевая тема:</b> {target_topic['name']}\n"
         text += f"Вопросов: {target_count}\n\n"
-        text += f"**Результат:** {target_count + source_count} вопросов в теме '{target_topic['name']}'\n\n"
-        text += "⚠️ **Внимание:** Исходная тема будет деактивирована!\n\n"
+        text += f"<b>Результат:</b> {target_count + source_count} вопросов в теме '{target_topic['name']}'\n\n"
+        text += "⚠️ <b>Внимание:</b> Исходная тема будет деактивирована!\n\n"
         text += "Подтвердите объединение:"
         
         keyboard = [
@@ -867,7 +867,7 @@ class AdminHandlers(BaseHandler):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def merge_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выполнение объединения тем."""
@@ -895,17 +895,17 @@ class AdminHandlers(BaseHandler):
         success = self.topic_manager.merge_topics(source_topic['name'], target_topic['name'])
         
         if success:
-            text = f"✅ **Объединение завершено!**\n\n"
+            text = f"✅ <b>Объединение завершено!</b>\n\n"
             text += f"Все вопросы из темы '{source_topic['name']}' перенесены в '{target_topic['name']}'.\n"
             text += f"Исходная тема деактивирована."
         else:
-            text = f"❌ **Ошибка при объединении тем.**\n\n"
+            text = f"❌ <b>Ошибка при объединении тем.</b>\n\n"
             text += "Попробуйте еще раз или обратитесь к разработчику."
         
         keyboard = [[InlineKeyboardButton("🔙 К управлению темами", callback_data="admin_topics")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
         
         # Очищаем данные
         context.user_data.pop('merge_source_id', None) 
