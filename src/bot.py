@@ -242,6 +242,10 @@ def main() -> None:
         admin_handlers.list_admins,
         pattern="^list_admins$"
     ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.admins_menu,
+        pattern="^admins_menu$"
+    ))
     
     # Add callback query handlers
     application.add_handler(CallbackQueryHandler(

@@ -12,6 +12,12 @@ Go2Study Bot is a Telegram bot designed to help students learn mathematics throu
 - **ENHANCED SECURITY**: Added access checks to all major callback and command handlers
 
 ### 🔧 RECENT FIXES (2025-01-11):
+- **FIXED ADMIN CANCEL BUTTON**: Исправлена кнопка "Отмена" в админ-панели при добавлении администратора
+  - **Проблема**: Кнопка "Отмена" не работала при добавлении нового администратора
+  - **Причина**: Отсутствовал обработчик callback для `admins_menu`
+  - **Исправление**: Добавлен обработчик CallbackQueryHandler для pattern "^admins_menu$"
+  - **Улучшение**: Добавлена очистка состояния context.user_data при возврате в меню админов
+  - **Результат**: Кнопка "Отмена" теперь корректно возвращает в меню управления администраторами
 - **FIXED ADMIN PANEL DATABASE ERROR**: Исправлена критическая ошибка с колонкой is_super
   - **Проблема**: Команда /admin вызывала ошибку "sqlite3.OperationalError: no such column: is_super"
   - **Причина**: Несоответствие имен колонок - в таблице была is_super_admin, а в запросах использовалось is_super

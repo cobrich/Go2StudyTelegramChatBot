@@ -2106,6 +2106,9 @@ class AdminHandlers(BaseHandler):
         query = update.callback_query
         await query.answer()
         
+        # Очищаем состояние при возврате в меню
+        context.user_data.pop('admin_action', None)
+        
         user_id = update.effective_user.id
         
         if not self.db.is_super_admin(user_id):
