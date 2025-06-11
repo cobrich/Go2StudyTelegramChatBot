@@ -101,6 +101,10 @@ def main() -> None:
         pattern="^add_student$"
     ))
     application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_student_by_id_start,
+        pattern="^add_student_by_id$"
+    ))
+    application.add_handler(CallbackQueryHandler(
         admin_handlers.list_students,
         pattern="^list_students$"
     ))

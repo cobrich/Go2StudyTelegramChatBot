@@ -66,9 +66,9 @@ class AdminHandlers(BaseHandler):
         await query.answer()
         
         keyboard = [
-            [InlineKeyboardButton("➕ Добавить ученика", callback_data="add_student")],
+            [InlineKeyboardButton("➕ Добавить ученика (по username)", callback_data="add_student")],
+            [InlineKeyboardButton("🆔 Добавить ученика (по ID)", callback_data="add_student_by_id")],
             [InlineKeyboardButton("📋 Список учеников", callback_data="list_students")],
-            [InlineKeyboardButton("✏️ Редактировать ученика", callback_data="edit_student")],
             [InlineKeyboardButton("🗑️ Удалить ученика", callback_data="remove_student")],
             [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
         ]
@@ -85,6 +85,14 @@ class AdminHandlers(BaseHandler):
         context.user_data['admin_action'] = 'add_student'
         await query.edit_message_text("➕ **Добавление ученика**\n\nВведите username ученика (без @):")
     
+    async def add_student_by_id_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало добавления ученика по ID."""
+        query = update.callback_query
+        await query.answer()
+        
+        context.user_data['admin_action'] = 'add_student_by_id'
+        await query.edit_message_text("🆔 **Добавление ученика по ID**\n\nВведите Telegram user_id ученика:")
+    
     async def list_students(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Список всех учеников."""
         query = update.callback_query
@@ -98,7 +106,17 @@ class AdminHandlers(BaseHandler):
             text = "📋 **Список учеников**\n\n"
             for i, student in enumerate(students, 1):
                 status = "✅" if student['is_active'] else "❌"
-                text += f"{i}. {status} @{student['username']}\n"
+                
+                # Проверяем, есть ли username или user_id
+                identifier = ""
+                if student.get('username'):
+                    identifier = f"@{student['username']}"
+                elif student.get('user_id'):
+                    identifier = f"ID: {student['user_id']}"
+                else:
+                    identifier = "Не указан"
+                
+                text += f"{i}. {status} {identifier}\n"
                 text += f"   ФИО: {student['full_name']}\n"
                 text += f"   Класс: {student['grade']}\n"
                 text += f"   Добавлен: {student['added_at'][:10]}\n\n"
@@ -434,14 +452,20 @@ class AdminHandlers(BaseHandler):
         
         if action == 'add_student':
             await self._handle_add_student(update, context, text)
+        elif action == 'add_student_by_id':
+            await self._handle_add_student_by_id(update, context, text)
         elif action == 'add_topic':
             await self._handle_add_topic(update, context, text)
         elif action == 'add_admin':
             await self._handle_add_admin(update, context, text)
         elif action == 'student_fullname':
             await self._handle_student_fullname(update, context, text)
+        elif action == 'student_by_id_fullname':
+            await self._handle_student_by_id_fullname(update, context, text)
         elif action == 'student_grade':
             await self._handle_student_grade(update, context, text)
+        elif action == 'student_by_id_grade':
+            await self._handle_student_by_id_grade(update, context, text)
         elif action == 'topic_description':
             await self._handle_topic_description(update, context, text)
     
@@ -471,6 +495,25 @@ class AdminHandlers(BaseHandler):
         
         await update.message.reply_text(f"Введите ФИО ученика @{username}:")
     
+    async def _handle_add_student_by_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id_text: str) -> None:
+        """Обработка добавления ученика по ID - этап 1 (user_id)."""
+        try:
+            student_user_id = int(user_id_text)
+        except ValueError:
+            await update.message.reply_text("❌ Введите корректный user_id (число). Попробуйте еще раз:")
+            return
+        
+        # Проверяем, что этот пользователь еще не добавлен
+        if self.db.check_user_access(student_user_id):
+            await update.message.reply_text(f"❌ Пользователь с ID {student_user_id} уже имеет доступ к боту.")
+            context.user_data.pop('admin_action', None)
+            return
+        
+        context.user_data['new_student_user_id'] = student_user_id
+        context.user_data['admin_action'] = 'student_by_id_fullname'
+        
+        await update.message.reply_text(f"Введите ФИО ученика с ID {student_user_id}:")
+
     async def _handle_student_fullname(self, update: Update, context: ContextTypes.DEFAULT_TYPE, fullname: str) -> None:
         """Обработка добавления ученика - этап 2 (ФИО)."""
         context.user_data['new_student_fullname'] = fullname
@@ -478,6 +521,13 @@ class AdminHandlers(BaseHandler):
         
         await update.message.reply_text("Введите класс ученика (число от 1 до 11):")
     
+    async def _handle_student_by_id_fullname(self, update: Update, context: ContextTypes.DEFAULT_TYPE, fullname: str) -> None:
+        """Обработка добавления ученика по ID - этап 2 (ФИО)."""
+        context.user_data['new_student_fullname'] = fullname
+        context.user_data['admin_action'] = 'student_by_id_grade'
+        
+        await update.message.reply_text("Введите класс ученика (число от 1 до 11):")
+
     async def _handle_student_grade(self, update: Update, context: ContextTypes.DEFAULT_TYPE, grade_text: str) -> None:
         """Обработка добавления ученика - этап 3 (класс)."""
         try:
@@ -503,6 +553,33 @@ class AdminHandlers(BaseHandler):
         # Очищаем данные
         context.user_data.pop('admin_action', None)
         context.user_data.pop('new_student_username', None)
+        context.user_data.pop('new_student_fullname', None)
+    
+    async def _handle_student_by_id_grade(self, update: Update, context: ContextTypes.DEFAULT_TYPE, grade_text: str) -> None:
+        """Обработка добавления ученика по ID - этап 3 (класс)."""
+        try:
+            grade = int(grade_text)
+            if grade < 1 or grade > 11:
+                await update.message.reply_text("❌ Класс должен быть от 1 до 11. Попробуйте еще раз:")
+                return
+        except ValueError:
+            await update.message.reply_text("❌ Введите корректный номер класса (число). Попробуйте еще раз:")
+            return
+        
+        student_user_id = context.user_data.get('new_student_user_id')
+        fullname = context.user_data.get('new_student_fullname')
+        admin_id = update.effective_user.id
+        
+        success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id)
+        
+        if success:
+            await update.message.reply_text(f"✅ Ученик с ID {student_user_id} успешно добавлен!\n\nФИО: {fullname}\nКласс: {grade}")
+        else:
+            await update.message.reply_text(f"❌ Ошибка при добавлении ученика. Возможно, пользователь с ID {student_user_id} уже существует.")
+        
+        # Очищаем данные
+        context.user_data.pop('admin_action', None)
+        context.user_data.pop('new_student_user_id', None)
         context.user_data.pop('new_student_fullname', None)
     
     async def _handle_add_topic(self, update: Update, context: ContextTypes.DEFAULT_TYPE, topic_name: str) -> None:

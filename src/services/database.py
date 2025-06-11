@@ -73,6 +73,14 @@ class Database:
                 )
             ''')
             
+            # Add user_id column for users without username
+            try:
+                cursor.execute('ALTER TABLE allowed_users ADD COLUMN user_id INTEGER')
+                conn.commit()
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+            
             # Topics table - для управления темами
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS topics (
@@ -616,6 +624,33 @@ class Database:
             result = cursor.fetchone()
             return bool(result and result[0])
     
+    def is_user_allowed_by_id(self, user_id: int) -> bool:
+        """Check if user is allowed by user_id (for users without username)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT is_active FROM allowed_users WHERE user_id = ?', (user_id,))
+            result = cursor.fetchone()
+            return bool(result and result[0])
+    
+    def check_user_access(self, user_id: int, username: str = None) -> bool:
+        """
+        Comprehensive access check for users.
+        Checks admin status, username whitelist, and user_id whitelist.
+        """
+        # First check if user is admin
+        if self.is_admin(user_id):
+            return True
+        
+        # Check username whitelist if username exists
+        if username and self.is_user_allowed(username):
+            return True
+        
+        # Check user_id whitelist for users without username
+        if self.is_user_allowed_by_id(user_id):
+            return True
+        
+        return False
+    
     def add_allowed_user(self, username: str, full_name: str, grade: int, added_by: int) -> bool:
         """Add user to whitelist."""
         try:
@@ -625,6 +660,20 @@ class Database:
                     INSERT INTO allowed_users (username, full_name, grade, added_by)
                     VALUES (?, ?, ?, ?)
                 ''', (username, full_name, grade, added_by))
+                conn.commit()
+                return True
+        except sqlite3.IntegrityError:
+            return False
+    
+    def add_allowed_user_by_id(self, user_id: int, full_name: str, grade: int, added_by: int, username: str = None) -> bool:
+        """Add user to whitelist by user_id (for users without username)."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO allowed_users (user_id, username, full_name, grade, added_by)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (user_id, username, full_name, grade, added_by))
                 conn.commit()
                 return True
         except sqlite3.IntegrityError:
@@ -677,18 +726,19 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT username, full_name, grade, is_active, added_at
+                SELECT user_id, username, full_name, grade, is_active, added_at
                 FROM allowed_users
                 ORDER BY added_at DESC
             ''')
             results = cursor.fetchall()
             return [
                 {
-                    'username': row[0],
-                    'full_name': row[1],
-                    'grade': row[2],
-                    'is_active': bool(row[3]),
-                    'added_at': row[4]
+                    'user_id': row[0],
+                    'username': row[1],
+                    'full_name': row[2],
+                    'grade': row[3],
+                    'is_active': bool(row[4]),
+                    'added_at': row[5]
                 }
                 for row in results
             ]

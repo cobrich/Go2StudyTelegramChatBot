@@ -3,7 +3,57 @@
 ## Project Overview
 Go2Study Bot is a Telegram bot designed to help students learn mathematics through interactive tests and quizzes. The bot provides a structured learning experience with immediate feedback and explanations.
 
-## Current Status: Test Interface Improved (2025-01-11)
+## Current Status: Security Issue Fixed - Whitelist Bypass (2025-01-11)
+
+### ⚠️ CRITICAL SECURITY FIX:
+- **FIXED WHITELIST BYPASS**: Users without Telegram username could bypass access control
+- **ENHANCED ACCESS CONTROL**: New comprehensive system supporting both username and user_id
+- **ADMIN FUNCTIONALITY**: Added ability to whitelist users by user_id for users without username
+- **DATABASE SCHEMA UPDATE**: Added user_id column to allowed_users table
+- **UNAUTHORIZED USER REMOVED**: Cleaned up user who gained access without permission
+
+### What was fixed:
+1. **Access Control Logic**: `check_user_access()` now checks:
+   - Admin status (by user_id)
+   - Username whitelist (if username exists)
+   - User_id whitelist (for users without username)
+
+2. **New Admin Functions**:
+   - "Add student by username" (existing)
+   - "Add student by ID" (new) - for users without Telegram username
+
+3. **Database Updates**:
+   - Added `user_id` column to `allowed_users` table
+   - New functions: `is_user_allowed_by_id()`, `add_allowed_user_by_id()`
+   - Enhanced `get_all_allowed_users()` to show both username and user_id
+
+4. **Security Improvements**:
+   - Fixed start command to properly check access before registration
+   - Better error messages showing user ID and username status
+   - Comprehensive access validation
+
+### Technical Details:
+
+**Problem**: Users without Telegram username (`user.username = None`) would bypass whitelist check:
+```python
+# OLD (vulnerable):
+if not self.db.is_admin(user.id):
+    if not self.db.is_user_allowed(user.username):  # None bypassed this
+        # access denied
+        return
+# Code continued anyway! ❌
+```
+
+**Solution**: New comprehensive access check:
+```python
+# NEW (secure):
+if not self.db.check_user_access(user.id, user.username):
+    # access denied with clear error message
+    return
+# Code only continues if access granted ✅
+```
+
+## Previous Status: Test Interface Improved (2025-01-11)
 
 ### Recently Completed:
 - ✅ **IMPROVED TEST EXPERIENCE**: Enhanced user interface during test taking
@@ -11,7 +61,8 @@ Go2Study Bot is a Telegram bot designed to help students learn mathematics throu
 - ✅ **Detailed Explanations at End**: Full explanations and analysis shown only in final results
 - ✅ **Fixed Test Completion**: Resolved HTTP 400 errors and test not finishing properly on last question
 - ✅ **Enhanced Error Handling**: Added fallback message sending when editing fails
-- ✅ **Better Results Format**: Improved final results display with percentage and comprehensive breakdown
+- ✅ **Better Results Format**: Shows percentage and clean formatting
+- ✅ **Updated Documentation**: Comprehensive DOCS.md with all improvements
 
 ### Test Interface Improvements:
 
