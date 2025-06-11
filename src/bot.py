@@ -266,6 +266,10 @@ def main() -> None:
         pattern="^main_topic_"
     ))
     application.add_handler(CallbackQueryHandler(
+        callback_handlers.handle_main_menu,
+        pattern="^back_to_main$"
+    ))
+    application.add_handler(CallbackQueryHandler(
         callback_handlers.handle_back_to_main_topics,
         pattern="^back_to_main_topics$"
     ))
@@ -300,10 +304,6 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(
         callback_handlers.handle_next_question,
         pattern="^next_question$"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        callback_handlers.handle_main_menu,
-        pattern="^main_menu$"
     ))
     application.add_handler(CallbackQueryHandler(
         callback_handlers.handle_back_to_results,

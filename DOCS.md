@@ -60,6 +60,12 @@ Go2Study Bot is a Telegram bot designed to help students learn mathematics throu
   - **Исправление**: Добавлена обработка исключений в методах list_topics и refresh_topics_stats
   - **Логика**: Если сообщение не изменилось - игнорируем ошибку, для других ошибок - отправляем новое сообщение
   - **Результат**: Плавная работа кнопки обновления статистики без ошибок
+- **FIXED ADMIN PANEL BACK BUTTON**: Исправлена кнопка "Назад" в админ-панели
+  - **Проблема**: Кнопка "🔙 Назад" в админ-панели не работала
+  - **Причина**: Отсутствовал обработчик для callback_data "back_to_main"
+  - **Исправление**: Добавлен CallbackQueryHandler для pattern "^back_to_main$"
+  - **Функциональность**: Кнопка теперь возвращает к главному меню бота
+  - **Результат**: Корректная навигация из админ-панели в главное меню
 
 ### 🔧 ADDITIONAL IMPROVEMENT - PDF Question Source Display:
 - **FIXED PDF SOURCE LABELING**: PDF questions now correctly show as "🟢 (из базы)" instead of "🤖 (ИИ)"
