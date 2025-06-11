@@ -38,7 +38,7 @@ class AdminHandlers(BaseHandler):
             except Exception:
                 pass  # Игнорируем ошибки удаления (например, если сообщение уже удалено)
             
-            # Пытаемся удалить предыдущие сообщения с inline-клавиатурами
+            # Пытаемся удалить предыдущие сообщения (обычно там выбор тем)
             chat_id = update.message.chat_id
             message_id = update.message.message_id
             
@@ -257,7 +257,7 @@ class AdminHandlers(BaseHandler):
         
         context.user_data['admin_action'] = 'add_topic'
         
-        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="add_topic")]]
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text("➕ <b>Добавление новой темы</b>\n\nВведите название новой темы:", 
@@ -884,17 +884,20 @@ class AdminHandlers(BaseHandler):
         
         callback_data = query.data
         
-        # Парсим данные из callback
-        parts = callback_data.replace('remove_student_execute_', '').split('_')
-        
-        if len(parts) >= 2 and parts[0] == "username":
-            username = parts[1]
+        # Парсим данные из callback - исправленная версия
+        if callback_data.startswith('remove_student_execute_username_'):
+            username = callback_data.replace('remove_student_execute_username_', '')
             success = self.db.remove_allowed_user(username)
             student_identifier = f"@{username}"
-        elif len(parts) >= 2 and parts[0] == "id":
-            user_id = int(parts[1])
-            success = self.db.remove_allowed_user_by_id(user_id)
-            student_identifier = f"ID: {user_id}"
+        elif callback_data.startswith('remove_student_execute_id_'):
+            user_id_str = callback_data.replace('remove_student_execute_id_', '')
+            try:
+                user_id = int(user_id_str)
+                success = self.db.remove_allowed_user_by_id(user_id)
+                student_identifier = f"ID: {user_id}"
+            except ValueError:
+                await query.edit_message_text("❌ Ошибка: неверный ID пользователя.")
+                return
         else:
             await query.edit_message_text("❌ Ошибка в данных.")
             return
