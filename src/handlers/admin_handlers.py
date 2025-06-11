@@ -2143,8 +2143,16 @@ class AdminHandlers(BaseHandler):
         keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admins_menu")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text("➕ <b>Добавление администратора</b>\n\nВведите Telegram user_id нового админа:", 
-                                     reply_markup=reply_markup, parse_mode='HTML')
+        text = "➕ <b>Добавление обычного администратора</b>\n\n"
+        text += "👨‍💼 <b>Права обычного администратора:</b>\n"
+        text += "• Управление учениками\n"
+        text += "• Управление темами\n"
+        text += "• Управление вопросами\n"
+        text += "• Просмотр статистики\n\n"
+        text += "ℹ️ <i>Для добавления суперадминистратора используйте скрипт init_superadmin.py</i>\n\n"
+        text += "Введите Telegram user_id нового администратора:"
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def list_admins(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Список всех админов."""
