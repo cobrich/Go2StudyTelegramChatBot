@@ -65,6 +65,9 @@ class AdminHandlers(BaseHandler):
         query = update.callback_query
         await query.answer()
         
+        # Очищаем состояние при возврате в меню
+        context.user_data.pop('admin_action', None)
+        
         keyboard = [
             [InlineKeyboardButton("➕ Добавить ученика (по username)", callback_data="add_student")],
             [InlineKeyboardButton("🆔 Добавить ученика (по ID)", callback_data="add_student_by_id")],
@@ -83,7 +86,12 @@ class AdminHandlers(BaseHandler):
         await query.answer()
         
         context.user_data['admin_action'] = 'add_student'
-        await query.edit_message_text("➕ **Добавление ученика**\n\nВведите username ученика (без @):")
+        
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text("➕ **Добавление ученика**\n\nВведите username ученика (без @):", 
+                                     reply_markup=reply_markup, parse_mode='Markdown')
     
     async def add_student_by_id_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало добавления ученика по ID."""
@@ -91,7 +99,12 @@ class AdminHandlers(BaseHandler):
         await query.answer()
         
         context.user_data['admin_action'] = 'add_student_by_id'
-        await query.edit_message_text("🆔 **Добавление ученика по ID**\n\nВведите Telegram user_id ученика:")
+        
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text("🆔 **Добавление ученика по ID**\n\nВведите Telegram user_id ученика:", 
+                                     reply_markup=reply_markup, parse_mode='Markdown')
     
     async def list_students(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Список всех учеников."""
@@ -133,6 +146,9 @@ class AdminHandlers(BaseHandler):
         query = update.callback_query
         await query.answer()
         
+        # Очищаем состояние при возврате в меню
+        context.user_data.pop('admin_action', None)
+        
         keyboard = [
             [InlineKeyboardButton("➕ Добавить тему", callback_data="add_topic")],
             [InlineKeyboardButton("📋 Список тем", callback_data="list_topics")],
@@ -152,7 +168,12 @@ class AdminHandlers(BaseHandler):
         await query.answer()
         
         context.user_data['admin_action'] = 'add_topic'
-        await query.edit_message_text("➕ **Добавление темы**\n\nВведите название новой темы:")
+        
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text("➕ **Добавление темы**\n\nВведите название новой темы:", 
+                                     reply_markup=reply_markup, parse_mode='Markdown')
     
     async def list_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Список всех тем."""
@@ -391,6 +412,9 @@ class AdminHandlers(BaseHandler):
         query = update.callback_query
         await query.answer()
         
+        # Очищаем состояние при возврате в меню
+        context.user_data.pop('admin_action', None)
+        
         user_id = update.effective_user.id
         if not self.db.is_super_admin(user_id):
             await query.edit_message_text("❌ Только суперадминистратор может управлять админами.")
@@ -413,7 +437,12 @@ class AdminHandlers(BaseHandler):
         await query.answer()
         
         context.user_data['admin_action'] = 'add_admin'
-        await query.edit_message_text("➕ **Добавление админа**\n\nВведите user_id нового админа:")
+        
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_admins")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text("➕ **Добавление админа**\n\nВведите user_id нового админа:", 
+                                     reply_markup=reply_markup, parse_mode='Markdown')
     
     async def list_admins(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Список всех админов."""
