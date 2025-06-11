@@ -218,8 +218,6 @@ class CallbackHandlers(BaseHandler):
             result_text = "✅ Правильно!"
         else:
             result_text = f"❌ Неправильно!\n\nПравильный ответ: {correct_answer}"
-            if error_count > 0:
-                result_text += f"\n\nКоличество ошибок в этом вопросе: {error_count}"
         
         if current_index == len(questions) - 1:
             # Last question - show final result and complete test
