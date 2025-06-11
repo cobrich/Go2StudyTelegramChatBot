@@ -52,9 +52,10 @@ def main() -> None:
     # Add text message handler for ReplyKeyboardMarkup and admin actions
     async def handle_text_with_admin(update: Update, context):
         # Сначала проверяем админские действия
-        await admin_handlers.handle_admin_text(update, context)
-        # Затем обычные действия
-        await command_handlers.handle_text(update, context)
+        admin_handled = await admin_handlers.handle_admin_text(update, context)
+        # Если админ-обработчик не обработал сообщение, вызываем обычный обработчик
+        if not admin_handled:
+            await command_handlers.handle_text(update, context)
     
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_with_admin))
     

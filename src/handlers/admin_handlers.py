@@ -1457,14 +1457,17 @@ class AdminHandlers(BaseHandler):
 
     # === ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ ===
     
-    async def handle_admin_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Обработка текстовых сообщений в админ-режиме."""
+    async def handle_admin_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+        """Обработка текстовых сообщений в админ-режиме. Возвращает True если сообщение обработано."""
         user_id = update.effective_user.id
         
         if not self.db.is_admin(user_id):
-            return
+            return False
         
         action = context.user_data.get('admin_action')
+        if not action:
+            return False
+            
         text = update.message.text.strip()
         
         if action == 'add_student':
@@ -1519,6 +1522,10 @@ class AdminHandlers(BaseHandler):
             await self._handle_add_base_section_name(update, context, text)
         elif action == 'add_base_section_subtopics':
             await self._handle_add_base_section_subtopics(update, context, text)
+        else:
+            return False
+            
+        return True
     
     # === ОБРАБОТКА ДОКУМЕНТОВ ===
     
@@ -1730,9 +1737,33 @@ class AdminHandlers(BaseHandler):
             text += f"• Роль: Обычный администратор\n\n"
             text += f"Пользователь получил права управления учениками, темами, вопросами и статистикой."
             
-            await update.message.reply_text(text, parse_mode='HTML')
+            # Показываем меню управления администраторами
+            keyboard = [
+                [InlineKeyboardButton("➕ Добавить админа", callback_data="add_admin")],
+                [InlineKeyboardButton("📋 Список админов", callback_data="list_admins")],
+                [InlineKeyboardButton("🗑️ Удалить админа", callback_data="remove_admin")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            text += f"\n\n👑 <b>Управление администраторами</b>\n\nВыберите действие:"
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
-            await update.message.reply_text(f"❌ Ошибка при добавлении админа. Возможно, пользователь {new_admin_id} уже является админом.")
+            text = f"❌ Ошибка при добавлении админа. Возможно, пользователь {new_admin_id} уже является админом."
+            
+            # Даже при ошибке показываем меню
+            keyboard = [
+                [InlineKeyboardButton("➕ Добавить админа", callback_data="add_admin")],
+                [InlineKeyboardButton("📋 Список админов", callback_data="list_admins")],
+                [InlineKeyboardButton("🗑️ Удалить админа", callback_data="remove_admin")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            text += f"\n\n👑 <b>Управление администраторами</b>\n\nВыберите действие:"
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         
         # Очищаем все данные
         context.user_data.pop('admin_action', None)
