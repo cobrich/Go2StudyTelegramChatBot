@@ -357,7 +357,7 @@ class AdminHandlers(BaseHandler):
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def list_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Список всех тем."""
+        """Список всех тем с пагинацией."""
         query = update.callback_query
         await query.answer()
         
@@ -366,14 +366,49 @@ class AdminHandlers(BaseHandler):
         
         if not topics:
             text = "📋 <b>Список тем</b>\n\nТемы не найдены."
-        else:
-            text = "📋 <b>Список тем</b>\n\n"
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            return
+        
+        # Ограничиваем количество тем для отображения
+        max_topics_per_page = 15
+        total_topics = len(topics)
+        
+        if total_topics <= max_topics_per_page:
+            # Показываем все темы
+            text = f"📋 <b>Список тем</b> (всего: {total_topics})\n\n"
             for i, topic in enumerate(topics, 1):
                 status = "✅" if topic['is_active'] else "❌"
                 question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
                 text += f"{i}. {status} <b>{topic['name']}</b>\n"
                 text += f"   ID: {topic['id']} | Вопросов: {question_count}\n"
-                text += f"   Описание: {topic['description']}\n\n"
+                # Ограничиваем длину описания
+                description = topic['description']
+                if len(description) > 50:
+                    description = description[:50] + "..."
+                text += f"   Описание: {description}\n\n"
+        else:
+            # Показываем краткую статистику
+            active_count = sum(1 for t in topics if t['is_active'])
+            inactive_count = total_topics - active_count
+            total_questions = sum(topic_stats.get(t['name'], {}).get('question_count', 0) for t in topics)
+            
+            text = f"📋 <b>Список тем</b>\n\n"
+            text += f"📊 <b>Статистика:</b>\n"
+            text += f"• Всего тем: {total_topics}\n"
+            text += f"• Активных: {active_count} ✅\n"
+            text += f"• Неактивных: {inactive_count} ❌\n"
+            text += f"• Всего вопросов: {total_questions}\n\n"
+            
+            text += f"<b>Первые {max_topics_per_page} тем:</b>\n\n"
+            for i, topic in enumerate(topics[:max_topics_per_page], 1):
+                status = "✅" if topic['is_active'] else "❌"
+                question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
+                text += f"{i}. {status} <b>{topic['name']}</b> ({question_count} вопр.)\n"
+            
+            if total_topics > max_topics_per_page:
+                text += f"\n... и еще {total_topics - max_topics_per_page} тем"
         
         keyboard = [
             [InlineKeyboardButton("🔄 Обновить статистику", callback_data="refresh_topics")],
@@ -2101,10 +2136,11 @@ class AdminHandlers(BaseHandler):
             text = "✏️ <b>Редактирование раздела</b>\n\nВыберите раздел для редактирования:\n\n"
             keyboard = []
             
-            for main_topic in base_structure.keys():
+            for i, main_topic in enumerate(base_structure.keys()):
+                # Используем индекс вместо названия для callback_data
                 keyboard.append([InlineKeyboardButton(
                     f"✏️ {main_topic}",
-                    callback_data=f"edit_base_section_select_{main_topic[:30]}"
+                    callback_data=f"edit_base_section_select_{i}"
                 )])
             
             keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="manage_base_structure")])
@@ -2127,16 +2163,17 @@ class AdminHandlers(BaseHandler):
             text += "⚠️ <i>Удаление раздела не удаляет созданные темы</i>\n\n"
             keyboard = []
             
-            for main_topic, subtopics in base_structure.items():
+            for i, (main_topic, subtopics) in enumerate(base_structure.items()):
+                # Используем индекс вместо названия для callback_data
                 keyboard.append([InlineKeyboardButton(
                     f"🗑️ {main_topic} ({len(subtopics)} подтем)",
-                    callback_data=f"delete_base_section_confirm_{main_topic[:30]}"
+                    callback_data=f"delete_base_section_confirm_{i}"
                 )])
             
             keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="manage_base_structure")])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')    # === ОБРАБОТЧИКИ ДЛЯ БАЗОВОЙ СТРУКТУРЫ ТЕМ ===
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def _handle_add_base_section_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE, section_name: str) -> None:
         """Обработка названия нового раздела."""
@@ -2186,6 +2223,115 @@ class AdminHandlers(BaseHandler):
         # Очищаем данные
         context.user_data.pop('admin_action', None)
         context.user_data.pop('new_base_section_name', None) 
+    
+    async def edit_base_section_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выбор раздела для редактирования."""
+        query = update.callback_query
+        await query.answer()
+        
+        try:
+            section_index = int(query.data.replace('edit_base_section_select_', ''))
+            base_structure = self.db.get_base_topic_structure()
+            main_topics = list(base_structure.keys())
+            
+            if section_index >= len(main_topics):
+                raise IndexError("Invalid section index")
+                
+            main_topic = main_topics[section_index]
+            subtopics = base_structure[main_topic]
+            
+            text = f"✏️ <b>Редактирование раздела</b>\n\n"
+            text += f"<b>Раздел:</b> {main_topic}\n"
+            text += f"<b>Подтем:</b> {len(subtopics)}\n\n"
+            text += "<b>Подтемы:</b>\n"
+            for i, subtopic in enumerate(subtopics, 1):
+                text += f"{i}. {subtopic}\n"
+            
+            text += "\n<i>Функция редактирования разделов будет добавлена в следующих обновлениях.</i>"
+            
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="edit_base_section")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except (ValueError, IndexError):
+            await query.edit_message_text(
+                "❌ Ошибка: раздел не найден.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="edit_base_section")]])
+            )
+
+    async def delete_base_section_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение удаления раздела."""
+        query = update.callback_query
+        await query.answer()
+        
+        try:
+            section_index = int(query.data.replace('delete_base_section_confirm_', ''))
+            base_structure = self.db.get_base_topic_structure()
+            main_topics = list(base_structure.keys())
+            
+            if section_index >= len(main_topics):
+                raise IndexError("Invalid section index")
+                
+            main_topic = main_topics[section_index]
+            subtopics = base_structure[main_topic]
+            
+            text = f"🗑️ <b>Подтверждение удаления</b>\n\n"
+            text += f"<b>Раздел:</b> {main_topic}\n"
+            text += f"<b>Подтем:</b> {len(subtopics)}\n\n"
+            text += "⚠️ <b>Внимание!</b> Это действие нельзя отменить.\n"
+            text += "Удаление раздела не удаляет созданные темы.\n\n"
+            text += "Вы уверены, что хотите удалить этот раздел?"
+            
+            keyboard = [
+                [InlineKeyboardButton("✅ Да, удалить", callback_data=f"delete_base_section_execute_{section_index}")],
+                [InlineKeyboardButton("❌ Отмена", callback_data="delete_base_section")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except (ValueError, IndexError):
+            await query.edit_message_text(
+                "❌ Ошибка: раздел не найден.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="delete_base_section")]])
+            )
+
+    async def delete_base_section_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение удаления раздела."""
+        query = update.callback_query
+        await query.answer()
+        
+        try:
+            section_index = int(query.data.replace('delete_base_section_execute_', ''))
+            base_structure = self.db.get_base_topic_structure()
+            main_topics = list(base_structure.keys())
+            
+            if section_index >= len(main_topics):
+                raise IndexError("Invalid section index")
+                
+            main_topic = main_topics[section_index]
+            
+            # Удаляем раздел из базы данных
+            success = self.db.delete_base_topic_section(main_topic)
+            
+            if success:
+                text = f"✅ <b>Раздел удален</b>\n\n"
+                text += f"Раздел '{main_topic}' успешно удален из базовой структуры."
+            else:
+                text = f"❌ <b>Ошибка удаления</b>\n\n"
+                text += f"Не удалось удалить раздел '{main_topic}'."
+            
+            keyboard = [[InlineKeyboardButton("🔙 К управлению структурой", callback_data="manage_base_structure")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except (ValueError, IndexError):
+            await query.edit_message_text(
+                "❌ Ошибка: раздел не найден.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="manage_base_structure")]])
+            )
     
     # === УПРАВЛЕНИЕ АДМИНАМИ ===
     

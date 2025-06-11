@@ -331,6 +331,18 @@ def main() -> None:
         admin_handlers.delete_base_section_start,
         pattern="^delete_base_section$"
     ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_base_section_select,
+        pattern="^edit_base_section_select_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_base_section_confirm,
+        pattern="^delete_base_section_confirm_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_base_section_execute,
+        pattern="^delete_base_section_execute_"
+    ))
     
     # Start the Bot
     application.run_polling(allowed_updates=Update.ALL_TYPES)
