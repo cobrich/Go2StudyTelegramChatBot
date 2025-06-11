@@ -30,6 +30,14 @@ class AdminHandlers(BaseHandler):
                 await update.callback_query.answer("❌ У вас нет прав администратора.")
             return
         
+        # Удаляем предыдущие сообщения для чистого интерфейса
+        if update.message:
+            try:
+                # Удаляем сообщение с командой /admin
+                await update.message.delete()
+            except Exception:
+                pass  # Игнорируем ошибки удаления (например, если сообщение уже удалено)
+        
         is_super = self.db.is_super_admin(user_id)
         
         keyboard = []
@@ -46,7 +54,7 @@ class AdminHandlers(BaseHandler):
             keyboard.append([InlineKeyboardButton("👑 Управление админами", callback_data="admin_admins")])
         
         keyboard.append([InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")])
-        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")])
+        keyboard.append([InlineKeyboardButton("🔙 Назад к выбору тем", callback_data="back_to_main")])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -54,6 +62,7 @@ class AdminHandlers(BaseHandler):
         text = f"🔧 <b>Админ-панель</b>\n\nВаша роль: {role}\n\nВыберите действие:"
         
         if update.message:
+            # Отправляем новое сообщение (старое уже удалено)
             await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
             query = update.callback_query
