@@ -122,6 +122,12 @@ def main() -> None:
         pattern="^remove_student_execute_"
     ))
     
+    # Student confirmation handler
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.confirm_add_student,
+        pattern="^confirm_add_student_"
+    ))
+    
     # Topic management handlers
     application.add_handler(CallbackQueryHandler(
         admin_handlers.add_topic_start,

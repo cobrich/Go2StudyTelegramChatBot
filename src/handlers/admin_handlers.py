@@ -913,6 +913,30 @@ class AdminHandlers(BaseHandler):
         
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
+    async def confirm_add_student(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение добавления ученика после неудачной проверки username."""
+        query = update.callback_query
+        await query.answer()
+        
+        callback_data = query.data
+        username = callback_data.replace('confirm_add_student_', '')
+        
+        # Получаем сохраненные данные
+        pending_student = context.user_data.get('pending_student')
+        if not pending_student or pending_student['username'] != username:
+            await query.edit_message_text("❌ Ошибка: данные ученика не найдены.")
+            return
+        
+        # Добавляем ученика в базу данных
+        await self._add_student_to_database(
+            update, context, 
+            pending_student['username'], 
+            pending_student['fullname'], 
+            pending_student['grade'], 
+            pending_student.get('user_id'),
+            "⚠️ Добавлен без проверки username"
+        )
+
     async def _handle_edit_topic_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_name: str) -> None:
         """Обработка изменения названия темы."""
         topic_id = context.user_data.get('edit_topic_id')
@@ -1758,22 +1782,27 @@ class AdminHandlers(BaseHandler):
         fullname = context.user_data.get('new_student_fullname')
         admin_id = update.effective_user.id
         
-        # Пытаемся найти user_id по username через Telegram API
+        # СНАЧАЛА проверяем username и получаем user_id
         student_user_id = None
         username_exists = False
+        verification_message = ""
+        
+        await update.message.reply_text("🔍 Проверяю username через Telegram API...")
         
         try:
-            # Пытаемся получить информацию о пользователе через username
-            chat_member = await context.bot.get_chat_member(f"@{username}", f"@{username}")
-            if chat_member and chat_member.user:
-                student_user_id = chat_member.user.id
+            # Правильный способ проверки username через Telegram API
+            # Пытаемся получить информацию о пользователе
+            chat_info = await context.bot.get_chat(f"@{username}")
+            if chat_info and chat_info.id:
+                student_user_id = chat_info.id
                 username_exists = True
+                verification_message = f"✅ Username @{username} подтвержден через Telegram API"
                 logging.info(f"Found user_id {student_user_id} for username @{username}")
         except Exception as e:
-            # Если не удалось найти через get_chat_member, пробуем другой способ
+            logging.warning(f"Telegram API verification failed for @{username}: {e}")
+            
+            # Fallback: проверяем в локальной базе данных
             try:
-                # Альтернативный способ - через поиск в чатах бота (если пользователь писал боту)
-                # Проверяем, есть ли пользователь в базе данных users
                 with sqlite3.connect(self.db.db_path) as conn:
                     cursor = conn.cursor()
                     cursor.execute('SELECT user_id FROM users WHERE username = ?', (username,))
@@ -1781,9 +1810,53 @@ class AdminHandlers(BaseHandler):
                     if result:
                         student_user_id = result[0]
                         username_exists = True
+                        verification_message = f"✅ Username @{username} найден в локальной базе данных"
                         logging.info(f"Found user_id {student_user_id} for username @{username} in local database")
+                    else:
+                        verification_message = f"⚠️ Username @{username} не найден в Telegram API и локальной базе"
+                        logging.warning(f"Username @{username} not found in API or local database")
             except Exception as e2:
-                logging.warning(f"Could not verify username @{username}: {e2}")
+                verification_message = f"❌ Ошибка при проверке username @{username}: {e2}"
+                logging.error(f"Error checking username @{username}: {e2}")
+        
+        # Показываем результат проверки
+        await update.message.reply_text(f"📋 {verification_message}")
+        
+        # Спрашиваем подтверждение у админа
+        if not username_exists:
+            keyboard = [
+                [InlineKeyboardButton("✅ Да, добавить", callback_data=f"confirm_add_student_{username}")],
+                [InlineKeyboardButton("❌ Отмена", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            text = f"⚠️ <b>Внимание!</b>\n\n"
+            text += f"Username @{username} не найден в Telegram.\n"
+            text += f"Это может означать:\n"
+            text += f"• Пользователь еще не писал боту\n"
+            text += f"• Username указан неверно\n"
+            text += f"• У пользователя скрытый профиль\n\n"
+            text += f"Добавить ученика без проверки?"
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+            # Сохраняем данные для подтверждения
+            context.user_data['pending_student'] = {
+                'username': username,
+                'fullname': fullname,
+                'grade': grade,
+                'user_id': student_user_id
+            }
+            return
+        
+        # Если username подтвержден, добавляем сразу
+        await self._add_student_to_database(update, context, username, fullname, grade, student_user_id, verification_message)
+    
+    async def _add_student_to_database(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
+                                     username: str, fullname: str, grade: int, 
+                                     student_user_id: int = None, verification_message: str = ""):
+        """Добавление ученика в базу данных."""
+        admin_id = update.effective_user.id
         
         # Добавляем ученика в allowed_users
         success = self.db.add_allowed_user(username, fullname, grade, admin_id)
@@ -1825,25 +1898,33 @@ class AdminHandlers(BaseHandler):
             
             text = f"✅ Ученик @{username} успешно добавлен!\n\n"
             text += f"ФИО: {fullname}\nКласс: {grade}\n"
+            text += f"{verification_message}\n"
             
             if student_user_id:
                 text += f"🆔 Telegram ID: {student_user_id}\n"
-                text += f"✅ Username подтвержден и ID автоматически добавлен\n"
                 text += f"📊 Данные синхронизированы в обеих таблицах\n"
             else:
-                text += f"⚠️ Username не подтвержден (пользователь не найден)\n"
                 text += f"💡 ID будет добавлен автоматически при первом использовании бота\n"
             
             text += f"\n👥 <b>Управление учениками</b>\n\nВыберите действие:"
             
-            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            # Определяем, это callback query или обычное сообщение
+            if update.callback_query:
+                await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            else:
+                await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
-            await update.message.reply_text(f"❌ Ошибка при добавлении ученика. Возможно, @{username} уже существует.")
+            error_text = f"❌ Ошибка при добавлении ученика. Возможно, @{username} уже существует."
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_text)
+            else:
+                await update.message.reply_text(error_text)
         
         # Очищаем данные
         context.user_data.pop('admin_action', None)
         context.user_data.pop('new_student_username', None)
         context.user_data.pop('new_student_fullname', None)
+        context.user_data.pop('pending_student', None)
     
     async def _handle_student_by_id_grade(self, update: Update, context: ContextTypes.DEFAULT_TYPE, grade_text: str) -> None:
         """Обработка добавления ученика по ID - этап 3 (класс)."""
@@ -1919,9 +2000,17 @@ class AdminHandlers(BaseHandler):
             text += f"📊 Данные синхронизированы в обеих таблицах\n"
             text += f"\n👥 <b>Управление учениками</b>\n\nВыберите действие:"
             
-            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            # Определяем, это callback query или обычное сообщение
+            if update.callback_query:
+                await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            else:
+                await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
-            await update.message.reply_text(f"❌ Ошибка при добавлении ученика. Возможно, пользователь с ID {student_user_id} уже существует.")
+            error_text = f"❌ Ошибка при добавлении ученика. Возможно, пользователь с ID {student_user_id} уже существует."
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_text)
+            else:
+                await update.message.reply_text(error_text)
         
         # Очищаем данные
         context.user_data.pop('admin_action', None)
@@ -1960,9 +2049,17 @@ class AdminHandlers(BaseHandler):
             text = f"✅ Тема '{topic_name}' успешно добавлена!\n\n"
             text += "📚 <b>Управление темами</b>\n\nВыберите действие:"
             
-            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            # Определяем, это callback query или обычное сообщение
+            if update.callback_query:
+                await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            else:
+                await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
-            await update.message.reply_text(f"❌ Ошибка при добавлении темы. Возможно, тема '{topic_name}' уже существует.")
+            error_text = f"❌ Ошибка при добавлении темы. Возможно, тема '{topic_name}' уже существует."
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_text)
+            else:
+                await update.message.reply_text(error_text)
         
         # Очищаем данные
         context.user_data.pop('admin_action', None)
@@ -2048,7 +2145,11 @@ class AdminHandlers(BaseHandler):
             
             text += f"\n\n👑 <b>Управление администраторами</b>\n\nВыберите действие:"
             
-            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            # Определяем, это callback query или обычное сообщение
+            if update.callback_query:
+                await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            else:
+                await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
             text = f"❌ Ошибка при добавлении админа. Возможно, пользователь {new_admin_id} уже является админом."
             
@@ -2063,7 +2164,11 @@ class AdminHandlers(BaseHandler):
             
             text += f"\n\n👑 <b>Управление администраторами</b>\n\nВыберите действие:"
             
-            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            # Определяем, это callback query или обычное сообщение
+            if update.callback_query:
+                await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            else:
+                await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         
         # Очищаем все данные
         context.user_data.pop('admin_action', None)
@@ -2194,7 +2299,11 @@ class AdminHandlers(BaseHandler):
             text += f"<b>Правильный ответ:</b> {correct_letter}) {correct_answer}\n"
             text += f"<b>Объяснение:</b> {explanation}"
             
-            await update.message.reply_text(text, parse_mode='HTML')
+            # Определяем, это callback query или обычное сообщение
+            if update.callback_query:
+                await update.callback_query.edit_message_text(text, parse_mode='HTML')
+            else:
+                await update.message.reply_text(text, parse_mode='HTML')
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка при сохранении вопроса: {e}")
         
