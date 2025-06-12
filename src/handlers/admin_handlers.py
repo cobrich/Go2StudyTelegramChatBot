@@ -1612,10 +1612,15 @@ class AdminHandlers(BaseHandler):
             text = "🗑️ <b>Удаление вопросов</b>\n\nВыберите тему для удаления вопросов:\n\n"
             keyboard = []
             
-            for topic, count in topics_with_counts:
+            # Сохраняем темы в контексте для использования по индексу
+            context.user_data['delete_questions_topics'] = topics_with_counts
+            
+            for i, (topic, count) in enumerate(topics_with_counts):
+                # Ограничиваем длину названия темы для отображения
+                display_name = topic[:35] + "..." if len(topic) > 35 else topic
                 keyboard.append([InlineKeyboardButton(
-                    f"📚 {topic} ({count} вопросов)",
-                    callback_data=f"delete_questions_topic_{topic}"
+                    f"📚 {display_name} ({count} вопросов)",
+                    callback_data=f"delete_questions_topic_{i}"
                 )])
             
             keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="admin_questions")])
@@ -1626,18 +1631,19 @@ class AdminHandlers(BaseHandler):
     async def delete_questions_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Подтверждение удаления вопросов по теме."""
         query = update.callback_query
-        topic = query.data.replace('delete_questions_topic_', '')
+        topic_index = int(query.data.replace('delete_questions_topic_', ''))
         await self.safe_answer_callback(query)
         
-        # Получаем количество вопросов в теме
-        try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM questions WHERE topic = ?", (topic,))
-                count = cursor.fetchone()[0]
-        except Exception as e:
-            logging.error(f"Error counting questions: {e}")
-            count = 0
+        # Получаем тему по индексу
+        topics_with_counts = context.user_data.get('delete_questions_topics', [])
+        if topic_index >= len(topics_with_counts):
+            await query.edit_message_text(
+                "❌ Ошибка: тема не найдена. Попробуйте снова.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_questions")]])
+            )
+            return
+        
+        topic, count = topics_with_counts[topic_index]
         
         text = f"🗑️ <b>Подтверждение удаления</b>\n\n"
         text += f"<b>Тема:</b> {topic}\n"
@@ -1646,8 +1652,11 @@ class AdminHandlers(BaseHandler):
         text += "Все вопросы данной темы будут удалены навсегда.\n\n"
         text += "Подтвердите удаление:"
         
+        # Сохраняем тему для выполнения удаления
+        context.user_data['delete_topic_name'] = topic
+        
         keyboard = [
-            [InlineKeyboardButton("✅ Да, удалить ВСЕ", callback_data=f"delete_questions_execute_{topic}")],
+            [InlineKeyboardButton("✅ Да, удалить ВСЕ", callback_data=f"delete_questions_execute_{topic_index}")],
             [InlineKeyboardButton("❌ Отмена", callback_data="delete_questions")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1657,8 +1666,16 @@ class AdminHandlers(BaseHandler):
     async def delete_questions_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выполнение удаления вопросов."""
         query = update.callback_query
-        topic = query.data.replace('delete_questions_execute_', '')
         await self.safe_answer_callback(query)
+        
+        # Получаем название темы из контекста
+        topic = context.user_data.get('delete_topic_name')
+        if not topic:
+            await query.edit_message_text(
+                "❌ Ошибка: тема не найдена. Попробуйте снова.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_questions")]])
+            )
+            return
         
         try:
             with sqlite3.connect(self.db.db_path) as conn:
@@ -1682,6 +1699,10 @@ class AdminHandlers(BaseHandler):
             text = f"❌ <b>Ошибка удаления</b>\n\n"
             text += f"Произошла ошибка при удалении вопросов: {str(e)}"
         
+        # Очищаем контекст
+        context.user_data.pop('delete_questions_topics', None)
+        context.user_data.pop('delete_topic_name', None)
+        
         keyboard = [[InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -1702,10 +1723,15 @@ class AdminHandlers(BaseHandler):
             text = "➕ <b>Добавление вопроса</b>\n\nВыберите тему для нового вопроса:\n\n"
             keyboard = []
             
-            for topic in topics:
+            # Сохраняем темы в контексте для использования по индексу
+            context.user_data['add_question_topics'] = topics
+            
+            for i, topic in enumerate(topics):
+                # Ограничиваем длину названия темы для отображения
+                display_name = topic['name'][:40] + "..." if len(topic['name']) > 40 else topic['name']
                 keyboard.append([InlineKeyboardButton(
-                    f"📚 {topic['name']}",
-                    callback_data=f"add_question_topic_{topic['name']}"
+                    f"📚 {display_name}",
+                    callback_data=f"add_question_topic_{i}"
                 )])
             
             keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="admin_questions")])
@@ -1716,8 +1742,19 @@ class AdminHandlers(BaseHandler):
     async def add_question_topic_selected(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Тема выбрана, запрашиваем текст вопроса."""
         query = update.callback_query
-        topic = query.data.replace('add_question_topic_', '')
+        topic_index = int(query.data.replace('add_question_topic_', ''))
         await self.safe_answer_callback(query)
+        
+        # Получаем тему по индексу
+        topics = context.user_data.get('add_question_topics', [])
+        if topic_index >= len(topics):
+            await query.edit_message_text(
+                "❌ Ошибка: тема не найдена. Попробуйте снова.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_questions")]])
+            )
+            return
+        
+        topic = topics[topic_index]['name']
         
         context.user_data['admin_action'] = 'add_question_text'
         context.user_data['new_question_topic'] = topic
