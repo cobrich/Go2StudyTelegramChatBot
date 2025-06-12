@@ -137,74 +137,197 @@ class AdminHandlers(BaseHandler):
                                      reply_markup=reply_markup, parse_mode='HTML')
     
     async def list_students(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Список всех учеников."""
+        """Список всех учеников с краткой статистикой."""
         query = update.callback_query
         await query.answer()
         
-        students = self.db.get_all_allowed_users()
+        students = self.db.get_all_students_summary()
         
         if not students:
             text = "📋 <b>Список учеников</b>\n\nУченики не найдены."
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]]
         else:
             text = "📋 <b>Список учеников</b>\n\n"
+            keyboard = []
             
-            # Подсчитываем статистику
-            total_students = len(students)
-            active_students = sum(1 for s in students if s['is_active'])
-            synced_students = 0
-            
-            for i, student in enumerate(students, 1):
+            for i, student in enumerate(students[:15], 1):  # Показываем первых 15
                 status = "✅" if student['is_active'] else "❌"
                 
-                # Проверяем синхронизацию данных
-                is_synced = False
-                if student.get('user_id') and student.get('username'):
-                    # Проверяем, есть ли пользователь в таблице users
-                    try:
-                        with sqlite3.connect(self.db.db_path) as conn:
-                            cursor = conn.cursor()
-                            cursor.execute('''
-                                SELECT username, full_name FROM users 
-                                WHERE user_id = ?
-                            ''', (student['user_id'],))
-                            user_data = cursor.fetchone()
-                            if user_data:
-                                is_synced = True
-                                synced_students += 1
-                    except Exception:
-                        pass
-                
                 # Определяем идентификатор
-                identifier_parts = []
                 if student.get('username'):
-                    identifier_parts.append(f"@{student['username']}")
+                    identifier = f"@{student['username']}"
+                elif student.get('user_id'):
+                    identifier = f"ID: {student['user_id']}"
+                else:
+                    identifier = "Неизвестен"
+                
+                # Краткая статистика
+                stats = f"Тестов: {student['total_tests']}, Балл: {student['avg_score']}%"
+                if student['unique_errors'] > 0:
+                    stats += f", Ошибок: {student['unique_errors']}"
+                
+                text += f"{i}. {status} <b>{identifier}</b>\n"
+                text += f"   {student['full_name']} ({student['grade']} класс)\n"
+                text += f"   {stats}\n"
+                text += f"   Статус: {student['status']}\n\n"
+                
+                # Кнопка для детального просмотра
                 if student.get('user_id'):
-                    identifier_parts.append(f"ID: {student['user_id']}")
-                
-                identifier = " | ".join(identifier_parts) if identifier_parts else "Не указан"
-                
-                # Добавляем индикатор синхронизации
-                sync_indicator = "🔄" if is_synced else "⚠️"
-                
-                text += f"{i}. {status} {sync_indicator} {identifier}\n"
-                text += f"   ФИО: {student['full_name']}\n"
-                text += f"   Класс: {student['grade']}\n"
-                text += f"   Добавлен: {student['added_at'][:10]}\n"
-                
-                if not is_synced and student.get('user_id'):
-                    text += f"   <i>Требуется синхронизация с таблицей users</i>\n"
-                
+                    keyboard.append([InlineKeyboardButton(
+                        f"📊 {identifier} - детали", 
+                        callback_data=f"student_details_{student['user_id']}"
+                    )])
+            
+            if len(students) > 15:
+                text += f"... и еще {len(students) - 15} учеников\n\n"
+            
+            # Кнопки управления
+            keyboard.extend([
+                [InlineKeyboardButton("📈 Статистика по классам", callback_data="class_statistics")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+            ])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def show_student_details(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Показать детальную статистику ученика."""
+        query = update.callback_query
+        await query.answer()
+        
+        # Извлекаем user_id из callback_data
+        user_id = int(query.data.split('_')[-1])
+        
+        stats = self.db.get_student_detailed_statistics(user_id)
+        
+        if not stats:
+            text = "❌ Ученик не найден или нет данных."
+            keyboard = [[InlineKeyboardButton("🔙 Назад к списку", callback_data="list_students")]]
+        else:
+            user_info = stats['user_info']
+            test_stats = stats['test_statistics']
+            
+            text = f"📊 <b>Детальная статистика ученика</b>\n\n"
+            text += f"👤 <b>Информация:</b>\n"
+            text += f"• ID: {user_info['user_id']}\n"
+            text += f"• Username: @{user_info['username'] or 'не указан'}\n"
+            text += f"• ФИО: {user_info['full_name'] or 'не указано'}\n"
+            text += f"• Класс: {user_info['grade'] or 'не указан'}\n"
+            text += f"• Язык: {user_info['language']}\n"
+            
+            if user_info['last_activity']:
+                text += f"• Последняя активность: {user_info['last_activity'][:16]}\n"
+            if user_info['added_to_whitelist']:
+                text += f"• Добавлен в whitelist: {user_info['added_to_whitelist'][:10]}\n"
+            
+            text += f"\n📝 <b>Статистика тестов:</b>\n"
+            text += f"• Всего тестов: {test_stats['total_tests']}\n"
+            text += f"• Средний балл: {test_stats['avg_score']}%\n"
+            
+            if test_stats['total_tests'] > 0:
+                text += f"• Лучший результат: {test_stats['max_score']}%\n"
+                text += f"• Худший результат: {test_stats['min_score']}%\n"
+                text += f"• Первый тест: {test_stats['first_test'][:10] if test_stats['first_test'] else 'н/д'}\n"
+                text += f"• Последний тест: {test_stats['last_test'][:10] if test_stats['last_test'] else 'н/д'}\n"
+            
+            # Показываем топ-5 тем по активности
+            if stats['topic_performance']:
+                text += f"\n🎯 <b>Активность по темам (топ-5):</b>\n"
+                for i, topic in enumerate(stats['topic_performance'][:5], 1):
+                    text += f"{i}. {topic['topic']}: {topic['tests_count']} тестов, {topic['avg_score']}%\n"
+            
+            # Показываем проблемные темы
+            if stats['error_analysis']:
+                text += f"\n❌ <b>Проблемные темы:</b>\n"
+                for i, error in enumerate(stats['error_analysis'][:3], 1):
+                    text += f"{i}. {error['topic']}: {error['unique_errors']} ошибок ({error['total_errors']} всего)\n"
+            
+            keyboard = [
+                [InlineKeyboardButton("📈 Подробная статистика", callback_data=f"student_full_stats_{user_id}")],
+                [InlineKeyboardButton("✏️ Редактировать", callback_data=f"edit_student_{user_id}")],
+                [InlineKeyboardButton("🔙 Назад к списку", callback_data="list_students")]
+            ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def show_student_full_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Показать полную статистику ученика."""
+        query = update.callback_query
+        await query.answer()
+        
+        user_id = int(query.data.split('_')[-1])
+        stats = self.db.get_student_detailed_statistics(user_id)
+        
+        if not stats:
+            text = "❌ Данные не найдены."
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"student_details_{user_id}")]]
+        else:
+            user_info = stats['user_info']
+            text = f"📈 <b>Полная статистика: {user_info['full_name'] or 'ID_' + str(user_id)}</b>\n\n"
+            
+            # Прогресс по дням (последние 10 дней)
+            if stats['daily_progress']:
+                text += f"📅 <b>Активность (последние дни):</b>\n"
+                for day in stats['daily_progress'][:10]:
+                    text += f"• {day['date']}: {day['tests_count']} тестов, {day['avg_score']}%\n"
                 text += "\n"
             
-            # Добавляем статистику в конец
-            text += f"📊 <b>Статистика:</b>\n"
-            text += f"Всего учеников: {total_students}\n"
-            text += f"Активных: {active_students}\n"
-            text += f"Синхронизированных: {synced_students}\n\n"
-            text += f"🔄 - данные синхронизированы\n"
-            text += f"⚠️ - требуется синхронизация"
+            # Все темы с результатами
+            if stats['topic_performance']:
+                text += f"🎯 <b>Результаты по всем темам:</b>\n"
+                for topic in stats['topic_performance']:
+                    text += f"• {topic['topic']}: {topic['tests_count']} тестов, {topic['avg_score']}%\n"
+                text += "\n"
+            
+            # Последние ошибки
+            if stats['recent_errors']:
+                text += f"❌ <b>Последние ошибки:</b>\n"
+                for i, error in enumerate(stats['recent_errors'][:5], 1):
+                    text += f"{i}. [{error['topic']}] {error['question']}\n"
+                    text += f"   Ошибок: {error['error_count']}, {error['timestamp'][:10]}\n"
+            
+            keyboard = [[InlineKeyboardButton("🔙 Назад к краткой статистике", callback_data=f"student_details_{user_id}")]]
         
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def show_class_statistics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Показать статистику по классам."""
+        query = update.callback_query
+        await query.answer()
+        
+        class_stats = self.db.get_class_statistics()
+        
+        if not class_stats['class_stats']:
+            text = "📈 <b>Статистика по классам</b>\n\nДанных нет."
+        else:
+            text = "📈 <b>Статистика по классам</b>\n\n"
+            
+            total_students = 0
+            total_active = 0
+            total_tests = 0
+            
+            for cls in class_stats['class_stats']:
+                if cls['grade']:  # Пропускаем записи без класса
+                    text += f"🎓 <b>{cls['grade']} класс:</b>\n"
+                    text += f"• Учеников: {cls['students_count']}\n"
+                    text += f"• Активных: {cls['active_students']} ({cls['activity_rate']}%)\n"
+                    text += f"• Тестов: {cls['total_tests']}\n"
+                    text += f"• Средний балл: {cls['avg_score']}%\n\n"
+                    
+                    total_students += cls['students_count']
+                    total_active += cls['active_students']
+                    total_tests += cls['total_tests']
+            
+            text += f"📊 <b>Общая статистика:</b>\n"
+            text += f"• Всего учеников: {total_students}\n"
+            text += f"• Активных: {total_active}\n"
+            text += f"• Всего тестов: {total_tests}\n"
+            overall_activity = round((total_active / total_students * 100) if total_students > 0 else 0, 1)
+            text += f"• Общая активность: {overall_activity}%\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад к списку учеников", callback_data="list_students")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')

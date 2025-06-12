@@ -110,6 +110,18 @@ def main() -> None:
         pattern="^list_students$"
     ))
     application.add_handler(CallbackQueryHandler(
+        admin_handlers.show_student_details,
+        pattern="^student_details_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.show_student_full_stats,
+        pattern="^student_full_stats_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.show_class_statistics,
+        pattern="^class_statistics$"
+    ))
+    application.add_handler(CallbackQueryHandler(
         admin_handlers.remove_student_start,
         pattern="^remove_student$"
     ))
