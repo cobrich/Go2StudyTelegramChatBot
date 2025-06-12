@@ -306,6 +306,18 @@ def main() -> None:
         pattern="^delete_questions_execute_"
     ))
     application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_single_question_start,
+        pattern="^delete_single_question$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_single_question_confirm,
+        pattern="^delete_single_question_confirm_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_single_question_execute,
+        pattern="^delete_single_question_execute_"
+    ))
+    application.add_handler(CallbackQueryHandler(
         admin_handlers.add_question_start,
         pattern="^add_question$"
     ))

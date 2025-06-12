@@ -146,6 +146,46 @@ def setup_handlers(application):
         admin_handlers.questions_stats,
         pattern="^questions_stats$"
     ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.search_questions_start,
+        pattern="^search_questions$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_questions_start,
+        pattern="^delete_questions$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_questions_confirm,
+        pattern="^delete_questions_topic_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_questions_execute,
+        pattern="^delete_questions_execute_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_single_question_start,
+        pattern="^delete_single_question$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_single_question_confirm,
+        pattern="^delete_single_question_confirm_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_single_question_execute,
+        pattern="^delete_single_question_execute_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_question_start,
+        pattern="^add_question$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_question_topic_selected,
+        pattern="^add_question_topic_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_question_start,
+        pattern="^edit_question$"
+    ))
     
     # Admin management handlers
     application.add_handler(CallbackQueryHandler(

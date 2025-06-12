@@ -1263,7 +1263,8 @@ class AdminHandlers(BaseHandler):
             [InlineKeyboardButton("✏️ Редактировать вопрос", callback_data="edit_question")],
             [InlineKeyboardButton("🔍 Поиск вопросов", callback_data="search_questions")],
             [InlineKeyboardButton("📋 Статистика вопросов", callback_data="questions_stats")],
-            [InlineKeyboardButton("🗑️ Удалить вопросы", callback_data="delete_questions")],
+            [InlineKeyboardButton("🗑️ Удалить вопрос", callback_data="delete_single_question")],
+            [InlineKeyboardButton("🗑️ Удалить вопросы по теме", callback_data="delete_questions")],
             [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
         ]
         
@@ -2136,6 +2137,8 @@ class AdminHandlers(BaseHandler):
             await self._handle_edit_student_grade(update, context, text)
         elif action == 'edit_student_phone':
             await self._handle_edit_student_phone(update, context, text)
+        elif action == 'delete_single_question_search':
+            await self._handle_delete_single_question_search(update, context, text)
         else:
             return False
             
@@ -3908,3 +3911,177 @@ class AdminHandlers(BaseHandler):
         
         # Очищаем данные
         context.user_data.pop('merge_source_id', None)
+    
+    # === УДАЛЕНИЕ ОТДЕЛЬНОГО ВОПРОСА ===
+    
+    async def delete_single_question_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало удаления отдельного вопроса."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        context.user_data['admin_action'] = 'delete_single_question_search'
+        
+        text = "🗑️ <b>Удаление вопроса</b>\n\n"
+        text += "Введите поисковый запрос для поиска вопроса, который хотите удалить:\n\n"
+        text += "Можно искать по:\n"
+        text += "• Тексту вопроса\n"
+        text += "• Части вопроса\n"
+        text += "• Ключевым словам"
+        
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_questions")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def _handle_delete_single_question_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_text: str) -> None:
+        """Обработка поиска вопроса для удаления."""
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT id, topic, question, answer, explanation
+                    FROM questions 
+                    WHERE question LIKE ?
+                    ORDER BY topic, id
+                    LIMIT 10
+                ''', (f'%{search_text}%',))
+                results = cursor.fetchall()
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка поиска: {e}")
+            context.user_data.pop('admin_action', None)
+            return
+        
+        if not results:
+            text = f"🔍 По запросу '<i>{search_text}</i>' вопросы не найдены.\n\nПопробуйте другой поисковый запрос:"
+            keyboard = [
+                [InlineKeyboardButton("🔄 Новый поиск", callback_data="delete_single_question")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            return
+        
+        text = f"🔍 <b>Найдено {len(results)} вопросов</b>\n\nВыберите вопрос для удаления:\n\n"
+        
+        keyboard = []
+        for i, (q_id, topic, question, answer, explanation) in enumerate(results, 1):
+            short_question = question[:60] + "..." if len(question) > 60 else question
+            text += f"<b>ID {q_id}</b> | {topic}\n{short_question}\n\n"
+            
+            # Добавляем кнопку для каждого вопроса
+            keyboard.append([InlineKeyboardButton(
+                f"🗑️ Удалить ID {q_id}",
+                callback_data=f"delete_single_question_confirm_{q_id}"
+            )])
+        
+        # Добавляем кнопки навигации
+        keyboard.extend([
+            [InlineKeyboardButton("🔄 Новый поиск", callback_data="delete_single_question")],
+            [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+        ])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        context.user_data.pop('admin_action', None)
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def delete_single_question_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение удаления отдельного вопроса."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        # Извлекаем ID вопроса из callback_data
+        question_id = int(query.data.split('_')[-1])
+        
+        # Получаем информацию о вопросе
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT topic, question, answer, explanation
+                    FROM questions WHERE id = ?
+                ''', (question_id,))
+                result = cursor.fetchone()
+        except Exception as e:
+            await query.edit_message_text(f"❌ Ошибка получения вопроса: {e}")
+            return
+        
+        if not result:
+            await query.edit_message_text(f"❌ Вопрос с ID {question_id} не найден.")
+            return
+        
+        topic, question, answer, explanation = result
+        
+        text = f"⚠️ <b>Подтверждение удаления</b>\n\n"
+        text += f"<b>ID:</b> {question_id}\n"
+        text += f"<b>Тема:</b> {topic}\n"
+        text += f"<b>Вопрос:</b> {question[:100]}{'...' if len(question) > 100 else ''}\n"
+        text += f"<b>Ответ:</b> {answer}\n\n"
+        text += "❗ <b>Это действие нельзя отменить!</b>\n"
+        text += "Вы уверены, что хотите удалить этот вопрос?"
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ Да, удалить", callback_data=f"delete_single_question_execute_{question_id}")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="delete_single_question")],
+            [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def delete_single_question_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение удаления отдельного вопроса."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        # Извлекаем ID вопроса из callback_data
+        question_id = int(query.data.split('_')[-1])
+        
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Сначала получаем информацию о вопросе для логирования
+                cursor.execute('SELECT topic, question FROM questions WHERE id = ?', (question_id,))
+                question_info = cursor.fetchone()
+                
+                if not question_info:
+                    await query.edit_message_text(f"❌ Вопрос с ID {question_id} не найден.")
+                    return
+                
+                topic, question_text = question_info
+                
+                # Удаляем вопрос
+                cursor.execute('DELETE FROM questions WHERE id = ?', (question_id,))
+                conn.commit()
+                
+                if cursor.rowcount > 0:
+                    success_text = f"✅ <b>Вопрос удален!</b>\n\n"
+                    success_text += f"<b>ID:</b> {question_id}\n"
+                    success_text += f"<b>Тема:</b> {topic}\n"
+                    success_text += f"<b>Вопрос:</b> {question_text[:100]}{'...' if len(question_text) > 100 else ''}"
+                    
+                    # Логируем удаление
+                    logging.info(f"Question deleted: ID {question_id}, Topic: {topic}")
+                    
+                    keyboard = [
+                        [InlineKeyboardButton("🗑️ Удалить еще вопрос", callback_data="delete_single_question")],
+                        [InlineKeyboardButton("📊 Статистика вопросов", callback_data="questions_stats")],
+                        [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")],
+                        [InlineKeyboardButton("🏠 Главное меню", callback_data="admin_panel")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await query.edit_message_text(success_text, reply_markup=reply_markup, parse_mode='HTML')
+                else:
+                    await query.edit_message_text(f"❌ Не удалось удалить вопрос с ID {question_id}.")
+                    
+        except Exception as e:
+            error_text = f"❌ Ошибка при удалении вопроса: {e}"
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать снова", callback_data="delete_single_question")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(error_text, reply_markup=reply_markup)
+            logging.error(f"Error deleting question {question_id}: {e}")
