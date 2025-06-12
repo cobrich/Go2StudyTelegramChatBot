@@ -138,6 +138,15 @@ class Database:
                 )
             ''')
             
+            # Add phone_number column to users table if it doesn't exist
+            try:
+                cursor.execute('ALTER TABLE users ADD COLUMN phone_number TEXT')
+                conn.commit()
+                print("[LOG] Добавлено поле phone_number в таблицу users")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+            
             # Test results table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS test_results (
@@ -450,13 +459,30 @@ class Database:
             conn.commit()
 
     def register_user(self, user_id: int, username: str) -> None:
-        """Register a user if not exists."""
+        """Register a new user and sync with whitelist data."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            
+            # Получаем данные из whitelist если есть
             cursor.execute('''
-                INSERT OR IGNORE INTO users (user_id, username)
-                VALUES (?, ?)
+                SELECT full_name, grade, phone_number 
+                FROM allowed_users 
+                WHERE user_id = ? OR username = ?
             ''', (user_id, username))
+            whitelist_data = cursor.fetchone()
+            
+            if whitelist_data:
+                full_name, grade, phone_number = whitelist_data
+                cursor.execute('''
+                    INSERT OR REPLACE INTO users (user_id, username, full_name, grade, phone_number, last_activity)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (user_id, username, full_name, grade, phone_number))
+            else:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO users (user_id, username, last_activity)
+                    VALUES (?, ?, CURRENT_TIMESTAMP)
+                ''', (user_id, username))
+            
             conn.commit()
 
     def add_question(self, question: dict) -> None:
@@ -1112,32 +1138,45 @@ class Database:
             }
     
     def sync_user_with_whitelist(self, user_id: int, username: str) -> bool:
-        """Sync user data with whitelist information."""
+        """Синхронизировать данные пользователя с whitelist."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Get whitelist data
+                # Получаем данные из allowed_users
                 cursor.execute('''
-                    SELECT full_name, grade FROM allowed_users 
-                    WHERE username = ? AND is_active = 1
-                ''', (username,))
-                whitelist_data = cursor.fetchone()
+                    SELECT full_name, grade, phone_number, is_active
+                    FROM allowed_users 
+                    WHERE user_id = ? OR username = ?
+                    ORDER BY user_id IS NOT NULL DESC
+                    LIMIT 1
+                ''', (user_id, username))
                 
-                if whitelist_data:
-                    # Update users table with whitelist data if it's newer/better
-                    cursor.execute('''
-                        UPDATE users 
-                        SET username = ?, 
-                            full_name = COALESCE(?, full_name),
-                            grade = COALESCE(?, grade)
-                        WHERE user_id = ?
-                    ''', (username, whitelist_data[0], whitelist_data[1], user_id))
-                    
-                    return True
-                return False
+                whitelist_data = cursor.fetchone()
+                if not whitelist_data:
+                    return False
+                
+                full_name, grade, phone_number, is_whitelist_active = whitelist_data
+                
+                # Обновляем данные в users
+                cursor.execute('''
+                    INSERT OR REPLACE INTO users 
+                    (user_id, username, full_name, grade, phone_number, last_activity)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (user_id, username, full_name, grade, phone_number))
+                
+                # Обновляем user_id в allowed_users если его не было
+                cursor.execute('''
+                    UPDATE allowed_users 
+                    SET user_id = ?, username = ?
+                    WHERE (user_id IS NULL OR user_id = 0) AND username = ?
+                ''', (user_id, username, username))
+                
+                conn.commit()
+                return True
+                
         except Exception as e:
-            logging.error(f"Error syncing user with whitelist: {e}")
+            print(f"[ERROR] Ошибка синхронизации пользователя {user_id}: {e}")
             return False
     
     def get_user_historical_stats(self, user_id: int) -> Dict[str, Any]:
@@ -1772,4 +1811,57 @@ class Database:
                 'whitelist_by_id': whitelist_by_id,
                 'whitelist_by_username': whitelist_by_username,
                 'needs_sync': whitelist_by_id and whitelist_by_username and whitelist_by_id['user_id'] != whitelist_by_username['user_id']
-            } 
+            }
+
+    def update_user_phone(self, user_id: int, phone_number: str) -> bool:
+        """Обновить номер телефона пользователя."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE users 
+                    SET phone_number = ?
+                    WHERE user_id = ?
+                ''', (phone_number, user_id))
+                
+                # Также обновляем в allowed_users если есть
+                cursor.execute('''
+                    UPDATE allowed_users 
+                    SET phone_number = ?
+                    WHERE user_id = ?
+                ''', (phone_number, user_id))
+                
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception as e:
+            print(f"[ERROR] Ошибка обновления номера телефона: {e}")
+            return False
+    
+    def get_user_phone(self, user_id: int) -> Optional[str]:
+        """Получить номер телефона пользователя."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT phone_number FROM users WHERE user_id = ?', (user_id,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+    
+    def find_user_by_phone(self, phone_number: str) -> Optional[Dict[str, Any]]:
+        """Найти пользователя по номеру телефона."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_id, username, full_name, grade, phone_number
+                FROM users 
+                WHERE phone_number = ?
+            ''', (phone_number,))
+            result = cursor.fetchone()
+            
+            if result:
+                return {
+                    'user_id': result[0],
+                    'username': result[1],
+                    'full_name': result[2],
+                    'grade': result[3],
+                    'phone_number': result[4]
+                }
+            return None 

@@ -586,3 +586,42 @@ allowed_users (
 - `src/handlers/admin_handlers.py`: обновленные обработчики с детальной статистикой
 - `src/bot.py`: новые callback handlers для статистики
 - Добавлены методы: `show_student_details()`, `show_student_full_stats()`, `show_class_statistics()`
+
+## 📱 Phone Number Integration for Users Table (December 2024)
+
+**Добавлена полная поддержка номеров телефонов в таблицу `users`:**
+
+#### ✅ Структурные изменения:
+1. **Поле `phone_number`** добавлено в таблицу `users`
+2. **Синхронизация данных** между `users` и `allowed_users`
+3. **Автоматическое копирование** номера телефона при регистрации
+4. **Консистентность данных** - номер телефона доступен в обеих таблицах
+
+#### 🔧 Новые методы для работы с номерами телефонов:
+- `update_user_phone(user_id, phone_number)` - обновление номера телефона
+- `get_user_phone(user_id)` - получение номера телефона пользователя  
+- `find_user_by_phone(phone_number)` - поиск пользователя по номеру телефона
+
+#### 📊 Обновленная структура таблицы `users`:
+```sql
+CREATE TABLE users (
+    user_id INTEGER PRIMARY KEY,        -- Telegram user_id
+    username TEXT,                      -- Telegram username
+    full_name TEXT,                     -- ФИО пользователя
+    grade INTEGER,                      -- Класс
+    language TEXT DEFAULT 'ru',        -- Язык интерфейса
+    phone_number TEXT,                  -- Номер телефона (НОВОЕ)
+    is_active BOOLEAN DEFAULT 0,       -- Активность
+    current_topic TEXT,                 -- Текущая тема
+    last_activity TIMESTAMP            -- Последняя активность
+)
+```
+
+#### 🔄 Улучшенная логика синхронизации:
+- При регистрации пользователя данные из `allowed_users` автоматически копируются в `users`
+- Обновление номера телефона синхронизируется между обеими таблицами
+- Поддержка поиска и идентификации по номеру телефона
+
+---
+
+## 🎯 Enhanced Student Management & Analytics System (December 2024)
