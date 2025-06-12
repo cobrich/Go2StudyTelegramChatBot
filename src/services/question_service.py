@@ -11,6 +11,18 @@ class QuestionService:
         self.db = db
         self.ai_service = ai_service
 
+    def _get_main_topic_for_subtopic(self, subtopic: str) -> Optional[str]:
+        """Получить главную тему для подтемы."""
+        try:
+            base_structure = self.db.get_base_topic_structure()
+            for main_topic, subtopics in base_structure.items():
+                if subtopic in subtopics:
+                    return main_topic
+            return None
+        except Exception as e:
+            logging.error(f"Error getting main topic for {subtopic}: {e}")
+            return None
+
     async def get_or_generate_tasks(
         self,
         user_id: int,
@@ -25,6 +37,10 @@ class QuestionService:
         if existing_question_texts_to_exclude is None:
             existing_question_texts_to_exclude = set()
         tasks = []
+        
+        # Получаем главную тему для контекста AI генерации
+        main_topic = self._get_main_topic_for_subtopic(topic)
+        logging.info(f"[get_or_generate_tasks] main_topic for '{topic}': {main_topic}")
         
         # 1. Сначала ошибки пользователя
         error_tasks = self.db.get_error_tasks_for_user(user_id, topic, limit=needed)
@@ -85,14 +101,15 @@ class QuestionService:
                             None,
                             self.ai_service.generate_similar_task,
                             topic,
-                            error_question
+                            error_question,
+                            main_topic
                         )
                     )
                 # If we still need more questions, generate regular ones
                 if len(generation_tasks) < remaining:
                     logging.info(f"[get_or_generate_tasks][retake] Not enough error_questions, scheduling {remaining - len(generation_tasks)} regular AI generations")
                     generation_tasks.extend([
-                        loop.run_in_executor(None, self.ai_service.generate_task, topic)
+                        loop.run_in_executor(None, self.ai_service.generate_task, topic, main_topic)
                         for _ in range(remaining - len(generation_tasks))
                     ])
                 results = await asyncio.gather(*generation_tasks, return_exceptions=True)
@@ -206,7 +223,7 @@ class QuestionService:
         new_tasks = []
         loop = asyncio.get_running_loop()
         generation_tasks = [
-            loop.run_in_executor(None, self.ai_service.generate_task, topic)
+            loop.run_in_executor(None, self.ai_service.generate_task, topic, main_topic)
             for _ in range(remaining)
         ]
         results = await asyncio.gather(*generation_tasks, return_exceptions=True)

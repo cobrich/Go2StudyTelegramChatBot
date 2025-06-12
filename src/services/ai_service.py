@@ -10,15 +10,26 @@ class AIService:
         genai.configure(api_key=GEMINI_API_KEY)
         self.model = genai.GenerativeModel(GEMINI_MODEL)
 
-    def generate_task(self, topic: str) -> Tuple[Optional[str], Optional[str], Optional[List[str]], Optional[str]]:
+    def generate_task(self, topic: str, main_topic: str = None) -> Tuple[Optional[str], Optional[str], Optional[List[str]], Optional[str]]:
         """Generate a single task for the given topic."""
+        # Формируем контекст темы
+        if main_topic:
+            # Убираем эмодзи из основной темы для чистоты
+            clean_main_topic = main_topic.split(' ', 1)[-1] if ' ' in main_topic else main_topic
+            topic_context = f"Тема '{topic}' из раздела '{clean_main_topic}'"
+            specific_requirements = self._get_topic_specific_requirements(topic, clean_main_topic)
+        else:
+            topic_context = f"Тема '{topic}'"
+            specific_requirements = ""
+        
         prompt_template = (
             "Твоя задача - быть экспертом по созданию обучающих математических задач для учеников 5-6 классов.\n"
-            "Тебе нужно сгенерировать ОДИН уникальный и интересный вопрос по теме '{topic}'.\n"
+            f"Тебе нужно сгенерировать ОДИН уникальный и интересный вопрос по теме: {topic_context}.\n"
+            f"{specific_requirements}\n"
             "Вопрос должен быть не просто на вычисление, а, по возможности, представлять собой небольшую текстовую задачу, логическую головоломку или задачу на применение математических концепций в жизненной ситуации, соответствующей теме. Избегай создания однотипных вопросов, отличающихся только числами.\n\n"
             "ТРЕБОВАНИЯ К ЗАДАЧЕ:\n"
             "1.  **Целевая аудитория:** Ученики 5-6 класса.\n"
-            "2.  **Тема:** '{topic}'.\n"
+            f"2.  **Тема:** {topic_context}.\n"
             "3.  **Сложность:** Вопрос должен быть решаем в уме или с минимальными записями, обычно не более 2-3 логических шагов или математических операций. Он должен быть достаточно сложным, чтобы требовать размышлений, но не чрезмерно трудным.\n"
             "4.  **Уникальность:** Вопрос должен быть новым, не повторяющим предыдущие.\n"
             "5.  **Контекст и единицы:** Если в вопросе используются единицы измерения, ответ также должен быть в этих единицах. Все числовые значения и условия должны быть реалистичными и соответствовать теме.\n"
@@ -35,7 +46,7 @@ class AIService:
         )
         
         try:
-            response_text = self.model.generate_content(prompt_template.format(topic=topic)).text
+            response_text = self.model.generate_content(prompt_template).text
             
             # Parse response
             q_match = re.search(r"ВОПРОС:\s*(.*?)\s*ПРАВИЛЬНЫЙ ОТВЕТ:", response_text, re.DOTALL | re.IGNORECASE)
@@ -85,6 +96,83 @@ class AIService:
         # Remove leading and trailing spaces
         return text.strip() 
 
+    def _get_topic_specific_requirements(self, topic: str, main_topic: str) -> str:
+        """Получить специфические требования для темы на основе раздела."""
+        topic_lower = topic.lower()
+        main_topic_lower = main_topic.lower()
+        
+        # Специфические требования для разных разделов
+        if "единиц" in main_topic_lower or "измерения" in main_topic_lower:
+            if "перевод" in topic_lower:
+                return (
+                    "ВАЖНО: Вопрос должен быть СТРОГО о переводе одних единиц измерения в другие. "
+                    "Например: перевод метров в сантиметры, килограммов в граммы, часов в минуты и т.д. "
+                    "НЕ создавай задачи на скорость, время в пути, дроби или другие темы!"
+                )
+            elif "время" in topic_lower:
+                return (
+                    "ВАЖНО: Вопрос должен быть о единицах времени: секунды, минуты, часы, дни, недели, месяцы, годы. "
+                    "Например: сколько минут в 2 часах 30 минутах, сколько дней в 3 неделях и т.д."
+                )
+            elif "длин" in topic_lower or "масс" in topic_lower:
+                return (
+                    "ВАЖНО: Вопрос должен быть о единицах длины (мм, см, м, км) или массы (г, кг, т). "
+                    "Например: сколько сантиметров в 2 метрах 50 сантиметрах."
+                )
+            elif "масштаб" in topic_lower:
+                return (
+                    "ВАЖНО: Вопрос должен быть о масштабе карт, планов или моделей. "
+                    "Например: если масштаб карты 1:1000, то сколько метров на местности соответствует 5 см на карте."
+                )
+        
+        elif "дроб" in main_topic_lower:
+            if "обыкновенн" in topic_lower:
+                return (
+                    "ВАЖНО: Вопрос должен быть СТРОГО об обыкновенных дробях (1/2, 3/4, 2/5 и т.д.). "
+                    "Операции: сложение, вычитание, умножение, деление обыкновенных дробей. "
+                    "НЕ используй десятичные дроби или проценты!"
+                )
+            elif "десятичн" in topic_lower:
+                return (
+                    "ВАЖНО: Вопрос должен быть СТРОГО о десятичных дробях (0.5, 1.25, 3.14 и т.д.). "
+                    "Операции: сложение, вычитание, умножение, деление десятичных дробей. "
+                    "НЕ используй обыкновенные дроби!"
+                )
+            elif "смешанн" in topic_lower:
+                return (
+                    "ВАЖНО: Вопрос должен быть о смешанных числах (1½, 2¾, 3⅖ и т.д.). "
+                    "Перевод между смешанными числами и неправильными дробями."
+                )
+        
+        elif "процент" in main_topic_lower:
+            return (
+                "ВАЖНО: Вопрос должен быть СТРОГО о процентах. "
+                "Например: найти процент от числа, найти число по его проценту, найти процентное отношение. "
+                "НЕ создавай задачи на дроби без процентов!"
+            )
+        
+        elif "геометр" in main_topic_lower:
+            if "периметр" in topic_lower or "площад" in topic_lower:
+                return (
+                    "ВАЖНО: Вопрос должен быть о вычислении периметра или площади геометрических фигур. "
+                    "Фигуры: прямоугольник, квадрат, треугольник, круг. "
+                    "Используй простые целые числа для размеров."
+                )
+            elif "угл" in topic_lower:
+                return (
+                    "ВАЖНО: Вопрос должен быть об углах: острые, тупые, прямые, развернутые. "
+                    "Измерение углов, сумма углов треугольника, смежные углы."
+                )
+        
+        elif "уравнен" in main_topic_lower or "алгебр" in main_topic_lower:
+            return (
+                "ВАЖНО: Вопрос должен быть о решении простых уравнений с одной переменной. "
+                "Например: x + 5 = 12, 3x = 15, x - 7 = 10. "
+                "Используй простые числа, решение должно быть целым числом."
+            )
+        
+        return ""
+
     def normalize_question_via_gemini(self, raw_text: str) -> Optional[dict]:
         """
         Отправляет сырой текст вопроса в Gemini и возвращает структурированный результат (dict) с полями:
@@ -126,11 +214,22 @@ class AIService:
             logging.error(f"Gemini normalization error: {e}")
             return None 
 
-    def generate_similar_task(self, topic: str, similar_to_question: str) -> Optional[tuple]:
+    def generate_similar_task(self, topic: str, similar_to_question: str, main_topic: str = None) -> Optional[tuple]:
         """Generate a question similar to the given question."""
         try:
-            prompt = f"""Сгенерируй вопрос по теме '{topic}', который похож на следующий вопрос, но с другими числами/переменными:
+            # Формируем контекст темы
+            if main_topic:
+                clean_main_topic = main_topic.split(' ', 1)[-1] if ' ' in main_topic else main_topic
+                topic_context = f"Тема '{topic}' из раздела '{clean_main_topic}'"
+                specific_requirements = self._get_topic_specific_requirements(topic, clean_main_topic)
+            else:
+                topic_context = f"Тема '{topic}'"
+                specific_requirements = ""
+            
+            prompt = f"""Сгенерируй вопрос по теме '{topic_context}', который похож на следующий вопрос, но с другими числами/переменными:
             {similar_to_question}
+            
+            {specific_requirements}
             
             В ответе должен быть JSON в формате:
             {{
@@ -145,6 +244,7 @@ class AIService:
             2. С похожей структурой и сложностью
             3. С другими числами/переменными
             4. С понятным объяснением решения
+            5. Строго соответствовать указанной теме и разделу
             """
             
             response = self.model.generate_content(prompt)
