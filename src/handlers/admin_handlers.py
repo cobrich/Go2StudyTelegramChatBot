@@ -421,16 +421,106 @@ class AdminHandlers(BaseHandler):
                 
             main_topic = main_topics_list[topic_index]
             
+            # Получаем существующие темы в этом разделе
+            all_topics = self.db.get_all_topics(active_only=False)
+            existing_topics_in_section = [
+                topic['name'] for topic in all_topics 
+                if topic['main_topic'] == main_topic
+            ]
+            
             context.user_data['selected_main_topic'] = main_topic
             context.user_data['admin_action'] = 'add_topic'
             
-            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")]]
+            # Формируем текст с информацией о существующих темах
+            text = f"➕ <b>Добавление новой темы</b>\n\n"
+            text += f"Выбранный раздел: <b>{main_topic}</b>\n\n"
+            
+            if existing_topics_in_section:
+                text += f"📋 <b>Существующие темы в этом разделе ({len(existing_topics_in_section)}):</b>\n"
+                # Показываем первые 5 тем для краткости
+                for i, topic_name in enumerate(existing_topics_in_section[:5], 1):
+                    text += f"{i}. {topic_name}\n"
+                
+                if len(existing_topics_in_section) > 5:
+                    text += f"... и еще {len(existing_topics_in_section) - 5} тем\n"
+                
+                text += "\n⚠️ <i>Убедитесь, что новая тема не дублирует существующие</i>\n\n"
+            else:
+                text += "📋 <i>В этом разделе пока нет тем</i>\n\n"
+            
+            text += "Введите название новой темы:"
+            
+            # Создаем клавиатуру с дополнительными опциями
+            keyboard = []
+            
+            if existing_topics_in_section:
+                keyboard.append([InlineKeyboardButton("📋 Показать все темы раздела", callback_data=f"show_section_topics_{topic_index}")])
+            
+            keyboard.append([InlineKeyboardButton("🔙 Выбрать другой раздел", callback_data="add_custom_topic")])
+            keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="admin_topics")])
+            
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            await query.edit_message_text(f"➕ <b>Добавление новой темы</b>\n\n"
-                                         f"Выбранный раздел: <b>{main_topic}</b>\n\n"
-                                         f"Введите название новой темы:", 
-                                         reply_markup=reply_markup, parse_mode='HTML')
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        except (ValueError, IndexError):
+            await query.edit_message_text(
+                "❌ Ошибка: раздел не найден.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]])
+            )
+
+    async def show_section_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Показать все темы в выбранном разделе."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        try:
+            # Получаем индекс из callback_data
+            topic_index = int(query.data.replace('show_section_topics_', ''))
+            main_topics_list = context.user_data.get('main_topics_list', [])
+            
+            if topic_index >= len(main_topics_list):
+                raise IndexError("Invalid topic index")
+                
+            main_topic = main_topics_list[topic_index]
+            
+            # Получаем все темы в этом разделе
+            all_topics = self.db.get_all_topics(active_only=False)
+            topics_in_section = [
+                topic for topic in all_topics 
+                if topic['main_topic'] == main_topic
+            ]
+            
+            text = f"📋 <b>Все темы в разделе</b>\n\n"
+            text += f"<b>Раздел:</b> {main_topic}\n"
+            text += f"<b>Всего тем:</b> {len(topics_in_section)}\n\n"
+            
+            if topics_in_section:
+                # Группируем по статусу
+                active_topics = [t for t in topics_in_section if t['is_active']]
+                inactive_topics = [t for t in topics_in_section if not t['is_active']]
+                
+                if active_topics:
+                    text += f"✅ <b>Активные темы ({len(active_topics)}):</b>\n"
+                    for i, topic in enumerate(active_topics, 1):
+                        text += f"{i}. {topic['name']}\n"
+                    text += "\n"
+                
+                if inactive_topics:
+                    text += f"❌ <b>Неактивные темы ({len(inactive_topics)}):</b>\n"
+                    for i, topic in enumerate(inactive_topics, 1):
+                        text += f"{i}. {topic['name']}\n"
+            else:
+                text += "📝 <i>В этом разделе пока нет тем</i>"
+            
+            keyboard = [
+                [InlineKeyboardButton("➕ Добавить тему в этот раздел", callback_data=f"select_main_topic_{topic_index}")],
+                [InlineKeyboardButton("🔙 Выбрать другой раздел", callback_data="add_custom_topic")],
+                [InlineKeyboardButton("❌ Отмена", callback_data="admin_topics")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
         except (ValueError, IndexError):
             await query.edit_message_text(
                 "❌ Ошибка: раздел не найден.",

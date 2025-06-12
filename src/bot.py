@@ -200,6 +200,10 @@ def main() -> None:
         pattern="^select_main_topic_"
     ))
     application.add_handler(CallbackQueryHandler(
+        admin_handlers.show_section_topics,
+        pattern="^show_section_topics_"
+    ))
+    application.add_handler(CallbackQueryHandler(
         admin_handlers.add_base_topics_start,
         pattern="^add_base_topics$"
     ))
