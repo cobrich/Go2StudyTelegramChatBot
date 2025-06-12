@@ -1373,7 +1373,15 @@ class AdminHandlers(BaseHandler):
             
             # Запускаем обработку в отдельном потоке, чтобы не блокировать бот
             loop = asyncio.get_event_loop()
-            questions = await loop.run_in_executor(None, self.pdf_processor.process_pdf_file, temp_path)
+            result = await loop.run_in_executor(None, self.pdf_processor.process_pdf_file, temp_path)
+            
+            # Распаковываем результат - process_pdf_file возвращает кортеж (questions, topic_stats)
+            if isinstance(result, tuple) and len(result) == 2:
+                questions, pdf_topic_stats = result
+            else:
+                # Для обратной совместимости, если возвращается только список
+                questions = result if isinstance(result, list) else []
+                pdf_topic_stats = {}
             
             if not questions:
                 await processing_msg.edit_text("❌ Не удалось извлечь вопросы из PDF файла. Проверьте формат файла.")
@@ -1399,13 +1407,35 @@ class AdminHandlers(BaseHandler):
                     skipped_count += 1
                     continue
                 
+                # Убеждаемся, что options является списком
+                options = question.get('options', [])
+                if not isinstance(options, list):
+                    if isinstance(options, str):
+                        # Пытаемся разбить строку на список
+                        options = [opt.strip() for opt in options.split('\n') if opt.strip()]
+                    else:
+                        # Создаем список с одним элементом
+                        options = [str(options)]
+                
+                # Проверяем, что у нас достаточно вариантов ответов
+                if len(options) < 2:
+                    logging.warning(f"Недостаточно вариантов ответов для вопроса: {question_text[:100]}...")
+                    continue
+                
                 # Подготавливаем данные для базы
-                correct_answer_index = ord(question['correct_answer']) - ord('A')
-                correct_answer_text = question['options'][correct_answer_index]
+                correct_answer_letter = question.get('correct_answer', 'A')
+                correct_answer_index = ord(correct_answer_letter) - ord('A')
+                
+                # Проверяем, что индекс корректный
+                if correct_answer_index >= len(options):
+                    logging.warning(f"Неверный индекс правильного ответа {correct_answer_letter} для вопроса: {question_text[:100]}...")
+                    continue
+                
+                correct_answer_text = options[correct_answer_index]
                 
                 # Формируем неправильные варианты
                 incorrect_options = []
-                for i, option in enumerate(question['options']):
+                for i, option in enumerate(options):
                     if i != correct_answer_index:
                         incorrect_options.append(option)
                 
@@ -1413,7 +1443,7 @@ class AdminHandlers(BaseHandler):
                     'topic': topic,
                     'question': question_text,
                     'answer': correct_answer_text,
-                    'explanation': f"Правильный ответ: {question['correct_answer']}) {correct_answer_text}",
+                    'explanation': f"Правильный ответ: {correct_answer_letter}) {correct_answer_text}",
                     'incorrect_options': '\n'.join(incorrect_options),
                     'question_type': 'standard',
                     'source': 'pdf'
