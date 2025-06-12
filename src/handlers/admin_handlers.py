@@ -2644,21 +2644,30 @@ class AdminHandlers(BaseHandler):
             return
         
         if not results:
-            text = f"🔍 <b>Результаты поиска</b>\n\nПо запросу '<i>{search_text}</i>' ничего не найдено."
-        else:
-            text = f"🔍 <b>Результаты поиска</b>\n\nПо запросу '<i>{search_text}</i>' найдено {len(results)} результатов:\n\n"
-            
-            for i, (q_id, topic, question, answer, explanation) in enumerate(results, 1):
-                # Ограничиваем длину для удобочитаемости
-                short_question = question[:100] + "..." if len(question) > 100 else question
-                short_answer = answer[:50] + "..." if len(answer) > 50 else answer
-                
-                text += f"{i}. <b>ID {q_id}</b> | {topic}\n"
-                text += f"   <i>В:</i> {short_question}\n"
-                text += f"   <i>О:</i> {short_answer}\n\n"
+            text = f"🔍 По запросу '<i>{search_text}</i>' вопросы не найдены.\n\nПопробуйте другой поисковый запрос:"
+            keyboard = [
+                [InlineKeyboardButton("🔄 Новый поиск", callback_data="edit_question")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            return
         
-        await update.message.reply_text(text, parse_mode='HTML')
-        context.user_data.pop('admin_action', None)
+        text = f"🔍 <b>Найдено {len(results)} вопросов</b>\n\nВведите ID вопроса для редактирования:\n\n"
+        
+        for i, (q_id, topic, question, answer, explanation) in enumerate(results, 1):
+            short_question = question[:80] + "..." if len(question) > 80 else question
+            text += f"<b>ID {q_id}</b> | {topic}\n{short_question}\n\n"
+        
+        # Добавляем кнопки навигации
+        keyboard = [
+            [InlineKeyboardButton("🔄 Новый поиск", callback_data="edit_question")],
+            [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        context.user_data['admin_action'] = 'edit_question_id'
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def _handle_add_question_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE, question_text: str) -> None:
         """Обработка добавления вопроса - этап 2 (текст вопроса)."""
