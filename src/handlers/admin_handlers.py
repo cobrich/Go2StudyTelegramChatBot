@@ -2772,15 +2772,28 @@ class AdminHandlers(BaseHandler):
             text += "<b>Подтемы:</b>\n"
             for i, subtopic in enumerate(subtopics, 1):
                 text += f"{i}. {subtopic}\n"
+            
+            # Добавляем кнопки для навигации
+            keyboard = [
+                [InlineKeyboardButton("➕ Добавить еще раздел", callback_data="add_base_section")],
+                [InlineKeyboardButton("🔙 К управлению структурой", callback_data="manage_base_structure")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
             text = f"❌ <b>Ошибка добавления раздела</b>\n\n"
             text += "Возможно, некоторые подтемы уже существуют."
-        
-        await update.message.reply_text(text, parse_mode='HTML')
+            
+            # Даже при ошибке добавляем кнопку возврата
+            keyboard = [[InlineKeyboardButton("🔙 К управлению структурой", callback_data="manage_base_structure")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         
         # Очищаем данные
         context.user_data.pop('admin_action', None)
-        context.user_data.pop('new_base_section_name', None) 
+        context.user_data.pop('new_base_section_name', None)
     
     async def edit_base_section_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выбор раздела для редактирования."""
