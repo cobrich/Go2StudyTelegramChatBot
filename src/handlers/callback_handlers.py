@@ -47,10 +47,26 @@ class CallbackHandlers(BaseHandler):
             
         # Показываем сообщение о поиске для всех выборов темы
         try:
-            await query.message.edit_text("🔍 Формируются вопросы, подождите...")
+            # Проверяем, есть ли вопросы в БД для этой темы
+            topic_counts = self.db.get_topic_question_counts()
+            has_questions_in_db = topic_counts.get(topic, 0) > 0
+            
+            if has_questions_in_db:
+                await query.message.edit_text("🔍 Формируются вопросы из базы данных...")
+            else:
+                await query.message.edit_text("🤖 ИИ генерирует вопросы для вас, это может занять некоторое время...")
         except Exception:
             # Если не удалось отредактировать, отправляем новое сообщение
-            await query.message.reply_text("🔍 Формируются вопросы, подождите...")
+            try:
+                topic_counts = self.db.get_topic_question_counts()
+                has_questions_in_db = topic_counts.get(topic, 0) > 0
+                
+                if has_questions_in_db:
+                    await query.message.reply_text("🔍 Формируются вопросы из базы данных...")
+                else:
+                    await query.message.reply_text("🤖 ИИ генерирует вопросы для вас, это может занять некоторое время...")
+            except Exception:
+                await query.message.reply_text("🔍 Формируются вопросы, подождите...")
             
         logging.info(f"[handle_topic_selection] after retake check: is_retake={is_retake}, topic_index={topic_index}")
         try:
@@ -675,10 +691,17 @@ class CallbackHandlers(BaseHandler):
                 pass
             return
         
-        # Показываем подтемы выбранного раздела
+        # Показываем подтемы выбранного раздела с информацией об индикаторах
+        info_text = (
+            f"📚 **{main_topic}**\n\n"
+            f"Выберите конкретную тему:\n\n"
+            f"🟢 - есть вопросы в базе данных\n"
+            f"🟡 - ИИ сгенерирует вопросы для вас"
+        )
+        
         try:
             await query.message.edit_text(
-                f"📚 **{main_topic}**\n\nВыберите конкретную тему:",
+                info_text,
                 reply_markup=build_subtopic_selection_keyboard(main_topic, main_topic_index),
                 parse_mode='Markdown'
             )

@@ -20,24 +20,39 @@ def build_topic_selection_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int) -> InlineKeyboardMarkup:
-    """Create InlineKeyboardMarkup for subtopic selection within a main topic."""
-    # Получаем подтемы из БД
-    base_structure = _db.get_base_topic_structure()
-    subtopics = base_structure.get(main_topic, [])
+    """Create InlineKeyboardMarkup for subtopic selection within a main topic with availability indicators."""
+    # Получаем подтемы с количеством вопросов
+    topics_with_counts = _db.get_topics_with_question_counts(active_only=True)
     
-    # Получаем активные темы из БД  
+    # Фильтруем подтемы для выбранного основного раздела
+    subtopics_for_main = [
+        topic for topic in topics_with_counts 
+        if topic['main_topic'] == main_topic
+    ]
+    
+    # Получаем активные темы из БД для получения индексов
     all_active_topics = _db.get_topic_names(active_only=True)
     
     keyboard = []
-    for subtopic in subtopics:
-        # Проверяем, активна ли подтема в БД
-        if subtopic in all_active_topics:
-            # Находим индекс подтемы в общем списке активных тем
-            try:
-                subtopic_index = all_active_topics.index(subtopic)
-                keyboard.append([InlineKeyboardButton(subtopic, callback_data=f"topic_{subtopic_index}")])
-            except ValueError:
-                continue
+    for topic_info in subtopics_for_main:
+        subtopic_name = topic_info['name']
+        question_count = topic_info['question_count']
+        has_questions = topic_info['has_questions']
+        
+        # Создаем текст кнопки с индикатором
+        if has_questions:
+            # 🟢 = есть вопросы в БД
+            button_text = f"🟢 {subtopic_name} ({question_count})"
+        else:
+            # 🟡 = ИИ генерация доступна
+            button_text = f"🟡 {subtopic_name} (ИИ)"
+        
+        # Находим индекс подтемы в общем списке активных тем
+        try:
+            subtopic_index = all_active_topics.index(subtopic_name)
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"topic_{subtopic_index}")])
+        except ValueError:
+            continue
     
     # Add navigation buttons
     keyboard.append([InlineKeyboardButton("🔙 Назад к разделам", callback_data="back_to_main_topics")])

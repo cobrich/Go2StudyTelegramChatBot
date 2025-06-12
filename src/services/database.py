@@ -1166,19 +1166,113 @@ class Database:
             }
     
     def get_all_users_with_history(self) -> List[Dict[str, Any]]:
-        """Get all users who have any activity history."""
-        with sqlite3.connect(self.db_path) as conn:
+        """Get all users with their test history and statistics."""
+        with self._get_connection() as conn:
             cursor = conn.cursor()
+            
+            # Get all users
             cursor.execute('''
-                SELECT DISTINCT u.user_id
+                SELECT u.user_id, u.username, u.full_name, u.grade, u.language, u.last_activity
                 FROM users u
-                WHERE u.user_id IN (
-                    SELECT DISTINCT user_id FROM test_results
-                    UNION
-                    SELECT DISTINCT user_id FROM user_errors
-                )
                 ORDER BY u.last_activity DESC
             ''')
+            users = cursor.fetchall()
             
-            user_ids = [row[0] for row in cursor.fetchall()]
-            return [self.get_user_historical_stats(user_id) for user_id in user_ids] 
+            result = []
+            for user in users:
+                user_id, username, full_name, grade, language, last_activity = user
+                
+                # Get test statistics
+                cursor.execute('''
+                    SELECT COUNT(*) as total_tests, AVG(percentage) as avg_score
+                    FROM test_results 
+                    WHERE user_id = ?
+                ''', (user_id,))
+                stats = cursor.fetchone()
+                total_tests, avg_score = stats if stats else (0, 0.0)
+                
+                # Get recent topics
+                cursor.execute('''
+                    SELECT topic, COUNT(*) as count
+                    FROM test_results 
+                    WHERE user_id = ?
+                    GROUP BY topic
+                    ORDER BY MAX(timestamp) DESC
+                    LIMIT 3
+                ''', (user_id,))
+                recent_topics = cursor.fetchall()
+                
+                result.append({
+                    'user_id': user_id,
+                    'username': username or 'не указан',
+                    'full_name': full_name or 'не указано',
+                    'grade': grade,
+                    'language': language,
+                    'last_activity': last_activity,
+                    'total_tests': total_tests,
+                    'avg_score': round(avg_score or 0.0, 1),
+                    'recent_topics': recent_topics
+                })
+            
+            return result
+
+    def get_topic_question_counts(self) -> Dict[str, int]:
+        """Get question count for each topic."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT topic, COUNT(*) as question_count
+                FROM questions
+                GROUP BY topic
+                ORDER BY topic
+            ''')
+            results = cursor.fetchall()
+            return {topic: count for topic, count in results}
+
+    def get_topics_with_question_counts(self, active_only: bool = True) -> List[Dict[str, Any]]:
+        """Get all topics with their question counts and availability status."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get all subtopics with question counts
+            if active_only:
+                cursor.execute('''
+                    SELECT s.name, 
+                           COALESCE(q.question_count, 0) as question_count,
+                           m.name as main_topic
+                    FROM subtopics s
+                    JOIN main_topics m ON s.main_topic_id = m.id
+                    LEFT JOIN (
+                        SELECT topic, COUNT(*) as question_count
+                        FROM questions
+                        GROUP BY topic
+                    ) q ON s.name = q.topic
+                    WHERE s.is_active = 1 AND m.is_active = 1
+                    ORDER BY m.order_index, s.order_index
+                ''')
+            else:
+                cursor.execute('''
+                    SELECT s.name, 
+                           COALESCE(q.question_count, 0) as question_count,
+                           m.name as main_topic
+                    FROM subtopics s
+                    JOIN main_topics m ON s.main_topic_id = m.id
+                    LEFT JOIN (
+                        SELECT topic, COUNT(*) as question_count
+                        FROM questions
+                        GROUP BY topic
+                    ) q ON s.name = q.topic
+                    ORDER BY m.order_index, s.order_index
+                ''')
+            
+            results = cursor.fetchall()
+            return [
+                {
+                    'name': name,
+                    'question_count': question_count,
+                    'main_topic': main_topic,
+                    'has_questions': question_count > 0,
+                    'availability_status': 'db' if question_count > 0 else 'ai'
+                }
+                for name, question_count, main_topic in results
+            ] 
