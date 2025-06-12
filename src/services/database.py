@@ -807,26 +807,37 @@ class Database:
             return False
     
     def get_all_allowed_users(self) -> List[Dict[str, Any]]:
-        """Get all allowed users."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT user_id, username, full_name, grade, is_active, added_at
-                FROM allowed_users
-                ORDER BY added_at DESC
-            ''')
-            results = cursor.fetchall()
-            return [
-                {
-                    'user_id': row[0],
-                    'username': row[1],
-                    'full_name': row[2],
-                    'grade': row[3],
-                    'is_active': bool(row[4]),
-                    'added_at': row[5]
-                }
-                for row in results
-            ]
+        """Получить всех разрешенных пользователей."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT user_id, username, full_name, grade, phone_number, is_active, added_at
+                    FROM allowed_users
+                    ORDER BY added_at DESC
+                ''')
+                return [dict(row) for row in cursor.fetchall()]
+        except sqlite3.Error as e:
+            logging.error(f"Error getting allowed users: {e}")
+            return []
+
+    def get_allowed_user_by_id(self, user_id: int) -> Dict[str, Any]:
+        """Получить информацию о разрешенном пользователе по ID."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT user_id, username, full_name, grade, phone_number, is_active, added_at, added_by
+                    FROM allowed_users
+                    WHERE user_id = ?
+                ''', (user_id,))
+                result = cursor.fetchone()
+                return dict(result) if result else None
+        except sqlite3.Error as e:
+            logging.error(f"Error getting allowed user by ID {user_id}: {e}")
+            return None
     
     # === TOPICS MANAGEMENT (Updated to use normalized structure) ===
     
