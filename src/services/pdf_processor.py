@@ -3,7 +3,7 @@ import logging
 import fitz  # PyMuPDF
 import re
 from PIL import Image
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import sqlite3
 import sys
 
@@ -12,7 +12,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from services.database import Database
 from services.ai_service import AIService
-from services.topic_manager import TopicManager
 
 class PDFProcessor:
     def __init__(self, output_dir: str = "question_images"):
@@ -20,7 +19,8 @@ class PDFProcessor:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         
-        self.topic_manager = TopicManager()
+        # Инициализируем базу данных для получения списка доступных тем
+        self.db = Database()
         
         # Паттерн для поиска заголовков тем
         self.topic_header_pattern = r'Тема:\s*([^(]+)\((\d+)\)'
@@ -34,6 +34,20 @@ class PDFProcessor:
             r'^([А-Г])\)\s*(.*?)(\s*✅)?$',  # А) текст ✅ (опционально)
         ]
 
+    def get_available_topics_from_db(self) -> List[str]:
+        """Получение списка доступных тем из базы данных."""
+        try:
+            return self.db.get_topic_names(active_only=True)
+        except Exception as e:
+            logging.error(f"Ошибка при получении тем из БД: {e}")
+            return []
+
+    def validate_topic_exists(self, topic_name: str) -> bool:
+        """Проверка существования темы в базе данных."""
+        available_topics = self.get_available_topics_from_db()
+        # Точное соответствие названия темы
+        return topic_name.strip() in available_topics
+
     def detect_language(self, text: str) -> str:
         """Определение языка на основе содержимого."""
         kazakh_chars = set('әіңғүұқөһӘІҢҒҮҰҚӨҺ')
@@ -41,8 +55,11 @@ class PDFProcessor:
             return 'kk'
         return 'ru'
 
-    def extract_topics_and_questions(self, text: str) -> List[Dict]:
-        """Извлечение тем и вопросов из текста PDF."""
+    def extract_topics_and_questions(self, text: str) -> Tuple[List[Dict], Dict[str, int]]:
+        """
+        Извлечение тем и вопросов из текста PDF.
+        Возвращает кортеж: (список_вопросов, статистика_по_темам)
+        """
         questions = []
         lines = text.split('\n')
         current_topic = None
@@ -50,10 +67,22 @@ class PDFProcessor:
         current_options = []
         correct_answer = None
         
-        # Словарь для хранения первого вопроса каждой темы
-        topic_first_questions = {}
+        # Статистика обработки
+        topic_stats = {
+            'found_topics': {},      # найденные темы и количество вопросов
+            'valid_topics': {},      # валидные темы (существуют в БД)
+            'invalid_topics': {},    # невалидные темы (не найдены в БД)
+            'total_questions': 0,    # общее количество найденных вопросов
+            'valid_questions': 0,    # количество вопросов с валидными темами
+            'invalid_questions': 0   # количество вопросов с невалидными темами
+        }
         
         print(f"[DEBUG] Всего строк для обработки: {len(lines)}")
+        print(f"[DEBUG] Получаю список доступных тем из БД...")
+        
+        # Получаем список доступных тем из БД
+        available_topics = self.get_available_topics_from_db()
+        print(f"[DEBUG] Доступные темы в БД ({len(available_topics)}): {available_topics}")
         
         i = 0
         while i < len(lines):
@@ -73,25 +102,26 @@ class PDFProcessor:
             if topic_match:
                 # Сохраняем предыдущий вопрос, если он был
                 if current_question and current_options and correct_answer:
-                    # Очищаем текст вопроса
-                    clean_question = ''.join(char for char in current_question if char.isprintable() or char.isspace())
-                    clean_question = clean_question.strip()
-                    
-                    if len(clean_question) >= 10:  # Минимальная длина вопроса
-                        topic_name = current_topic or 'Математика'
-                        
-                        questions.append({
-                            'topic': topic_name,
-                            'question': clean_question,
-                            'options': current_options,
-                            'correct_answer': correct_answer
-                        })
-                        print(f"[SAVE] Сохранен вопрос: {clean_question[:100]}...")
+                    self._save_current_question(
+                        current_topic, current_question, current_options, 
+                        correct_answer, questions, topic_stats, available_topics
+                    )
                 
                 # Устанавливаем новую тему
                 current_topic = topic_match.group(1).strip()
                 expected_questions = int(topic_match.group(2))
-                print(f"[LOG] Найдена тема: '{current_topic}' ({expected_questions} вопросов)")
+                
+                # Проверяем, существует ли тема в БД
+                topic_exists = self.validate_topic_exists(current_topic)
+                
+                if topic_exists:
+                    print(f"[✅ VALID] Найдена валидная тема: '{current_topic}' ({expected_questions} вопросов)")
+                    topic_stats['valid_topics'][current_topic] = 0
+                else:
+                    print(f"[❌ INVALID] Найдена невалидная тема: '{current_topic}' (не найдена в БД)")
+                    topic_stats['invalid_topics'][current_topic] = 0
+                
+                topic_stats['found_topics'][current_topic] = 0
                 
                 # Сбрасываем текущий вопрос
                 current_question = None
@@ -106,51 +136,16 @@ class PDFProcessor:
             if question_match:
                 # Сохраняем предыдущий вопрос, если он был
                 if current_question and current_options and correct_answer:
-                    # Очищаем текст вопроса
-                    clean_question = ''.join(char for char in current_question if char.isprintable() or char.isspace())
-                    clean_question = clean_question.strip()
-                    
-                    if len(clean_question) >= 10:  # Минимальная длина вопроса
-                        topic_name = current_topic or 'Математика'
-                        
-                        questions.append({
-                            'topic': topic_name,
-                            'question': clean_question,
-                            'options': current_options,
-                            'correct_answer': correct_answer
-                        })
-                        print(f"[SAVE] Сохранен вопрос: {clean_question[:100]}...")
+                    self._save_current_question(
+                        current_topic, current_question, current_options, 
+                        correct_answer, questions, topic_stats, available_topics
+                    )
                 
                 # Начинаем новый вопрос
                 question_number = question_match.group(1)
                 current_question = question_match.group(2).strip()
                 current_options = []
                 correct_answer = None
-                
-                # Сохраняем первый вопрос темы для анализа (сразу при начале вопроса)
-                topic_name = current_topic or 'Математика'
-                if topic_name not in topic_first_questions and current_question:
-                    # Создаем предварительную версию вопроса для анализа
-                    temp_question = current_question
-                    # Пытаемся найти продолжение вопроса в следующих строках
-                    j = i + 1
-                    while j < len(lines) and j < i + 5:  # Смотрим максимум 5 строк вперед
-                        next_line = lines[j].strip()
-                        next_line = ''.join(char for char in next_line if char.isprintable() or char.isspace())
-                        next_line = next_line.strip()
-                        
-                        # Если это не вариант ответа и не новый вопрос, добавляем к тексту
-                        if (next_line and 
-                            not re.match(r'^[A-ZА-Г]\).*', next_line) and 
-                            not re.match(r'^\d+[.)\s]*\s*', next_line) and
-                            not re.match(r'^\d+$', next_line)):
-                            temp_question += " " + next_line
-                        else:
-                            break
-                        j += 1
-                    
-                    topic_first_questions[topic_name] = temp_question
-                    print(f"[FIRST_Q] Сохранен первый вопрос темы '{topic_name}': {temp_question[:100]}...")
                 
                 print(f"[LOG] Вопрос {question_number}: {current_question[:100]}...")
                 i += 1
@@ -216,48 +211,58 @@ class PDFProcessor:
         
         # Сохраняем последний вопрос
         if current_question and current_options and correct_answer:
-            # Очищаем текст вопроса
-            clean_question = ''.join(char for char in current_question if char.isprintable() or char.isspace())
-            clean_question = clean_question.strip()
+            self._save_current_question(
+                current_topic, current_question, current_options, 
+                correct_answer, questions, topic_stats, available_topics
+            )
+        
+        print(f"[DEBUG] Итого извлечено вопросов: {len(questions)}")
+        return questions, topic_stats
+
+    def _save_current_question(self, current_topic: str, current_question: str, 
+                             current_options: List[str], correct_answer: str,
+                             questions: List[Dict], topic_stats: Dict, 
+                             available_topics: List[str]) -> None:
+        """Сохранение текущего вопроса с проверкой валидности темы."""
+        # Очищаем текст вопроса
+        clean_question = ''.join(char for char in current_question if char.isprintable() or char.isspace())
+        clean_question = clean_question.strip()
+        
+        if len(clean_question) >= 10:  # Минимальная длина вопроса
+            topic_name = current_topic or 'Неизвестная тема'
             
-            if len(clean_question) >= 10:  # Минимальная длина вопроса
-                topic_name = current_topic or 'Математика'
-                
+            # Обновляем статистику
+            topic_stats['total_questions'] += 1
+            if topic_name in topic_stats['found_topics']:
+                topic_stats['found_topics'][topic_name] += 1
+            
+            # Проверяем валидность темы
+            if topic_name in available_topics:
+                # Тема валидна - добавляем вопрос
                 questions.append({
                     'topic': topic_name,
                     'question': clean_question,
                     'options': current_options,
                     'correct_answer': correct_answer
                 })
-                print(f"[SAVE] Сохранен последний вопрос: {clean_question[:100]}...")
-        
-        # Теперь обновляем темы в вопросах, используя первые вопросы для анализа
-        print(f"[DEBUG] Анализируем темы с помощью AI...")
-        
-        # Сначала анализируем первые вопросы каждой темы для определения правильных тем
-        topic_mappings = {}  # original_topic -> normalized_topic
-        
-        for original_topic, first_question in topic_first_questions.items():
-            # Используем TopicManager для нормализации темы с первым вопросом темы
-            normalized_topic = self.topic_manager.ensure_topic_exists(
-                original_topic, 
-                sample_question=first_question
-            )
-            topic_mappings[original_topic] = normalized_topic
-            print(f"[TOPIC] '{original_topic}' → '{normalized_topic}' (на основе первого вопроса)")
-        
-        # Теперь применяем найденные темы ко всем вопросам
-        for question in questions:
-            original_topic = question['topic']
-            normalized_topic = topic_mappings.get(original_topic, original_topic)
-            question['topic'] = normalized_topic
-        
-        print(f"[DEBUG] Итого извлечено вопросов: {len(questions)}")
-        return questions
+                topic_stats['valid_questions'] += 1
+                if topic_name in topic_stats['valid_topics']:
+                    topic_stats['valid_topics'][topic_name] += 1
+                print(f"[✅ SAVE] Сохранен вопрос: {clean_question[:100]}...")
+            else:
+                # Тема невалидна - пропускаем вопрос
+                topic_stats['invalid_questions'] += 1
+                if topic_name in topic_stats['invalid_topics']:
+                    topic_stats['invalid_topics'][topic_name] += 1
+                print(f"[❌ SKIP] Пропущен вопрос (невалидная тема '{topic_name}'): {clean_question[:100]}...")
 
-    def extract_questions_from_pdf(self, pdf_path: str) -> List[Dict]:
-        """Извлечение вопросов из PDF файла."""
+    def extract_questions_from_pdf(self, pdf_path: str) -> Tuple[List[Dict], Dict[str, int]]:
+        """
+        Извлечение вопросов из PDF файла.
+        Возвращает кортеж: (список_вопросов, статистика_обработки)
+        """
         questions = []
+        topic_stats = {}
         
         try:
             doc = fitz.open(pdf_path)
@@ -285,60 +290,60 @@ class PDFProcessor:
             # Выбираем подходящий метод парсинга
             if has_topic_headers:
                 print("[DEBUG] Используем парсер с заголовками тем")
-                extracted_questions = self.extract_topics_and_questions(full_text)
+                extracted_questions, topic_stats = self.extract_topics_and_questions(full_text)
             else:
                 print("[DEBUG] Используем парсер без заголовков тем")
-                extracted_questions = self.extract_questions_without_topics(full_text)
+                extracted_questions, topic_stats = self.extract_questions_without_topics(full_text)
             
-            print(f"[DEBUG] Извлечено {len(extracted_questions)} сырых вопросов")
+            print(f"[DEBUG] Извлечено {len(extracted_questions)} валидных вопросов")
             
             # Обрабатываем каждый вопрос
             valid_count = 0
             invalid_count = 0
             
             for i, q in enumerate(extracted_questions):
-                # Тема уже нормализована в extract_topics_and_questions или extract_questions_without_topics
-                normalized_topic = q['topic']
-                
                 question_data = {
                     'question': q['question'].strip(),
                     'options': q['options'],
                     'correct_answer': q['correct_answer'],
                     'language': language,
-                    'topic': normalized_topic,
+                    'topic': q['topic'],
                     'source_file': os.path.basename(pdf_path)
                 }
                 
                 if self.validate_question(question_data):
                     questions.append(question_data)
                     valid_count += 1
-                    print(f"[VALID][{i+1}] Тема: {normalized_topic} | {q['question'][:100]}...")
+                    print(f"[VALID][{i+1}] Тема: {q['topic']} | {q['question'][:100]}...")
                 else:
                     invalid_count += 1
                     print(f"[SKIP][{i+1}] Невалидный вопрос: {q['question'][:100]}...")
             
-            print(f"[DEBUG] Валидных вопросов: {valid_count}, Невалидных: {invalid_count}")
+            print(f"[DEBUG] Финальных валидных вопросов: {valid_count}, Невалидных: {invalid_count}")
             logging.info(f"Извлечено {len(questions)} валидных вопросов из {pdf_path}")
-            return questions
+            return questions, topic_stats
             
         except Exception as e:
             logging.error(f"Ошибка при обработке {pdf_path}: {e}")
-            return []
+            return [], {}
 
-    def process_pdf_file(self, pdf_path: str) -> List[Dict]:
-        """Обработка PDF файла и извлечение вопросов."""
+    def process_pdf_file(self, pdf_path: str) -> Tuple[List[Dict], Dict[str, int]]:
+        """
+        Обработка PDF файла и извлечение вопросов.
+        Возвращает кортеж: (список_вопросов, статистика_обработки)
+        """
         try:
             if not os.path.exists(pdf_path):
                 raise FileNotFoundError(f"PDF файл не найден: {pdf_path}")
             
-            questions = self.extract_questions_from_pdf(pdf_path)
+            questions, topic_stats = self.extract_questions_from_pdf(pdf_path)
             
             logging.info(f"Обработано {len(questions)} вопросов из {pdf_path}")
-            return questions
+            return questions, topic_stats
             
         except Exception as e:
             logging.error(f"Ошибка при обработке {pdf_path}: {e}")
-            return []
+            return [], {}
 
     def validate_question(self, question: Dict) -> bool:
         """Валидация вопроса."""
@@ -390,14 +395,29 @@ class PDFProcessor:
         
         return True
 
-    def extract_questions_without_topics(self, text: str) -> List[Dict]:
-        """Извлечение вопросов из PDF без четких заголовков тем."""
+    def extract_questions_without_topics(self, text: str) -> Tuple[List[Dict], Dict[str, int]]:
+        """
+        Извлечение вопросов из PDF без четких заголовков тем.
+        Возвращает кортеж: (список_вопросов, статистика_по_темам)
+        """
         questions = []
         lines = text.split('\n')
         current_question = None
         current_options = []
         correct_answer = None
         question_number = 0
+        
+        # Статистика (для совместимости)
+        topic_stats = {
+            'found_topics': {'Неопределенная тема': 0},
+            'valid_topics': {},
+            'invalid_topics': {'Неопределенная тема': 0},
+            'total_questions': 0,
+            'valid_questions': 0,
+            'invalid_questions': 0
+        }
+        
+        print("[WARNING] PDF без заголовков тем - все вопросы будут отклонены")
         
         i = 0
         while i < len(lines):
@@ -421,12 +441,12 @@ class PDFProcessor:
                     clean_question = clean_question.strip()
                     
                     if len(clean_question) >= 10:
-                        questions.append({
-                            'topic': self.topic_manager.get_topic_by_content(clean_question),
-                            'question': clean_question,
-                            'options': current_options,
-                            'correct_answer': correct_answer
-                        })
+                        # Все вопросы без заголовков тем считаются невалидными
+                        topic_stats['total_questions'] += 1
+                        topic_stats['invalid_questions'] += 1
+                        topic_stats['found_topics']['Неопределенная тема'] += 1
+                        topic_stats['invalid_topics']['Неопределенная тема'] += 1
+                        print(f"[❌ SKIP] Вопрос без темы: {clean_question[:100]}...")
                 
                 # Начинаем новый вопрос
                 question_number = int(question_match.group(1))
@@ -498,17 +518,20 @@ class PDFProcessor:
             clean_question = clean_question.strip()
             
             if len(clean_question) >= 10:
-                questions.append({
-                    'topic': self.topic_manager.get_topic_by_content(clean_question),
-                    'question': clean_question,
-                    'options': current_options,
-                    'correct_answer': correct_answer
-                })
+                # Все вопросы без заголовков тем считаются невалидными
+                topic_stats['total_questions'] += 1
+                topic_stats['invalid_questions'] += 1
+                topic_stats['found_topics']['Неопределенная тема'] += 1
+                topic_stats['invalid_topics']['Неопределенная тема'] += 1
+                print(f"[❌ SKIP] Последний вопрос без темы: {clean_question[:100]}...")
         
-        return questions
+        return questions, topic_stats
 
-def add_questions_to_db(questions: List[Dict], db: Database):
-    """Добавление вопросов в базу данных с генерацией подробных объяснений."""
+def add_questions_to_db(questions: List[Dict], db: Database) -> Dict[str, int]:
+    """
+    Добавление вопросов в базу данных с генерацией подробных объяснений.
+    Возвращает статистику добавления.
+    """
     total = len(questions)
     print(f"[LOG] Начинаю добавление {total} вопросов в базу...")
     saved_count = 0
@@ -522,7 +545,7 @@ def add_questions_to_db(questions: List[Dict], db: Database):
     with open('added_questions.log', 'a', encoding='utf-8') as logf:
         for idx, q in enumerate(questions, 1):
             question_text = q['question'].strip()
-            topic = q.get('topic', 'Операции с дробями и остатками')
+            topic = q.get('topic', 'Неизвестная тема')
             
             # Обновляем статистику
             topic_stats[topic] = topic_stats.get(topic, 0) + 1
@@ -574,10 +597,46 @@ def add_questions_to_db(questions: List[Dict], db: Database):
             except Exception as e:
                 print(f"[ERROR][{idx}/{total}] Ошибка сохранения: {e}")
     
-    print(f"\n[LOG] Добавлено {saved_count} новых вопросов в базу.")
-    print(f"[LOG] Статистика по темам:")
-    for topic, count in sorted(topic_stats.items()):
-        print(f"  - {topic}: {count} вопросов")
+    return {
+        'total_processed': total,
+        'saved_count': saved_count,
+        'topic_stats': topic_stats
+    }
+
+def print_processing_report(pdf_file: str, questions: List[Dict], topic_stats: Dict, 
+                          db_stats: Dict) -> None:
+    """Печать детального отчета об обработке PDF файла."""
+    print(f"\n{'='*80}")
+    print(f"📊 ОТЧЕТ ОБ ОБРАБОТКЕ ФАЙЛА: {os.path.basename(pdf_file)}")
+    print(f"{'='*80}")
+    
+    # Общая статистика
+    print(f"\n📈 ОБЩАЯ СТАТИСТИКА:")
+    print(f"  • Всего найдено вопросов в PDF: {topic_stats.get('total_questions', 0)}")
+    print(f"  • Вопросов с валидными темами: {topic_stats.get('valid_questions', 0)}")
+    print(f"  • Вопросов с невалидными темами: {topic_stats.get('invalid_questions', 0)}")
+    print(f"  • Финально добавлено в БД: {db_stats.get('saved_count', 0)}")
+    
+    # Статистика по валидным темам
+    if topic_stats.get('valid_topics'):
+        print(f"\n✅ ВАЛИДНЫЕ ТЕМЫ (найдены в БД):")
+        for topic, count in topic_stats['valid_topics'].items():
+            print(f"  • {topic}: {count} вопросов")
+    
+    # Статистика по невалидным темам
+    if topic_stats.get('invalid_topics'):
+        print(f"\n❌ НЕВАЛИДНЫЕ ТЕМЫ (НЕ найдены в БД):")
+        for topic, count in topic_stats['invalid_topics'].items():
+            print(f"  • {topic}: {count} вопросов (ОТКЛОНЕНЫ)")
+    
+    # Рекомендации
+    if topic_stats.get('invalid_topics'):
+        print(f"\n💡 РЕКОМЕНДАЦИИ:")
+        print(f"  • Проверьте названия тем в PDF файле")
+        print(f"  • Убедитесь, что темы точно соответствуют темам в базе данных")
+        print(f"  • Добавьте недостающие темы через админ-панель бота")
+    
+    print(f"\n{'='*80}")
 
 def main():
     """Основная функция для обработки PDF файлов."""
@@ -590,6 +649,7 @@ def main():
     ]
     
     total_questions = 0
+    total_saved = 0
     
     for pdf_file in pdf_files:
         if not os.path.exists(pdf_file):
@@ -601,18 +661,23 @@ def main():
         print(f"{'='*60}")
         
         try:
-            questions = processor.process_pdf_file(pdf_file)
-            print(f"✅ Успешно обработано {len(questions)} вопросов из {pdf_file}")
+            questions, topic_stats = processor.process_pdf_file(pdf_file)
+            print(f"✅ Успешно обработано {len(questions)} валидных вопросов из {pdf_file}")
             
             # Добавляем вопросы в базу данных
+            db_stats = {'saved_count': 0, 'topic_stats': {}}
             if questions:
                 print(f"\n🔄 Добавляю {len(questions)} вопросов в базу данных...")
                 from services.database import Database
                 db = Database()
-                add_questions_to_db(questions, db)
+                db_stats = add_questions_to_db(questions, db)
                 print(f"✅ Вопросы успешно добавлены в базу данных")
             
+            # Печатаем детальный отчет
+            print_processing_report(pdf_file, questions, topic_stats, db_stats)
+            
             total_questions += len(questions)
+            total_saved += db_stats.get('saved_count', 0)
             
         except Exception as e:
             print(f"❌ Ошибка при обработке {pdf_file}: {e}")
@@ -620,7 +685,9 @@ def main():
             traceback.print_exc()
     
     print(f"\n{'='*60}")
-    print(f"🎉 ИТОГО ОБРАБОТАНО: {total_questions} вопросов")
+    print(f"🎉 ИТОГОВАЯ СТАТИСТИКА:")
+    print(f"  • Всего обработано валидных вопросов: {total_questions}")
+    print(f"  • Всего добавлено в БД: {total_saved}")
     print(f"{'='*60}")
 
 if __name__ == "__main__":

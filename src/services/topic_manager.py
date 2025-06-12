@@ -335,4 +335,193 @@ class TopicManager:
             return success
         except Exception as e:
             logging.error(f"Ошибка при удалении раздела: {e}")
-            return False 
+            return False
+    
+    def ensure_topic_exists(self, original_topic: str, sample_question: str = None) -> str:
+        """
+        Обеспечить существование темы с AI-анализом содержания вопроса.
+        
+        Args:
+            original_topic: Исходное название темы из PDF
+            sample_question: Пример вопроса для анализа содержания
+            
+        Returns:
+            Нормализованное название темы
+        """
+        try:
+            # Шаг 1: AI анализ содержания вопроса (если предоставлен)
+            if sample_question and len(sample_question.strip()) > 10:
+                try:
+                    normalized_topic = self._normalize_topic_with_ai(original_topic, sample_question)
+                    if normalized_topic and normalized_topic != original_topic:
+                        logger.info(f"AI нормализация: '{original_topic}' → '{normalized_topic}'")
+                        original_topic = normalized_topic
+                except Exception as e:
+                    logger.warning(f"AI анализ не удался, используем резервную логику: {e}")
+            
+            # Шаг 2: Поиск похожих существующих тем
+            existing_topics = self.get_available_topics()
+            
+            # Точное совпадение
+            if original_topic in existing_topics:
+                return original_topic
+            
+            # Поиск похожих тем
+            similar_topic = self._find_similar_topic(original_topic, existing_topics)
+            if similar_topic:
+                logger.info(f"Найдена похожая тема: '{original_topic}' → '{similar_topic}'")
+                return similar_topic
+            
+            # Шаг 3: Создание новой темы если не найдена
+            success = self.create_topic_if_not_exists(original_topic)
+            if success:
+                logger.info(f"Создана новая тема: '{original_topic}'")
+                return original_topic
+            else:
+                # Fallback к первой доступной теме
+                if existing_topics:
+                    fallback_topic = existing_topics[0]
+                    logger.warning(f"Не удалось создать тему '{original_topic}', используем fallback: '{fallback_topic}'")
+                    return fallback_topic
+                else:
+                    logger.error("Нет доступных тем и не удалось создать новую")
+                    return "Математика"  # Базовая тема по умолчанию
+                    
+        except Exception as e:
+            logger.error(f"Ошибка в ensure_topic_exists: {e}")
+            # Возвращаем первую доступную тему или базовую
+            existing_topics = self.get_available_topics()
+            return existing_topics[0] if existing_topics else "Математика"
+
+    def _normalize_topic_with_ai(self, original_topic: str, sample_question: str) -> Optional[str]:
+        """
+        Нормализация темы с помощью AI на основе содержания вопроса.
+        
+        Args:
+            original_topic: Исходное название темы
+            sample_question: Пример вопроса для анализа
+            
+        Returns:
+            Нормализованное название темы или None при ошибке
+        """
+        try:
+            # Получаем список доступных тем для контекста
+            available_topics = self.get_available_topics()
+            topics_list = "\n".join([f"- {topic}" for topic in available_topics[:20]])  # Ограничиваем для промпта
+            
+            prompt = f"""
+Проанализируй математический вопрос и определи наиболее подходящую тему из существующих.
+
+ВОПРОС: {sample_question}
+
+ИСХОДНАЯ ТЕМА ИЗ PDF: {original_topic}
+
+ДОСТУПНЫЕ ТЕМЫ В СИСТЕМЕ:
+{topics_list}
+
+ЗАДАЧА:
+1. Проанализируй СОДЕРЖАНИЕ вопроса (какие математические операции, понятия используются)
+2. Определи наиболее подходящую тему из списка доступных тем
+3. Игнорируй широкие названия типа "Арифметика - Дроби, проценты, уравнения"
+4. Фокусируйся на конкретном содержании вопроса
+
+ПРИМЕРЫ:
+- Вопрос "2,46 × 18 =" + тема "Арифметика - Дроби, проценты, уравнения" → "Десятичные дроби"
+- Вопрос "Найдите 25% от 80" + тема "Математические задачи" → "Нахождение процента от числа"
+- Вопрос "x + 15 = 23" + тема "Школьная программа" → "Простейшие уравнения"
+
+ОТВЕТ (только название темы без объяснений):
+"""
+            
+            response = self.ai_service.get_completion(prompt)
+            if response and response.strip():
+                normalized = response.strip()
+                # Проверяем, что ответ является одной из доступных тем
+                if normalized in available_topics:
+                    return normalized
+                else:
+                    # Ищем наиболее похожую тему
+                    return self._find_similar_topic(normalized, available_topics)
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Ошибка AI нормализации темы: {e}")
+            return None
+
+    def _find_similar_topic(self, query: str, available_topics: List[str], threshold: float = 0.6) -> Optional[str]:
+        """
+        Найти наиболее похожую тему из доступных.
+        
+        Args:
+            query: Запрос для поиска
+            available_topics: Список доступных тем
+            threshold: Минимальный порог схожести
+            
+        Returns:
+            Наиболее похожая тема или None
+        """
+        try:
+            if not available_topics:
+                return None
+            
+            best_match = None
+            best_score = 0
+            
+            query_lower = query.lower()
+            
+            # Точное совпадение
+            for topic in available_topics:
+                if query_lower == topic.lower():
+                    return topic
+            
+            # Поиск по вхождению ключевых слов
+            for topic in available_topics:
+                topic_lower = topic.lower()
+                
+                # Проверяем вхождение слов из запроса в название темы
+                query_words = [word for word in query_lower.split() if len(word) > 2]
+                topic_words = [word for word in topic_lower.split() if len(word) > 2]
+                
+                # Считаем количество совпадающих слов
+                matches = sum(1 for word in query_words if any(word in topic_word or topic_word in word for topic_word in topic_words))
+                
+                if matches > 0:
+                    score = matches / max(len(query_words), len(topic_words))
+                    if score > best_score and score >= threshold:
+                        best_score = score
+                        best_match = topic
+            
+            # Если не найдено по словам, используем SequenceMatcher
+            if not best_match:
+                for topic in available_topics:
+                    score = SequenceMatcher(None, query_lower, topic.lower()).ratio()
+                    if score > best_score and score >= threshold:
+                        best_score = score
+                        best_match = topic
+            
+            return best_match
+            
+        except Exception as e:
+            logger.error(f"Ошибка при поиске похожей темы: {e}")
+            return None
+
+    def get_topic_by_content(self, question_text: str) -> str:
+        """
+        Определить тему по содержанию вопроса (для совместимости).
+        Использует ensure_topic_exists с анализом содержания.
+        """
+        try:
+            # Пытаемся определить тему по содержанию
+            detected_topic = self.get_topic_by_similarity(question_text)
+            if detected_topic:
+                return detected_topic
+            
+            # Используем ensure_topic_exists с базовой темой
+            return self.ensure_topic_exists("Математика", question_text)
+            
+        except Exception as e:
+            logger.error(f"Ошибка при определении темы по содержанию: {e}")
+            # Возвращаем первую доступную тему или базовую
+            available_topics = self.get_available_topics()
+            return available_topics[0] if available_topics else "Математика" 
