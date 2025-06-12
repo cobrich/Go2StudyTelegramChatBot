@@ -1980,3 +1980,45 @@ class Database:
                 'reason': 'database_error',
                 'message': f'Ошибка базы данных: {str(e)}'
             } 
+
+    def get_admin_info(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Получить информацию об админе из таблицы admins."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_id, username, full_name, is_super_admin, created_at
+                FROM admins 
+                WHERE user_id = ?
+            ''', (user_id,))
+            result = cursor.fetchone()
+            
+            if result:
+                return {
+                    'user_id': result[0],
+                    'username': result[1],
+                    'full_name': result[2],
+                    'is_super_admin': bool(result[3]),
+                    'created_at': result[4]
+                }
+            return None
+    
+    def get_all_admins(self) -> List[Dict]:
+        """Get list of all admins."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT user_id, username, full_name, is_super_admin, created_at
+                FROM admins
+                ORDER BY is_super_admin DESC, created_at ASC
+            ''')
+            rows = cursor.fetchall()
+            return [
+                {
+                    'user_id': row[0],
+                    'username': row[1],
+                    'name': row[2],
+                    'is_super': bool(row[3]),
+                    'added_at': row[4]
+                }
+                for row in rows
+            ]

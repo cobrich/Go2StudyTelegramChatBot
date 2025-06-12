@@ -638,6 +638,12 @@ allowed_users (
 - `auto_setup_user_from_whitelist(user_id, username)` - автоматическая настройка
 - `update_user_phone(user_id, phone_number)` - обновление номера телефона
 - `find_user_by_phone(phone_number)` - поиск по номеру телефона
+- `get_admin_info(user_id)` - получение информации об админе из таблицы admins
+
+#### 🐛 Исправления:
+- **Админы**: ФИО теперь проверяется и обновляется в таблице `admins`, а не `users`
+- **Логика**: админы больше не спрашиваются о ФИО если оно уже есть в таблице `admins`
+- **Состояния**: добавлено отдельное состояние `awaiting_admin_full_name` для админов
 
 ---
 

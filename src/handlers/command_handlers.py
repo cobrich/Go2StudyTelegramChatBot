@@ -4,6 +4,7 @@ import logging
 from handlers.base_handler import BaseHandler
 from utils.keyboards import get_main_menu_markup, build_topic_selection_keyboard
 from config.constants import HELP_TEXT, TOPICS
+import sqlite3
 
 class CommandHandlers(BaseHandler):
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -44,21 +45,10 @@ class CommandHandlers(BaseHandler):
                 auto_setup_message += f"\n📚 Теперь вы можете пользоваться ботом!"
                 
                 await update.message.reply_html(auto_setup_message)
-        else:
-            # Для админов - обычная регистрация
-            self.db.register_user(user.id, user.username)
-            self.db.sync_user_with_whitelist(user.id, user.username)
-
-        # Получаем информацию о пользователе после настройки
-        user_info = self.db.get_user_info(user.id)
-        
-        # Для админов - проверяем только ФИО
-        if is_admin:
-            if not user_info or not user_info[0]:  # Нет ФИО
-                context.user_data['awaiting_full_name'] = True
-                await update.message.reply_text("👨‍💼 Добро пожаловать, администратор! Пожалуйста, введите ваше ФИО:")
-                return
-        else:
+            
+            # Получаем информацию о пользователе после настройки
+            user_info = self.db.get_user_info(user.id)
+            
             # Для обычных пользователей - проверяем ФИО и класс (на случай если автонастройка не сработала)
             if not user_info or not user_info[0]:  # Нет ФИО
                 context.user_data['awaiting_full_name'] = True
@@ -69,22 +59,29 @@ class CommandHandlers(BaseHandler):
                 context.user_data['full_name'] = user_info[0]
                 await update.message.reply_text("Пожалуйста, введите ваш класс (4, 5 или 6):")
                 return
+            
+            # Если все данные есть - показываем приветствие
+            welcome_name = user_info[0] if user_info and user_info[0] else user.first_name or "пользователь"
+            grade_text = f", {user_info[1]} класс" if user_info and user_info[1] else ""
+            welcome_text = f"👋 Привет, {welcome_name}{grade_text}!\n\n📚 Я бот для изучения математики. Выбери действие:"
+        else:
+            # Для админов - проверяем ФИО из таблицы admins
+            admin_info = self.db.get_admin_info(user.id)
+            
+            if not admin_info or not admin_info['full_name']:  # Нет ФИО в таблице admins
+                context.user_data['awaiting_admin_full_name'] = True
+                await update.message.reply_text("👨‍💼 Добро пожаловать, администратор! Пожалуйста, введите ваше ФИО:")
+                return
+            
+            # Если ФИО есть в admins - показываем приветствие
+            welcome_name = admin_info['full_name']
+            welcome_text = f"👋 Добро пожаловать, {welcome_name}!\n\n🔧 Вы вошли как <b>администратор</b>.\n\nВыберите действие:"
 
-        # Если все данные есть - показываем приветствие
-        welcome_name = user_info[0] if user_info and user_info[0] else user.first_name or "пользователь"
-        
         # Clear previous session data
         self.clear_user_data(context)
         self.set_user_data(context, 'session_started', True)
 
         self.db.set_all_users_inactive()
-
-        # Формируем приветственное сообщение
-        if is_admin:
-            welcome_text = f"👋 Добро пожаловать, {welcome_name}!\n\n🔧 Вы вошли как <b>администратор</b>.\n\nВыберите действие:"
-        else:
-            grade_text = f", {user_info[1]} класс" if user_info and user_info[1] else ""
-            welcome_text = f"👋 Привет, {welcome_name}{grade_text}!\n\n📚 Я бот для изучения математики. Выбери действие:"
 
         try:
             # Try to remove any existing keyboard
@@ -183,7 +180,42 @@ class CommandHandlers(BaseHandler):
             )
             return
         
-        # Проверка на ввод ФИО
+        # Проверка на ввод ФИО для админа
+        if context.user_data.get('awaiting_admin_full_name'):
+            full_name = text.strip()
+            
+            if not full_name:
+                await update.message.reply_text("❌ ФИО не может быть пустым. Пожалуйста, введите ваше ФИО:")
+                return
+            
+            # Обновляем ФИО в таблице admins
+            try:
+                with sqlite3.connect(self.db.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        UPDATE admins 
+                        SET full_name = ?
+                        WHERE user_id = ?
+                    ''', (full_name, user_id))
+                    conn.commit()
+                
+                context.user_data['awaiting_admin_full_name'] = False
+                
+                await update.message.reply_text(
+                    f"✅ Спасибо, {full_name}! Ваши данные обновлены.\n\n🔧 Вы администратор системы. Теперь вы можете пользоваться ботом.",
+                    reply_markup=self.main_menu_markup
+                )
+                return
+                
+            except Exception as e:
+                logging.error(f"Error updating admin full_name: {e}")
+                await update.message.reply_text(
+                    "❌ Произошла ошибка при сохранении данных. Попробуйте еще раз.",
+                    reply_markup=self.main_menu_markup
+                )
+                return
+        
+        # Проверка на ввод ФИО для обычных пользователей
         if context.user_data.get('awaiting_full_name'):
             full_name = text
             db_info = self.db.get_user_info(user_id)
