@@ -359,77 +359,48 @@ class CallbackHandlers(BaseHandler):
         self.db.add_test_result(user_id, topic, percentage)
         errors = [r for r in user_results if not r['is_correct']]
         
+        # Всегда показываем красивый краткий результат с кнопками для объяснений
         results_text = f"📊 Результаты теста по теме '{topic}':\n\n"
         results_text += f"Правильных ответов: {correct} из {total} ({percentage:.1f}%)\n\n"
         
-        # Показываем подробный разбор всех вопросов
-        results_text += "📝 Подробный разбор:\n\n"
-        for i, result in enumerate(user_results):
-            status = "✅" if result['is_correct'] else "❌"
-            results_text += f"{status} Вопрос {i+1}: {result['question'][:50]}{'...' if len(result['question']) > 50 else ''}\n"
-            results_text += f"   Ваш ответ: {result['user_answer']}\n"
-            if not result['is_correct']:
-                results_text += f"   Правильный ответ: {result['correct_answer']}\n"
-            results_text += f"   Объяснение: {result['explanation']}\n"
-            results_text += f"   Источник: {result['source']}\n\n"
-        
-        # Если сообщение слишком длинное, отправляем по частям
-        if len(results_text) > 4000:
-            # Отправляем краткий результат
-            short_text = f"📊 Результаты теста по теме '{topic}':\n\n"
-            short_text += f"Правильных ответов: {correct} из {total} ({percentage:.1f}%)\n\n"
-            if errors:
-                short_text += "Ошибки:\n"
-                for err in errors:
-                    short_text += f"Вопрос {err['q_num']+1}: Ваш ответ: {err['user_answer']} | Правильный: {err['correct_answer']}\n"
-            else:
-                short_text += "🎉 Поздравляем! Все ответы верны!\n"
-            
-            buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]]
+        if errors:
+            results_text += "❌ Ошибки:\n"
             for err in errors:
-                buttons.append([
-                    InlineKeyboardButton(
-                        f"Показать объяснение к вопросу {err['q_num']+1}",
-                        callback_data=f"show_expl_{err['q_num']}"
-                    )
-                ])
-            buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{self.db.get_topic_names(active_only=True).index(topic)}")])
-            buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
-            keyboard = InlineKeyboardMarkup(buttons)
-            
-            try:
-                await query.message.edit_text(short_text, reply_markup=keyboard)
-            except Exception as e:
-                logging.error(f"Error editing message with short results: {e}")
-                try:
-                    # Fallback: send new message
-                    await context.bot.send_message(
-                        chat_id=query.message.chat_id,
-                        text=short_text,
-                        reply_markup=keyboard
-                    )
-                except Exception as e2:
-                    logging.error(f"Error sending fallback results message: {e2}")
+                results_text += f"Вопрос {err['q_num']+1}: {err['user_answer']} → {err['correct_answer']}\n"
         else:
-            # Отправляем полный результат
-            buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]]
-            buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{self.db.get_topic_names(active_only=True).index(topic)}")])
-            buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
-            keyboard = InlineKeyboardMarkup(buttons)
-            
+            results_text += "🎉 Поздравляем! Все ответы верны!\n"
+        
+        # Создаем кнопки
+        buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]]
+        
+        # Добавляем кнопки объяснений для ошибок
+        for err in errors:
+            buttons.append([
+                InlineKeyboardButton(
+                    f"💡 Объяснение к вопросу {err['q_num']+1}",
+                    callback_data=f"show_expl_{err['q_num']}"
+                )
+            ])
+        
+        # Добавляем кнопки навигации
+        buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", callback_data=f"retake_{self.db.get_topic_names(active_only=True).index(topic)}")])
+        buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
+        
+        keyboard = InlineKeyboardMarkup(buttons)
+        
+        try:
+            await query.message.edit_text(results_text, reply_markup=keyboard)
+        except Exception as e:
+            logging.error(f"Error editing message with results: {e}")
             try:
-                await query.message.edit_text(results_text, reply_markup=keyboard)
-            except Exception as e:
-                logging.error(f"Error editing message with full results: {e}")
-                try:
-                    # Fallback: send new message
-                    await context.bot.send_message(
-                        chat_id=query.message.chat_id,
-                        text=results_text,
-                        reply_markup=keyboard
-                    )
-                except Exception as e2:
-                    logging.error(f"Error sending fallback full results message: {e2}")
+                # Fallback: send new message
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=results_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e2:
+                logging.error(f"Error sending fallback results message: {e2}")
         # user_data теперь очищается только при возврате в меню или выборе новой темы
 
     async def handle_show_explanation(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -452,18 +423,23 @@ class CallbackHandlers(BaseHandler):
                 break
         if explanation:
             source_text = explanation['source']
-            text = f"Вопрос {q_num+1}: {explanation['question']}\n\nПравильный ответ: {explanation['correct_answer']}\n\nОбъяснение: {explanation['explanation']}\n\nИсточник: {source_text}"
+            text = f"💡 <b>Объяснение к вопросу {q_num+1}</b>\n\n"
+            text += f"<b>Вопрос:</b> {explanation['question']}\n\n"
+            text += f"❌ <b>Ваш ответ:</b> {explanation['user_answer']}\n"
+            text += f"✅ <b>Правильный ответ:</b> {explanation['correct_answer']}\n\n"
+            text += f"📝 <b>Объяснение:</b>\n{explanation['explanation']}\n\n"
+            text += f"📚 <b>Источник:</b> {source_text}"
         else:
-            text = "Вопрос не найден."
+            text = "❌ Вопрос не найден."
         # Кнопка назад к результатам
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("⬅️ Назад к результатам", callback_data="back_to_results")]
         ])
         try:
-            await query.message.edit_text(text, reply_markup=keyboard)
+            await query.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
         except Exception:
             try:
-                await query.message.reply_text(text)
+                await query.message.reply_text(text, parse_mode='HTML')
             except Exception as e:
                 logging.error(f"Error sending explanation text: {e}")
 
@@ -492,9 +468,9 @@ class CallbackHandlers(BaseHandler):
         results_text = f"📊 Результаты теста по теме '{topic}':\n\n"
         results_text += f"Правильных ответов: {correct} из {total} ({percentage:.1f}%)\n\n"
         if errors:
-            results_text += "Ошибки:\n"
+            results_text += "❌ Ошибки:\n"
             for err in errors:
-                results_text += f"Вопрос {err['q_num']+1}: Ваш ответ: {err['user_answer']} | Правильный: {err['correct_answer']}\n"
+                results_text += f"Вопрос {err['q_num']+1}: {err['user_answer']} → {err['correct_answer']}\n"
         else:
             results_text += "🎉 Поздравляем! Все ответы верны!\n"
         
@@ -502,7 +478,7 @@ class CallbackHandlers(BaseHandler):
         for err in errors:
             buttons.append([
                 InlineKeyboardButton(
-                    f"Показать объяснение к вопросу {err['q_num']+1}",
+                    f"💡 Объяснение к вопросу {err['q_num']+1}",
                     callback_data=f"show_expl_{err['q_num']}"
                 )
             ])
