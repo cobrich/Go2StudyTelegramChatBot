@@ -184,12 +184,20 @@ def main() -> None:
     
     # Topic management handlers
     application.add_handler(CallbackQueryHandler(
+        admin_handlers.topics_menu,
+        pattern="^admin_topics$"
+    ))
+    application.add_handler(CallbackQueryHandler(
         admin_handlers.add_topic_start,
         pattern="^add_topic$"
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.add_custom_topic_start,
         pattern="^add_custom_topic$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.select_main_topic_for_new,
+        pattern="^select_main_topic_"
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.add_base_topics_start,

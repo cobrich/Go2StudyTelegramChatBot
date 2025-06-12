@@ -378,12 +378,46 @@ class AdminHandlers(BaseHandler):
         query = update.callback_query
         await self.safe_answer_callback(query)
         
+        # Получаем список основных разделов
+        base_structure = self.db.get_base_topic_structure()
+        
+        if not base_structure:
+            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text("❌ Основные разделы не найдены. Сначала создайте базовую структуру.", 
+                                         reply_markup=reply_markup, parse_mode='HTML')
+            return
+        
+        context.user_data['admin_action'] = 'select_main_topic_for_new'
+        
+        keyboard = []
+        for main_topic in base_structure.keys():
+            keyboard.append([InlineKeyboardButton(
+                f"📚 {main_topic}",
+                callback_data=f"select_main_topic_{main_topic}"
+            )])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text("➕ <b>Добавление новой темы</b>\n\nВыберите основной раздел для новой темы:", 
+                                     reply_markup=reply_markup, parse_mode='HTML')
+
+    async def select_main_topic_for_new(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выбор основного раздела для новой темы."""
+        query = update.callback_query
+        main_topic = query.data.replace('select_main_topic_', '')
+        await self.safe_answer_callback(query)
+        
+        context.user_data['selected_main_topic'] = main_topic
         context.user_data['admin_action'] = 'add_topic'
         
         keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text("➕ <b>Добавление новой темы</b>\n\nВведите название новой темы:", 
+        await query.edit_message_text(f"➕ <b>Добавление новой темы</b>\n\n"
+                                     f"Выбранный раздел: <b>{main_topic}</b>\n\n"
+                                     f"Введите название новой темы:", 
                                      reply_markup=reply_markup, parse_mode='HTML')
     
     async def add_base_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2172,12 +2206,14 @@ class AdminHandlers(BaseHandler):
     async def _handle_topic_description(self, update: Update, context: ContextTypes.DEFAULT_TYPE, description: str) -> None:
         """Обработка добавления темы - этап 2 (описание)."""
         topic_name = context.user_data.get('new_topic_name')
+        selected_main_topic = context.user_data.get('selected_main_topic')
         admin_id = update.effective_user.id
         
         if description == '-':
             description = f"Тема: {topic_name}"
         
-        success = self.db.add_topic(topic_name, description, admin_id)
+        # Используем выбранный основной раздел
+        success = self.db.add_topic(topic_name, description, admin_id, main_topic_name=selected_main_topic)
         
         if success:
             # Показываем сообщение об успехе и возвращаемся в меню управления темами
@@ -2191,8 +2227,10 @@ class AdminHandlers(BaseHandler):
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            text = f"✅ Тема '{topic_name}' успешно добавлена!\n\n"
-            text += "📚 <b>Управление темами</b>\n\nВыберите действие:"
+            text = f"✅ Тема '{topic_name}' успешно добавлена"
+            if selected_main_topic:
+                text += f" в раздел '{selected_main_topic}'"
+            text += "!\n\n📚 <b>Управление темами</b>\n\nВыберите действие:"
             
             # Определяем, это callback query или обычное сообщение
             if update.callback_query:
@@ -2209,6 +2247,7 @@ class AdminHandlers(BaseHandler):
         # Очищаем данные
         context.user_data.pop('admin_action', None)
         context.user_data.pop('new_topic_name', None)
+        context.user_data.pop('selected_main_topic', None)
     
     async def _handle_add_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id_text: str) -> None:
         """Обработка добавления админа - этап 1 (user_id)."""
