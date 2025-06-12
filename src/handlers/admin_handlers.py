@@ -2749,13 +2749,32 @@ class AdminHandlers(BaseHandler):
             text += f"<b>Правильный ответ:</b> {correct_letter}) {correct_answer}\n"
             text += f"<b>Объяснение:</b> {explanation}"
             
+            # Добавляем кнопки навигации
+            keyboard = [
+                [InlineKeyboardButton("➕ Добавить еще вопрос", callback_data="add_question")],
+                [InlineKeyboardButton("📊 Статистика вопросов", callback_data="questions_stats")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             # Определяем, это callback query или обычное сообщение
             if update.callback_query:
-                await update.callback_query.edit_message_text(text, parse_mode='HTML')
+                await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
             else:
-                await update.message.reply_text(text, parse_mode='HTML')
+                await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка при сохранении вопроса: {e}")
+            error_text = f"❌ Ошибка при сохранении вопроса: {e}"
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать снова", callback_data="add_question")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_text, reply_markup=reply_markup)
+            else:
+                await update.message.reply_text(error_text, reply_markup=reply_markup)
         
         # Очищаем все данные
         context.user_data.pop('admin_action', None)
@@ -2868,9 +2887,25 @@ class AdminHandlers(BaseHandler):
                 ''', (new_explanation, question_id))
                 conn.commit()
             
-            await update.message.reply_text(f"✅ <b>Вопрос обновлен!</b>\n\nНовое объяснение: <i>{new_explanation}</i>", parse_mode='HTML')
+            success_text = f"✅ <b>Вопрос обновлен!</b>\n\nНовое объяснение: <i>{new_explanation}</i>"
+            keyboard = [
+                [InlineKeyboardButton("✏️ Редактировать еще вопрос", callback_data="edit_question")],
+                [InlineKeyboardButton("📊 Статистика вопросов", callback_data="questions_stats")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(success_text, reply_markup=reply_markup, parse_mode='HTML')
         except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка при обновлении: {e}")
+            error_text = f"❌ Ошибка при обновлении: {e}"
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать снова", callback_data="edit_question")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(error_text, reply_markup=reply_markup)
         
         # Очищаем данные
         context.user_data.pop('admin_action', None)
