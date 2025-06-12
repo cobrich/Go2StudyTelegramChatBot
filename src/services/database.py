@@ -1864,4 +1864,119 @@ class Database:
                     'grade': result[3],
                     'phone_number': result[4]
                 }
-            return None 
+            return None
+
+    def auto_setup_user_from_whitelist(self, user_id: int, username: str) -> Dict[str, Any]:
+        """
+        Автоматическая настройка пользователя из whitelist при первом входе.
+        Возвращает информацию о том, что было настроено.
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Ищем пользователя в whitelist по user_id или username
+                cursor.execute('''
+                    SELECT user_id, username, full_name, grade, phone_number, is_active, added_at
+                    FROM allowed_users 
+                    WHERE (user_id = ? OR username = ?) AND is_active = 1
+                    ORDER BY user_id IS NOT NULL DESC, added_at DESC
+                    LIMIT 1
+                ''', (user_id, username))
+                
+                whitelist_data = cursor.fetchone()
+                
+                if not whitelist_data:
+                    return {
+                        'success': False,
+                        'reason': 'not_in_whitelist',
+                        'message': 'Пользователь не найден в списке разрешенных'
+                    }
+                
+                wl_user_id, wl_username, wl_full_name, wl_grade, wl_phone, wl_active, wl_added_at = whitelist_data
+                
+                # Проверяем, есть ли уже запись в users
+                cursor.execute('SELECT user_id, full_name, grade, phone_number FROM users WHERE user_id = ?', (user_id,))
+                existing_user = cursor.fetchone()
+                
+                # Определяем, что нужно обновить
+                updates_made = []
+                
+                if existing_user:
+                    # Обновляем существующую запись
+                    current_name, current_grade, current_phone = existing_user[1], existing_user[2], existing_user[3]
+                    
+                    update_fields = []
+                    update_params = []
+                    
+                    if wl_full_name and wl_full_name != current_name:
+                        update_fields.append("full_name = ?")
+                        update_params.append(wl_full_name)
+                        updates_made.append(f"ФИО: {wl_full_name}")
+                    
+                    if wl_grade and wl_grade != current_grade:
+                        update_fields.append("grade = ?")
+                        update_params.append(wl_grade)
+                        updates_made.append(f"Класс: {wl_grade}")
+                    
+                    if wl_phone and wl_phone != current_phone:
+                        update_fields.append("phone_number = ?")
+                        update_params.append(wl_phone)
+                        updates_made.append(f"Телефон: {wl_phone}")
+                    
+                    # Всегда обновляем username и last_activity
+                    update_fields.extend(["username = ?", "last_activity = CURRENT_TIMESTAMP"])
+                    update_params.extend([username])
+                    
+                    if update_fields:
+                        update_params.append(user_id)
+                        cursor.execute(f'''
+                            UPDATE users 
+                            SET {", ".join(update_fields)}
+                            WHERE user_id = ?
+                        ''', update_params)
+                else:
+                    # Создаем новую запись
+                    cursor.execute('''
+                        INSERT INTO users (user_id, username, full_name, grade, phone_number, last_activity)
+                        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ''', (user_id, username, wl_full_name, wl_grade, wl_phone))
+                    
+                    if wl_full_name:
+                        updates_made.append(f"ФИО: {wl_full_name}")
+                    if wl_grade:
+                        updates_made.append(f"Класс: {wl_grade}")
+                    if wl_phone:
+                        updates_made.append(f"Телефон: {wl_phone}")
+                
+                # Обновляем user_id в whitelist если его не было
+                if not wl_user_id or wl_user_id != user_id:
+                    cursor.execute('''
+                        UPDATE allowed_users 
+                        SET user_id = ?
+                        WHERE username = ? AND (user_id IS NULL OR user_id != ?)
+                    ''', (user_id, username, user_id))
+                    updates_made.append("Синхронизирован user_id в whitelist")
+                
+                conn.commit()
+                
+                return {
+                    'success': True,
+                    'auto_configured': len(updates_made) > 0,
+                    'updates_made': updates_made,
+                    'user_data': {
+                        'full_name': wl_full_name,
+                        'grade': wl_grade,
+                        'phone_number': wl_phone,
+                        'username': wl_username or username
+                    },
+                    'message': f"Автоматически настроено: {', '.join(updates_made)}" if updates_made else "Данные уже актуальны"
+                }
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка автоматической настройки пользователя {user_id}: {e}")
+            return {
+                'success': False,
+                'reason': 'database_error',
+                'message': f'Ошибка базы данных: {str(e)}'
+            } 

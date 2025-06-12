@@ -21,33 +21,70 @@ class CommandHandlers(BaseHandler):
             )
             return
 
-        # Регистрируем пользователя в базе, если его нет
-        self.db.register_user(user.id, user.username)
-
         # Проверяем, является ли пользователь админом
         is_admin = self.db.is_admin(user.id)
         
-        # Проверяем, есть ли ФИО и класс (для админов класс не обязателен)
-        user_info = self.db.get_user_info(user.id)
-        if not user_info or not user_info[0]:
-            # Если нет ФИО - спрашиваем у всех (включая админов)
-            context.user_data['awaiting_full_name'] = True
-            await update.message.reply_text("Пожалуйста, введите ваше ФИО:")
-            return
-        elif not is_admin and not user_info[1]:
-            # Если нет класса и пользователь НЕ админ - спрашиваем класс
-            context.user_data['awaiting_grade'] = True
-            context.user_data['full_name'] = user_info[0]  # Сохраняем ФИО
-            await update.message.reply_text("Пожалуйста, введите ваш класс (4, 5 или 6):")
-            return
+        if not is_admin:
+            # Для обычных пользователей - пытаемся автоматически настроить из whitelist
+            setup_result = self.db.auto_setup_user_from_whitelist(user.id, user.username)
+            
+            if setup_result['success'] and setup_result['auto_configured']:
+                # Показываем сообщение об автоматической настройке
+                auto_setup_message = f"✅ <b>Добро пожаловать!</b>\n\n"
+                auto_setup_message += f"🔄 {setup_result['message']}\n\n"
+                
+                user_data = setup_result['user_data']
+                if user_data['full_name']:
+                    auto_setup_message += f"👤 <b>ФИО:</b> {user_data['full_name']}\n"
+                if user_data['grade']:
+                    auto_setup_message += f"🎓 <b>Класс:</b> {user_data['grade']}\n"
+                if user_data['phone_number']:
+                    auto_setup_message += f"📱 <b>Телефон:</b> {user_data['phone_number']}\n"
+                
+                auto_setup_message += f"\n📚 Теперь вы можете пользоваться ботом!"
+                
+                await update.message.reply_html(auto_setup_message)
+        else:
+            # Для админов - обычная регистрация
+            self.db.register_user(user.id, user.username)
+            self.db.sync_user_with_whitelist(user.id, user.username)
 
+        # Получаем информацию о пользователе после настройки
+        user_info = self.db.get_user_info(user.id)
+        
+        # Для админов - проверяем только ФИО
+        if is_admin:
+            if not user_info or not user_info[0]:  # Нет ФИО
+                context.user_data['awaiting_full_name'] = True
+                await update.message.reply_text("👨‍💼 Добро пожаловать, администратор! Пожалуйста, введите ваше ФИО:")
+                return
+        else:
+            # Для обычных пользователей - проверяем ФИО и класс (на случай если автонастройка не сработала)
+            if not user_info or not user_info[0]:  # Нет ФИО
+                context.user_data['awaiting_full_name'] = True
+                await update.message.reply_text("Пожалуйста, введите ваше ФИО:")
+                return
+            elif not user_info[1]:  # Нет класса
+                context.user_data['awaiting_grade'] = True
+                context.user_data['full_name'] = user_info[0]
+                await update.message.reply_text("Пожалуйста, введите ваш класс (4, 5 или 6):")
+                return
+
+        # Если все данные есть - показываем приветствие
+        welcome_name = user_info[0] if user_info and user_info[0] else user.first_name or "пользователь"
+        
         # Clear previous session data
         self.clear_user_data(context)
         self.set_user_data(context, 'session_started', True)
 
         self.db.set_all_users_inactive()
 
-        welcome_text = f"👋 Привет, {user.mention_html()}! Я бот для изучения математики. Выбери действие:"
+        # Формируем приветственное сообщение
+        if is_admin:
+            welcome_text = f"👋 Добро пожаловать, {welcome_name}!\n\n🔧 Вы вошли как <b>администратор</b>.\n\nВыберите действие:"
+        else:
+            grade_text = f", {user_info[1]} класс" if user_info and user_info[1] else ""
+            welcome_text = f"👋 Привет, {welcome_name}{grade_text}!\n\n📚 Я бот для изучения математики. Выбери действие:"
 
         try:
             # Try to remove any existing keyboard
