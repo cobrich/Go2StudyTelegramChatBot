@@ -1279,13 +1279,58 @@ class AdminHandlers(BaseHandler):
         context.user_data['admin_action'] = 'upload_pdf'
         
         text = "📄 <b>Загрузка PDF файла</b>\n\n"
-        text += "Отправьте PDF файл с вопросами в следующем формате:\n\n"
-        text += "<code>Тема: Пропорция(10)\n\n"
-        text += "1) Вопрос\nA) Вариант A\nB) Вариант B ✅\nC) Вариант C\nD) Вариант D\n\n"
-        text += "2) Следующий вопрос\n...</code>\n\n"
-        text += "⚠️ Убедитесь, что правильные ответы помечены символом ✅"
+        text += "Отправьте PDF файл с вопросами для добавления в базу данных.\n\n"
+        text += "<b>Требования к файлу:</b>\n"
+        text += "• Формат: PDF\n"
+        text += "• Размер: до 20MB\n"
+        text += "• Структура: вопросы с вариантами ответов A, B, C, D\n"
+        text += "• Правильный ответ должен быть отмечен ✅\n\n"
+        text += "📋 Для подробного руководства нажмите кнопку ниже."
         
-        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_questions")]]
+        keyboard = [
+            [InlineKeyboardButton("📋 Руководство по формату", callback_data="pdf_format_guide")],
+            [InlineKeyboardButton("🔙 Отмена", callback_data="admin_questions")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def pdf_format_guide(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Показ руководства по формату PDF файлов."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        text = "📋 <b>Руководство по формату PDF</b>\n\n"
+        text += "<b>Структура файла:</b>\n"
+        text += "1. Заголовок темы: <code>Тема: Название темы(количество)</code>\n"
+        text += "2. Номер вопроса: <code>1. Текст вопроса</code>\n"
+        text += "3. Варианты ответов:\n"
+        text += "   <code>A) Вариант 1</code>\n"
+        text += "   <code>B) Вариант 2 ✅</code> (правильный)\n"
+        text += "   <code>C) Вариант 3</code>\n"
+        text += "   <code>D) Вариант 4</code>\n\n"
+        text += "<b>Пример:</b>\n"
+        text += "<code>Тема: Математика(2)\n\n"
+        text += "1. Сколько будет 2+2?\n"
+        text += "A) 3\n"
+        text += "B) 4 ✅\n"
+        text += "C) 5\n"
+        text += "D) 6\n\n"
+        text += "2. Сколько будет 3×3?\n"
+        text += "A) 6\n"
+        text += "B) 8\n"
+        text += "C) 9 ✅\n"
+        text += "D) 12</code>\n\n"
+        text += "<b>Важно:</b>\n"
+        text += "• Тема должна существовать в системе\n"
+        text += "• Правильный ответ отмечается ✅\n"
+        text += "• Соблюдайте нумерацию вопросов\n"
+        text += "• Используйте латинские буквы A, B, C, D"
+        
+        keyboard = [
+            [InlineKeyboardButton("📄 Загрузить PDF", callback_data="upload_pdf")],
+            [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
@@ -1384,7 +1429,25 @@ class AdminHandlers(BaseHandler):
                 pdf_topic_stats = {}
             
             if not questions:
-                await processing_msg.edit_text("❌ Не удалось извлечь вопросы из PDF файла. Проверьте формат файла.")
+                no_questions_msg = f"❌ <b>Вопросы не найдены</b>\n\n"
+                no_questions_msg += f"📄 Файл: {update.message.document.file_name}\n"
+                no_questions_msg += f"🔍 В PDF файле не найдено валидных вопросов.\n\n"
+                no_questions_msg += "Возможные причины:\n"
+                no_questions_msg += "• Неправильный формат файла\n"
+                no_questions_msg += "• Темы не существуют в системе\n"
+                no_questions_msg += "• Отсутствуют правильные ответы (✅)\n"
+                no_questions_msg += "• Некорректная структура вопросов"
+                
+                # Добавляем кнопки навигации для случая отсутствия вопросов
+                keyboard = [
+                    [InlineKeyboardButton("📋 Руководство по формату", callback_data="pdf_format_guide")],
+                    [InlineKeyboardButton("📄 Попробовать другой файл", callback_data="upload_pdf")],
+                    [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")],
+                    [InlineKeyboardButton("🏠 Главное меню", callback_data="admin_panel")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await processing_msg.edit_text(no_questions_msg, reply_markup=reply_markup, parse_mode='HTML')
                 return
             
             await processing_msg.edit_text(f"⏳ Найдено {len(questions)} вопросов. Сохраняю в базу данных...")
@@ -1467,12 +1530,34 @@ class AdminHandlers(BaseHandler):
                 for topic, count in sorted(topic_stats.items()):
                     result_text += f"• {topic}: {count}\n"
             
-            await processing_msg.edit_text(result_text, parse_mode='HTML')
+            # Добавляем кнопки навигации для успешной обработки
+            keyboard = [
+                [InlineKeyboardButton("📊 Статистика вопросов", callback_data="questions_stats")],
+                [InlineKeyboardButton("📄 Загрузить еще PDF", callback_data="upload_pdf")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await processing_msg.edit_text(result_text, reply_markup=reply_markup, parse_mode='HTML')
             
         except Exception as e:
-            error_msg = f"❌ Ошибка при обработке PDF: {str(e)}"
+            error_msg = f"❌ <b>Ошибка при обработке PDF</b>\n\n"
+            error_msg += f"📄 Файл: {update.message.document.file_name}\n"
+            error_msg += f"🚫 Ошибка: {str(e)}\n\n"
+            error_msg += "Проверьте формат файла и попробуйте снова."
+            
+            # Добавляем кнопки навигации для ошибки
+            keyboard = [
+                [InlineKeyboardButton("📄 Попробовать снова", callback_data="upload_pdf")],
+                [InlineKeyboardButton("📋 Руководство по формату", callback_data="pdf_format_guide")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             logging.error(f"PDF processing error: {e}")
-            await processing_msg.edit_text(error_msg)
+            await processing_msg.edit_text(error_msg, reply_markup=reply_markup, parse_mode='HTML')
         
         finally:
             # Удаляем временный файл

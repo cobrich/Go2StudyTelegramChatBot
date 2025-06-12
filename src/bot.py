@@ -282,6 +282,10 @@ def main() -> None:
         pattern="^upload_pdf$"
     ))
     application.add_handler(CallbackQueryHandler(
+        admin_handlers.pdf_format_guide,
+        pattern="^pdf_format_guide$"
+    ))
+    application.add_handler(CallbackQueryHandler(
         admin_handlers.questions_stats,
         pattern="^questions_stats$"
     ))
