@@ -2871,7 +2871,13 @@ class AdminHandlers(BaseHandler):
         
         # Если пользователь отправил '-', оставляем текущее объяснение
         if new_explanation == '-':
-            await update.message.reply_text("❌ Редактирование отменено.")
+            cancel_text = "❌ Редактирование отменено."
+            keyboard = [
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(cancel_text, reply_markup=reply_markup)
             context.user_data.pop('admin_action', None)
             context.user_data.pop('edit_question_id', None)
             context.user_data.pop('edit_question_answer', None)
