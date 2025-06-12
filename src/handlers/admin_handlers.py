@@ -389,12 +389,15 @@ class AdminHandlers(BaseHandler):
             return
         
         context.user_data['admin_action'] = 'select_main_topic_for_new'
+        # Сохраняем список разделов для использования по индексу
+        main_topics_list = list(base_structure.keys())
+        context.user_data['main_topics_list'] = main_topics_list
         
         keyboard = []
-        for main_topic in base_structure.keys():
+        for i, main_topic in enumerate(main_topics_list):
             keyboard.append([InlineKeyboardButton(
                 f"📚 {main_topic}",
-                callback_data=f"select_main_topic_{main_topic}"
+                callback_data=f"select_main_topic_{i}"
             )])
         
         keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")])
@@ -406,19 +409,33 @@ class AdminHandlers(BaseHandler):
     async def select_main_topic_for_new(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выбор основного раздела для новой темы."""
         query = update.callback_query
-        main_topic = query.data.replace('select_main_topic_', '')
         await self.safe_answer_callback(query)
         
-        context.user_data['selected_main_topic'] = main_topic
-        context.user_data['admin_action'] = 'add_topic'
-        
-        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(f"➕ <b>Добавление новой темы</b>\n\n"
-                                     f"Выбранный раздел: <b>{main_topic}</b>\n\n"
-                                     f"Введите название новой темы:", 
-                                     reply_markup=reply_markup, parse_mode='HTML')
+        try:
+            # Получаем индекс из callback_data
+            topic_index = int(query.data.replace('select_main_topic_', ''))
+            main_topics_list = context.user_data.get('main_topics_list', [])
+            
+            if topic_index >= len(main_topics_list):
+                raise IndexError("Invalid topic index")
+                
+            main_topic = main_topics_list[topic_index]
+            
+            context.user_data['selected_main_topic'] = main_topic
+            context.user_data['admin_action'] = 'add_topic'
+            
+            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(f"➕ <b>Добавление новой темы</b>\n\n"
+                                         f"Выбранный раздел: <b>{main_topic}</b>\n\n"
+                                         f"Введите название новой темы:", 
+                                         reply_markup=reply_markup, parse_mode='HTML')
+        except (ValueError, IndexError):
+            await query.edit_message_text(
+                "❌ Ошибка: раздел не найден.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]])
+            )
     
     async def add_base_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать базовые темы для добавления."""
@@ -2248,6 +2265,7 @@ class AdminHandlers(BaseHandler):
         context.user_data.pop('admin_action', None)
         context.user_data.pop('new_topic_name', None)
         context.user_data.pop('selected_main_topic', None)
+        context.user_data.pop('main_topics_list', None)
     
     async def _handle_add_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id_text: str) -> None:
         """Обработка добавления админа - этап 1 (user_id)."""
