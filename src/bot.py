@@ -252,12 +252,12 @@ def main() -> None:
         pattern="^remove_topic_execute_"
     ))
     application.add_handler(CallbackQueryHandler(
-        admin_handlers.remove_topic_permanent,
-        pattern="^remove_topic_permanent_"
-    ))
-    application.add_handler(CallbackQueryHandler(
         admin_handlers.remove_topic_permanent_confirm,
         pattern="^remove_topic_permanent_confirm_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_topic_permanent,
+        pattern="^remove_topic_permanent_(?!confirm_)"
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.merge_topics_start,

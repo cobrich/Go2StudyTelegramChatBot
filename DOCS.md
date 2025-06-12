@@ -939,3 +939,11 @@ get_updates_request = HTTPXRequest(
 - `src/services/database.py`: добавлен метод `delete_topic_permanently()`
 - `src/handlers/admin_handlers.py`: обновлены методы удаления тем с новыми опциями
 - `src/bot.py`: добавлены обработчики для новых callback'ов
+
+#### 🐛 Fix: Callback Pattern Conflict
+- **Исправлена ошибка** конфликта паттернов callback'ов при безвозвратном удалении
+- **Проблема**: паттерн `^remove_topic_permanent_` захватывал также `remove_topic_permanent_confirm_`
+- **Решение**: использование negative lookahead `^remove_topic_permanent_(?!confirm_)` для исключения confirm паттерна
+- **Правильный порядок обработчиков**: сначала более специфичные, затем общие паттерны
+
+---
