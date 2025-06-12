@@ -200,6 +200,20 @@ class CallbackHandlers(BaseHandler):
         except Exception:
             selected_index = -1
         options = question[3]
+        
+        # Дополнительная проверка типа данных для options
+        if not isinstance(options, list):
+            logging.error(f"Options is not a list: {type(options)}, value: {options}")
+            if isinstance(options, str):
+                # Пытаемся разбить строку на список
+                options = [opt.strip() for opt in options.split('\n') if opt.strip()]
+            else:
+                # Создаем список с одним элементом
+                options = [str(options)]
+        
+        # Убеждаемся, что все элементы options - строки
+        options = [str(opt) for opt in options if opt is not None]
+        
         correct_answer = question[1]
         selected_answer = options[selected_index] if 0 <= selected_index < len(options) else None
         is_correct = selected_answer == correct_answer

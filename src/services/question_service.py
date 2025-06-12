@@ -29,18 +29,29 @@ class QuestionService:
         # 1. Сначала ошибки пользователя
         error_tasks = self.db.get_error_tasks_for_user(user_id, topic, limit=needed)
         logging.info(f"[get_or_generate_tasks] error_tasks found: {len(error_tasks)}")
-        error_questions = []  # Store error questions for AI generation
+        error_questions = []
         for task in error_tasks:
             if task['question'] not in existing_question_texts_to_exclude:
                 options = [task['answer']]
                 if task['incorrect_options']:
-                    options += [opt for opt in task['incorrect_options'].split('\n') if opt.strip()]
+                    # Убеждаемся, что incorrect_options правильно разбиваются на список
+                    if isinstance(task['incorrect_options'], str):
+                        incorrect_opts = [opt.strip() for opt in task['incorrect_options'].split('\n') if opt.strip()]
+                    else:
+                        incorrect_opts = task['incorrect_options'] if isinstance(task['incorrect_options'], list) else []
+                    options.extend(incorrect_opts)
+                
+                # Убеждаемся, что options - это список строк
+                options = [str(opt) for opt in options if opt and str(opt).strip()]
+                if len(options) < 2:  # Добавляем фиктивные варианты если их мало
+                    options.extend([f"Вариант {i}" for i in range(len(options), 4)])
+                
                 random.shuffle(options)
                 tasks.append((
                     task['question'],
                     task['answer'],
                     task['explanation'],
-                    options,
+                    options,  # Теперь гарантированно список
                     'db',
                     task['image_path'] if 'image_path' in task else None
                 ))
@@ -86,53 +97,54 @@ class QuestionService:
                     if isinstance(result, Exception):
                         logging.error(f"[get_or_generate_tasks][retake][AI generation] Error generating task: {result}")
                         continue
-                    if not result:
-                        logging.warning(f"[get_or_generate_tasks][retake][AI generation] Empty or invalid result from Gemini")
-                        continue
-                    if isinstance(result, tuple) and len(result) >= 4:
+                    if result and len(result) >= 4:
                         question, correct_answer, incorrect_options, explanation = result
-                        if not question:
-                            logging.warning(f"[get_or_generate_tasks][retake][AI generation] No question text in result: {result}")
-                            continue
-                        if question in existing_question_texts_to_exclude:
-                            logging.info(f"[get_or_generate_tasks][retake][AI generation] Duplicate question skipped: {question}")
-                            continue
-                        # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
-                        if not self.db.get_explanation_by_question_text(question):
-                            # Validate that all required fields are not None/empty
-                            if question and correct_answer and explanation:
-                                self.db.add_question({
-                                    'topic': topic,
-                                    'question': question,
-                                    'answer': correct_answer,
-                                    'explanation': explanation,
-                                    'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
-                                    'question_type': 'standard',
-                                    'source': 'ai'
-                                })
-                                logging.info(f"[get_or_generate_tasks][retake][AI generation] Saved new AI question to DB: {question}")
-                            else:
-                                logging.warning(f"[get_or_generate_tasks][retake][AI generation] Skipping question with NULL fields: question={question}, answer={correct_answer}, explanation={explanation}")
-                        # Формируем варианты: правильный + неправильные, гарантируем наличие правильного
-                        options = [correct_answer]
-                        if incorrect_options:
-                            options += [opt for opt in incorrect_options if opt.strip()]
-                        if correct_answer not in options:
-                            options.append(correct_answer)
-                        options = list(dict.fromkeys(options))  # remove duplicates, preserve order
-                        random.shuffle(options)
-                        new_tasks.append((
-                            question,
-                            correct_answer,
-                            explanation,
-                            options,
-                            'ai',
-                            None
-                        ))
-                        existing_question_texts_to_exclude.add(question)
-                        logging.info(f"[get_or_generate_tasks][retake][AI generation] Added AI question: {question}")
-                    else:
-                        logging.warning(f"[get_or_generate_tasks][retake][AI generation] Unexpected result format: {result}")
+                        if question not in existing_question_texts_to_exclude:
+                            # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
+                            if not self.db.get_explanation_by_question_text(question):
+                                # Validate that all required fields are not None/empty
+                                if question and correct_answer and explanation:
+                                    self.db.add_question({
+                                        'topic': topic,
+                                        'question': question,
+                                        'answer': correct_answer,
+                                        'explanation': explanation,
+                                        'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
+                                        'question_type': 'standard',
+                                        'source': 'ai'
+                                    })
+                                    logging.info(f"[get_or_generate_tasks][retake][AI generation] Saved new AI question to DB: {question}")
+                                else:
+                                    logging.warning(f"[get_or_generate_tasks][retake][AI generation] Skipping question with NULL fields: question={question}, answer={correct_answer}, explanation={explanation}")
+                            # Формируем варианты: правильный + неправильные, гарантируем наличие правильного
+                            options = [correct_answer]
+                            if incorrect_options:
+                                if isinstance(incorrect_options, list):
+                                    options.extend([opt for opt in incorrect_options if opt and str(opt).strip()])
+                                elif isinstance(incorrect_options, str):
+                                    options.extend([opt.strip() for opt in incorrect_options.split('\n') if opt.strip()])
+                            
+                            # Убеждаемся, что options - это список строк
+                            options = [str(opt) for opt in options if opt and str(opt).strip()]
+                            if len(options) < 2:  # Добавляем фиктивные варианты если их мало
+                                options.extend([f"Вариант {i}" for i in range(len(options), 4)])
+                            
+                            if correct_answer not in options:
+                                options.append(correct_answer)
+                            options = list(dict.fromkeys(options))  # remove duplicates, preserve order
+                            random.shuffle(options)
+                            new_tasks.append((
+                                question,
+                                correct_answer,
+                                explanation,
+                                options,  # Теперь гарантированно список
+                                'ai',
+                                None
+                            ))
+                            existing_question_texts_to_exclude.add(question)
+                            logging.info(f"[get_or_generate_tasks][retake][AI generation] Added AI question: {question}")
+                        else:
+                            logging.warning(f"[get_or_generate_tasks][retake][AI generation] Unexpected result format: {result}")
                 logging.info(f"[get_or_generate_tasks][retake][AI generation] Total new AI tasks added: {len(new_tasks)}")
                 tasks.extend(new_tasks)
                 if len(tasks) >= needed:
@@ -147,13 +159,24 @@ class QuestionService:
                 if task['question'] not in existing_question_texts_to_exclude:
                     options = [task['answer']]
                     if task['incorrect_options']:
-                        options += [opt for opt in task['incorrect_options'].split('\n') if opt.strip()]
+                        # Убеждаемся, что incorrect_options правильно разбиваются на список
+                        if isinstance(task['incorrect_options'], str):
+                            incorrect_opts = [opt.strip() for opt in task['incorrect_options'].split('\n') if opt.strip()]
+                        else:
+                            incorrect_opts = task['incorrect_options'] if isinstance(task['incorrect_options'], list) else []
+                        options.extend(incorrect_opts)
+                    
+                    # Убеждаемся, что options - это список строк
+                    options = [str(opt) for opt in options if opt and str(opt).strip()]
+                    if len(options) < 2:  # Добавляем фиктивные варианты если их мало
+                        options.extend([f"Вариант {i}" for i in range(len(options), 4)])
+                    
                     random.shuffle(options)
                     tasks.append((
                         task['question'],
                         task['answer'],
                         task['explanation'],
-                        options,
+                        options,  # Теперь гарантированно список
                         task.get('source', 'db'),
                         task['image_path'] if 'image_path' in task else None
                     ))
@@ -202,7 +225,16 @@ class QuestionService:
                     # Формируем варианты: правильный + неправильные, гарантируем наличие правильного
                     options = [correct_answer]
                     if incorrect_options:
-                        options += [opt for opt in incorrect_options if opt.strip()]
+                        if isinstance(incorrect_options, list):
+                            options.extend([opt for opt in incorrect_options if opt and str(opt).strip()])
+                        elif isinstance(incorrect_options, str):
+                            options.extend([opt.strip() for opt in incorrect_options.split('\n') if opt.strip()])
+                    
+                    # Убеждаемся, что options - это список строк
+                    options = [str(opt) for opt in options if opt and str(opt).strip()]
+                    if len(options) < 2:  # Добавляем фиктивные варианты если их мало
+                        options.extend([f"Вариант {i}" for i in range(len(options), 4)])
+                    
                     if correct_answer not in options:
                         options.append(correct_answer)
                     options = list(dict.fromkeys(options))  # remove duplicates, preserve order
@@ -211,7 +243,7 @@ class QuestionService:
                         question,
                         correct_answer,
                         explanation,
-                        options,
+                        options,  # Теперь гарантированно список
                         'ai',
                         None
                     ))
