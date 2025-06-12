@@ -3356,7 +3356,14 @@ class AdminHandlers(BaseHandler):
             # Также обновляем в таблице users если студент уже использовал бота
             self.db.update_user_info(user_id, new_name, None)
             
-            await update.message.reply_text(f"✅ ФИО студента успешно изменено на: {new_name}")
+            # Создаем кнопку для возврата к списку учеников
+            keyboard = [[InlineKeyboardButton("👥 Назад к списку учеников", callback_data="list_students")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"✅ ФИО студента успешно изменено на: {new_name}",
+                reply_markup=reply_markup
+            )
         else:
             await update.message.reply_text("❌ Ошибка при изменении ФИО.")
         
@@ -3388,7 +3395,14 @@ class AdminHandlers(BaseHandler):
             # Также обновляем в таблице users если студент уже использовал бота
             self.db.update_user_info(user_id, None, grade)
             
-            await update.message.reply_text(f"✅ Класс студента успешно изменен на: {grade}")
+            # Создаем кнопку для возврата к списку учеников
+            keyboard = [[InlineKeyboardButton("👥 Назад к списку учеников", callback_data="list_students")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"✅ Класс студента успешно изменен на: {grade}",
+                reply_markup=reply_markup
+            )
         else:
             await update.message.reply_text("❌ Ошибка при изменении класса.")
         
@@ -3425,7 +3439,14 @@ class AdminHandlers(BaseHandler):
             if phone_number:
                 self.db.update_user_phone(user_id, phone_number)
             
-            await update.message.reply_text(f"✅ Номер телефона студента {action_text}")
+            # Создаем кнопку для возврата к списку учеников
+            keyboard = [[InlineKeyboardButton("👥 Назад к списку учеников", callback_data="list_students")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"✅ Номер телефона студента {action_text}",
+                reply_markup=reply_markup
+            )
         else:
             await update.message.reply_text("❌ Ошибка при изменении номера телефона.")
         
