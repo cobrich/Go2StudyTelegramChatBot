@@ -1024,12 +1024,18 @@ class AdminHandlers(BaseHandler):
         text += f"<b>Тема:</b> {topic['name']}\n"
         text += f"<b>Вопросов:</b> {question_count}\n"
         text += f"<b>Описание:</b> {topic['description']}\n\n"
-        text += "⚠️ <b>Внимание:</b> Тема будет деактивирована!\n"
-        text += "Вопросы останутся в базе данных, но тема будет недоступна для тестирования.\n\n"
-        text += "Подтвердите удаление:"
+        text += "Выберите тип удаления:\n\n"
+        text += "🔄 <b>Деактивировать</b> - тема будет скрыта, но данные сохранятся\n"
+        text += "🗑️ <b>Безвозвратно удалить</b> - тема и все связанные данные будут удалены навсегда\n\n"
+        text += "⚠️ <b>Внимание:</b> При безвозвратном удалении будут удалены:\n"
+        text += "• Все вопросы по теме\n"
+        text += "• Результаты тестов учеников\n"
+        text += "• История ошибок по теме\n"
+        text += "• Сама тема из базы данных"
         
         keyboard = [
-            [InlineKeyboardButton("✅ Да, удалить", callback_data=f"remove_topic_execute_{topic_id}")],
+            [InlineKeyboardButton("🔄 Деактивировать", callback_data=f"remove_topic_execute_{topic_id}")],
+            [InlineKeyboardButton("🗑️ Безвозвратно удалить", callback_data=f"remove_topic_permanent_{topic_id}")],
             [InlineKeyboardButton("❌ Отмена", callback_data="remove_topic")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -3613,3 +3619,90 @@ class AdminHandlers(BaseHandler):
         # Очищаем состояние
         context.user_data.pop('admin_action', None)
         context.user_data.pop('edit_student_id', None)
+    
+    async def remove_topic_permanent(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Безвозвратное удаление темы с подтверждением."""
+        query = update.callback_query
+        topic_id = int(query.data.replace('remove_topic_permanent_', ''))
+        await self.safe_answer_callback(query)
+        
+        # Получаем информацию о теме
+        topics = self.db.get_all_topics(active_only=False)
+        topic = next((t for t in topics if t['id'] == topic_id), None)
+        
+        if not topic:
+            await query.edit_message_text(
+                "❌ Тема не найдена.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]])
+            )
+            return
+        
+        topic_stats = self.topic_manager.get_topic_statistics()
+        question_count = topic_stats.get(topic['name'], {}).get('question_count', 0)
+        
+        text = f"⚠️ <b>БЕЗВОЗВРАТНОЕ УДАЛЕНИЕ ТЕМЫ</b>\n\n"
+        text += f"<b>Тема:</b> {topic['name']}\n"
+        text += f"<b>Вопросов:</b> {question_count}\n"
+        text += f"<b>Описание:</b> {topic['description']}\n\n"
+        text += "🚨 <b>КРИТИЧЕСКОЕ ПРЕДУПРЕЖДЕНИЕ!</b>\n\n"
+        text += "Это действие <b>НЕЛЬЗЯ ОТМЕНИТЬ</b>!\n\n"
+        text += "Будут <b>НАВСЕГДА УДАЛЕНЫ</b>:\n"
+        text += f"• {question_count} вопросов по теме\n"
+        text += "• Все результаты тестов учеников\n"
+        text += "• Вся история ошибок по теме\n"
+        text += "• Сама тема из базы данных\n\n"
+        text += "Вы <b>УВЕРЕНЫ</b>, что хотите безвозвратно удалить эту тему?"
+        
+        keyboard = [
+            [InlineKeyboardButton("🗑️ ДА, УДАЛИТЬ НАВСЕГДА", callback_data=f"remove_topic_permanent_confirm_{topic_id}")],
+            [InlineKeyboardButton("🔄 Лучше деактивировать", callback_data=f"remove_topic_execute_{topic_id}")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="remove_topic")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def remove_topic_permanent_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение безвозвратного удаления темы."""
+        query = update.callback_query
+        topic_id = int(query.data.replace('remove_topic_permanent_confirm_', ''))
+        await self.safe_answer_callback(query)
+        
+        # Получаем название темы перед удалением
+        topics = self.db.get_all_topics(active_only=False)
+        topic = next((t for t in topics if t['id'] == topic_id), None)
+        
+        if not topic:
+            await query.edit_message_text(
+                "❌ Тема не найдена.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]])
+            )
+            return
+        
+        topic_name = topic['name']
+        topic_stats = self.topic_manager.get_topic_statistics()
+        question_count = topic_stats.get(topic_name, {}).get('question_count', 0)
+        
+        # Безвозвратно удаляем тему
+        success = self.db.delete_topic_permanently(topic_id)
+        
+        if success:
+            text = f"✅ <b>Тема безвозвратно удалена</b>\n\n"
+            text += f"Тема '<b>{topic_name}</b>' и все связанные данные успешно удалены:\n\n"
+            text += f"🗑️ Удалено {question_count} вопросов\n"
+            text += f"🗑️ Удалены все результаты тестов\n"
+            text += f"🗑️ Удалена история ошибок\n"
+            text += f"🗑️ Удалена сама тема\n\n"
+            text += "⚠️ Данные восстановить невозможно."
+        else:
+            text = f"❌ <b>Ошибка удаления</b>\n\n"
+            text += f"Не удалось безвозвратно удалить тему '<b>{topic_name}</b>'.\n"
+            text += f"Возможно, тема уже была удалена или произошла ошибка базы данных."
+        
+        keyboard = [[InlineKeyboardButton("🔙 К управлению темами", callback_data="admin_topics")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        
+        # Очищаем данные
+        context.user_data.pop('merge_source_id', None)

@@ -934,6 +934,39 @@ class Database:
         """Delete subtopic (soft delete - set is_active to 0)."""
         return self.update_topic(topic_id, is_active=False)
     
+    def delete_topic_permanently(self, topic_id: int) -> bool:
+        """Permanently delete topic and all related data (hard delete)."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Получаем название темы для логирования
+                cursor.execute('SELECT name FROM subtopics WHERE id = ?', (topic_id,))
+                topic_result = cursor.fetchone()
+                if not topic_result:
+                    return False
+                
+                topic_name = topic_result[0]
+                
+                # Удаляем все связанные данные
+                # 1. Удаляем результаты тестов
+                cursor.execute('DELETE FROM test_results WHERE topic = ?', (topic_name,))
+                
+                # 2. Удаляем ошибки пользователей
+                cursor.execute('DELETE FROM user_errors WHERE topic = ?', (topic_name,))
+                
+                # 3. Удаляем вопросы по теме
+                cursor.execute('DELETE FROM questions WHERE topic = ?', (topic_name,))
+                
+                # 4. Удаляем саму тему
+                cursor.execute('DELETE FROM subtopics WHERE id = ?', (topic_id,))
+                
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error permanently deleting topic: {e}")
+            return False
+    
     def get_topic_names(self, active_only: bool = True) -> List[str]:
         """Get list of subtopic names for compatibility with existing code."""
         topics = self.get_all_topics(active_only)
