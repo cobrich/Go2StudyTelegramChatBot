@@ -684,3 +684,39 @@ allowed_users (
 - **Полнота данных** - все контактные данные собираются заранее
 - **Меньше взаимодействий** - студенту не нужно вводить номер при первом входе
 - **Лучший UX** - более гладкий процесс онбординга для студентов
+
+## Технические улучшения
+
+### Обработка устаревших Callback Queries (2025-01-12)
+
+**Проблема:**
+Бот периодически выдавал ошибки типа `BadRequest: Query is too old and response timeout expired or query id is invalid` при работе с inline кнопками. Это происходило когда:
+- Callback query устаревал (более 30 секунд)
+- Бот перезапускался с активными кнопками
+- Пользователь нажимал кнопку несколько раз
+
+**Решение:**
+1. **Создана вспомогательная функция** `safe_answer_callback()` в базовом классе `BaseHandler`
+2. **Заменены все вызовы** `await query.answer()` на `await self.safe_answer_callback(query)`
+3. **Добавлена обработка исключений** для игнорирования устаревших callback queries
+
+**Технические детали:**
+```python
+async def safe_answer_callback(self, query) -> None:
+    """Safely answer callback query, ignoring expired queries."""
+    try:
+        await query.answer()
+    except Exception:
+        # Игнорируем ошибки с устаревшими callback queries
+        pass
+```
+
+**Файлы изменены:**
+- `src/handlers/base_handler.py` - добавлена функция `safe_answer_callback()`
+- `src/handlers/admin_handlers.py` - заменены все `query.answer()` на `safe_answer_callback()`
+- `src/handlers/callback_handlers.py` - заменены все `query.answer()` на `safe_answer_callback()`
+
+**Результат:**
+- Устранены ошибки с устаревшими callback queries
+- Улучшена стабильность работы бота
+- Более плавный пользовательский опыт

@@ -11,6 +11,14 @@ class BaseHandler:
         self.question_service = question_service
         self.main_menu_markup = get_main_menu_markup()
 
+    async def safe_answer_callback(self, query) -> None:
+        """Safely answer callback query, ignoring expired queries."""
+        try:
+            await query.answer()
+        except Exception:
+            # Игнорируем ошибки с устаревшими callback queries
+            pass
+
     async def check_user_active(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
         """Check if user is active and handle accordingly."""
         user_id = update.effective_user.id

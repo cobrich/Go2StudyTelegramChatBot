@@ -12,7 +12,7 @@ class CallbackHandlers(BaseHandler):
         """Handle topic selection callback."""
         query = update.callback_query
         try:
-            await query.answer()
+            await self.safe_answer_callback(query)
         except Exception as e:
             logging.error(f"Error in query.answer() (topic_selection): {e}")
         
@@ -163,7 +163,7 @@ class CallbackHandlers(BaseHandler):
         """Handle answer selection callback."""
         query = update.callback_query
         try:
-            await query.answer()
+            await self.safe_answer_callback(query)
         except Exception as e:
             logging.error(f"Error in query.answer() (answer): {e}")
         
@@ -292,7 +292,7 @@ class CallbackHandlers(BaseHandler):
         """Handle continue button callback."""
         query = update.callback_query
         try:
-            await query.answer()
+            await self.safe_answer_callback(query)
         except Exception as e:
             logging.error(f"Error in query.answer() (continue): {e}")
         questions = self.get_user_data(context).get('questions', [])
@@ -325,7 +325,7 @@ class CallbackHandlers(BaseHandler):
     async def handle_show_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         try:
-            await query.answer()
+            await self.safe_answer_callback(query)
         except Exception as e:
             logging.error(f"Error in query.answer() (show_results): {e}")
         user_id = query.from_user.id
@@ -421,7 +421,7 @@ class CallbackHandlers(BaseHandler):
     async def handle_show_explanation(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         try:
-            await query.answer()
+            await self.safe_answer_callback(query)
         except Exception as e:
             logging.error(f"Error in query.answer() (show_explanation): {e}")
         data = query.data.replace('show_expl_', '')
@@ -456,7 +456,7 @@ class CallbackHandlers(BaseHandler):
     async def handle_back_to_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         try:
-            await query.answer()
+            await self.safe_answer_callback(query)
         except Exception as e:
             logging.error(f"Error in query.answer() (back_to_results): {e}")
         user_id = query.from_user.id
@@ -503,7 +503,7 @@ class CallbackHandlers(BaseHandler):
     async def handle_back_to_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         try:
-            await query.answer()
+            await self.safe_answer_callback(query)
         except Exception as e:
             logging.error(f"Error in query.answer() (back_to_topics): {e}")
         
@@ -542,7 +542,7 @@ class CallbackHandlers(BaseHandler):
     async def handle_prev_question(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         try:
-            await query.answer()
+            await self.safe_answer_callback(query)
         except Exception as e:
             logging.error(f"Error in query.answer() (prev_question): {e}")
         questions = self.get_user_data(context).get('questions', [])
@@ -589,7 +589,7 @@ class CallbackHandlers(BaseHandler):
     async def handle_next_question(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         try:
-            await query.answer()
+            await self.safe_answer_callback(query)
         except Exception as e:
             logging.error(f"Error in query.answer() (next_question): {e}")
         questions = self.get_user_data(context).get('questions', [])
@@ -636,7 +636,7 @@ class CallbackHandlers(BaseHandler):
     async def handle_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         try:
-            await query.answer()
+            await self.safe_answer_callback(query)
         except Exception as e:
             logging.error(f"Error in query.answer() (main_menu): {e}")
         
@@ -675,7 +675,7 @@ class CallbackHandlers(BaseHandler):
         """Handle main topic category selection callback."""
         query = update.callback_query
         try:
-            await query.answer()
+            await self.safe_answer_callback(query)
         except Exception as e:
             logging.error(f"Error in query.answer() (main_topic): {e}")
         
@@ -720,7 +720,7 @@ class CallbackHandlers(BaseHandler):
         """Handle back to main topics callback."""
         query = update.callback_query
         try:
-            await query.answer()
+            await self.safe_answer_callback(query)
         except Exception as e:
             logging.error(f"Error in query.answer() (back_to_main_topics): {e}")
         

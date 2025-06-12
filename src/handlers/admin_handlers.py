@@ -85,7 +85,7 @@ class AdminHandlers(BaseHandler):
             await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
             query = update.callback_query
-            await query.answer()
+            await self.safe_answer_callback(query)
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     # === УПРАВЛЕНИЕ УЧЕНИКАМИ ===
@@ -93,7 +93,7 @@ class AdminHandlers(BaseHandler):
     async def students_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Меню управления учениками."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Очищаем состояние при возврате в меню
         context.user_data.pop('admin_action', None)
@@ -113,7 +113,7 @@ class AdminHandlers(BaseHandler):
     async def add_student_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало добавления ученика."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         context.user_data['admin_action'] = 'add_student'
         
@@ -126,7 +126,7 @@ class AdminHandlers(BaseHandler):
     async def add_student_by_id_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало добавления ученика по ID."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         context.user_data['admin_action'] = 'add_student_by_id'
         
@@ -139,7 +139,7 @@ class AdminHandlers(BaseHandler):
     async def list_students(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Список всех учеников с краткой статистикой."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         students = self.db.get_all_students_summary()
         
@@ -193,7 +193,7 @@ class AdminHandlers(BaseHandler):
     async def show_student_details(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать детальную статистику ученика."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Извлекаем user_id из callback_data
         user_id = int(query.data.split('_')[-1])
@@ -254,7 +254,7 @@ class AdminHandlers(BaseHandler):
     async def show_student_full_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать полную статистику ученика."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         user_id = int(query.data.split('_')[-1])
         stats = self.db.get_student_detailed_statistics(user_id)
@@ -295,7 +295,7 @@ class AdminHandlers(BaseHandler):
     async def show_class_statistics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать статистику по классам."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         class_stats = self.db.get_class_statistics()
         
@@ -337,7 +337,7 @@ class AdminHandlers(BaseHandler):
     async def topics_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Меню управления темами."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Очищаем состояние при возврате в меню
         context.user_data.pop('admin_action', None)
@@ -358,7 +358,7 @@ class AdminHandlers(BaseHandler):
     async def add_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало добавления темы."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Очищаем состояние при возврате в меню
         context.user_data.pop('admin_action', None)
@@ -376,7 +376,7 @@ class AdminHandlers(BaseHandler):
     async def add_custom_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало добавления пользовательской темы."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         context.user_data['admin_action'] = 'add_topic'
         
@@ -389,7 +389,7 @@ class AdminHandlers(BaseHandler):
     async def add_base_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать базовые темы для добавления."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Получаем существующие темы из базы
         existing_topics = [topic['name'] for topic in self.db.get_all_topics(active_only=False)]
@@ -462,7 +462,7 @@ class AdminHandlers(BaseHandler):
         """Добавить выбранную базовую тему."""
         query = update.callback_query
         topic_name = query.data.replace('add_base_topic_', '')
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         admin_id = update.effective_user.id
         
@@ -509,7 +509,7 @@ class AdminHandlers(BaseHandler):
     async def add_all_missing_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Добавить все недостающие базовые темы."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         admin_id = update.effective_user.id
         
@@ -550,7 +550,7 @@ class AdminHandlers(BaseHandler):
     async def list_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Список всех тем с пагинацией."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Получаем номер страницы из callback_data или используем 0 по умолчанию
         page = 0
@@ -664,7 +664,7 @@ class AdminHandlers(BaseHandler):
     async def edit_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало редактирования темы."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         topics = self.db.get_all_topics(active_only=False)
         
@@ -692,7 +692,7 @@ class AdminHandlers(BaseHandler):
         """Выбор действия для редактирования темы."""
         query = update.callback_query
         topic_id = int(query.data.replace('edit_topic_select_', ''))
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Получаем информацию о теме
         topics = self.db.get_all_topics(active_only=False)
@@ -734,7 +734,7 @@ class AdminHandlers(BaseHandler):
         """Начало изменения названия темы."""
         query = update.callback_query
         topic_id = int(query.data.replace('edit_topic_name_', ''))
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         context.user_data['admin_action'] = 'edit_topic_name'
         context.user_data['edit_topic_id'] = topic_id
@@ -760,7 +760,7 @@ class AdminHandlers(BaseHandler):
         """Начало изменения описания темы."""
         query = update.callback_query
         topic_id = int(query.data.replace('edit_topic_desc_', ''))
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         context.user_data['admin_action'] = 'edit_topic_description'
         context.user_data['edit_topic_id'] = topic_id
@@ -786,7 +786,7 @@ class AdminHandlers(BaseHandler):
     async def edit_topic_toggle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Изменение статуса темы (активна/неактивна)."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         callback_data = query.data
         if "activate" in callback_data:
@@ -827,7 +827,7 @@ class AdminHandlers(BaseHandler):
     async def remove_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало удаления темы."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         topics = self.db.get_all_topics(active_only=False)
         topic_stats = self.topic_manager.get_topic_statistics()
@@ -863,7 +863,7 @@ class AdminHandlers(BaseHandler):
         """Подтверждение удаления темы."""
         query = update.callback_query
         topic_id = int(query.data.replace('remove_topic_confirm_', ''))
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Получаем информацию о теме
         topics = self.db.get_all_topics(active_only=False)
@@ -899,7 +899,7 @@ class AdminHandlers(BaseHandler):
         """Выполнение удаления темы."""
         query = update.callback_query
         topic_id = int(query.data.replace('remove_topic_execute_', ''))
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Получаем название темы перед удалением
         topics = self.db.get_all_topics(active_only=False)
@@ -934,7 +934,7 @@ class AdminHandlers(BaseHandler):
     async def remove_student_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало удаления ученика."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         students = self.db.get_all_allowed_users()
         
@@ -969,7 +969,7 @@ class AdminHandlers(BaseHandler):
     async def remove_student_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Подтверждение удаления ученика."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         callback_data = query.data
         
@@ -1003,7 +1003,7 @@ class AdminHandlers(BaseHandler):
     async def remove_student_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выполнение удаления ученика."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         callback_data = query.data
         
@@ -1042,7 +1042,7 @@ class AdminHandlers(BaseHandler):
     async def confirm_add_student(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Подтверждение добавления ученика после неудачной проверки username."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         callback_data = query.data
         username = callback_data.replace('confirm_add_student_', '')
@@ -1108,7 +1108,7 @@ class AdminHandlers(BaseHandler):
     async def questions_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Меню управления вопросами."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         keyboard = [
             [InlineKeyboardButton("📄 Загрузить PDF", callback_data="upload_pdf")],
@@ -1127,7 +1127,7 @@ class AdminHandlers(BaseHandler):
     async def upload_pdf_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало загрузки PDF файла."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         context.user_data['admin_action'] = 'upload_pdf'
         
@@ -1146,7 +1146,7 @@ class AdminHandlers(BaseHandler):
     async def questions_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Статистика вопросов по темам."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Получаем статистику вопросов из базы данных
         try:
@@ -1311,7 +1311,7 @@ class AdminHandlers(BaseHandler):
     async def search_questions_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало поиска вопросов."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         context.user_data['admin_action'] = 'search_questions'
         
@@ -1326,7 +1326,7 @@ class AdminHandlers(BaseHandler):
     async def delete_questions_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало удаления вопросов."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Получаем список тем с количеством вопросов
         try:
@@ -1365,7 +1365,7 @@ class AdminHandlers(BaseHandler):
         """Подтверждение удаления вопросов по теме."""
         query = update.callback_query
         topic = query.data.replace('delete_questions_topic_', '')
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Получаем количество вопросов в теме
         try:
@@ -1396,7 +1396,7 @@ class AdminHandlers(BaseHandler):
         """Выполнение удаления вопросов."""
         query = update.callback_query
         topic = query.data.replace('delete_questions_execute_', '')
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         try:
             with sqlite3.connect(self.db.db_path) as conn:
@@ -1428,7 +1428,7 @@ class AdminHandlers(BaseHandler):
     async def add_question_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало добавления нового вопроса."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Получаем список активных тем
         topics = self.db.get_all_topics(active_only=True)
@@ -1455,7 +1455,7 @@ class AdminHandlers(BaseHandler):
         """Тема выбрана, запрашиваем текст вопроса."""
         query = update.callback_query
         topic = query.data.replace('add_question_topic_', '')
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         context.user_data['admin_action'] = 'add_question_text'
         context.user_data['new_question_topic'] = topic
@@ -1472,7 +1472,7 @@ class AdminHandlers(BaseHandler):
     async def edit_question_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало редактирования вопроса."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         context.user_data['admin_action'] = 'edit_question_search'
         
@@ -1487,7 +1487,7 @@ class AdminHandlers(BaseHandler):
     async def show_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать общую статистику системы."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Получаем статистику
         with sqlite3.connect(self.db.db_path) as conn:
@@ -1558,7 +1558,7 @@ class AdminHandlers(BaseHandler):
     async def show_user_history(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать историю всех пользователей, включая удаленных из whitelist."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         users_with_history = self.db.get_all_users_with_history()
         
@@ -1599,7 +1599,7 @@ class AdminHandlers(BaseHandler):
     async def merge_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало объединения тем."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         topics = self.db.get_all_topics(active_only=False)
         topic_stats = self.topic_manager.get_topic_statistics()
@@ -1632,7 +1632,7 @@ class AdminHandlers(BaseHandler):
         """Выбор целевой темы для объединения."""
         query = update.callback_query
         source_topic_id = int(query.data.replace('merge_source_', ''))
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Сохраняем ID исходной темы
         context.user_data['merge_source_id'] = source_topic_id
@@ -1677,7 +1677,7 @@ class AdminHandlers(BaseHandler):
         query = update.callback_query
         target_topic_id = int(query.data.replace('merge_target_', ''))
         source_topic_id = context.user_data.get('merge_source_id')
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         if not source_topic_id:
             await query.edit_message_text(
@@ -1722,7 +1722,7 @@ class AdminHandlers(BaseHandler):
     async def merge_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выполнение объединения тем."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Парсим данные
         parts = query.data.replace('merge_execute_', '').split('_')
@@ -2571,7 +2571,7 @@ class AdminHandlers(BaseHandler):
     async def manage_base_structure_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Меню управления базовой структурой тем."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Получаем статистику базовой структуры
         base_structure = self.db.get_base_topic_structure()
@@ -2598,7 +2598,7 @@ class AdminHandlers(BaseHandler):
     async def view_base_structure(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Просмотр базовой структуры тем."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         base_structure = self.db.get_base_topic_structure()
         
@@ -2623,7 +2623,7 @@ class AdminHandlers(BaseHandler):
     async def add_base_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало добавления нового раздела."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         context.user_data['admin_action'] = 'add_base_section_name'
         
@@ -2638,7 +2638,7 @@ class AdminHandlers(BaseHandler):
     async def edit_base_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало редактирования раздела."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         base_structure = self.db.get_base_topic_structure()
         
@@ -2664,7 +2664,7 @@ class AdminHandlers(BaseHandler):
     async def delete_base_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало удаления раздела."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         base_structure = self.db.get_base_topic_structure()
         
@@ -2740,7 +2740,7 @@ class AdminHandlers(BaseHandler):
     async def edit_base_section_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выбор раздела для редактирования."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         try:
             section_index = int(query.data.replace('edit_base_section_select_', ''))
@@ -2776,7 +2776,7 @@ class AdminHandlers(BaseHandler):
     async def delete_base_section_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Подтверждение удаления раздела."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         try:
             section_index = int(query.data.replace('delete_base_section_confirm_', ''))
@@ -2813,7 +2813,7 @@ class AdminHandlers(BaseHandler):
     async def delete_base_section_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выполнение удаления раздела."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         try:
             section_index = int(query.data.replace('delete_base_section_execute_', ''))
@@ -2851,7 +2851,7 @@ class AdminHandlers(BaseHandler):
     async def admins_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Меню управления админами (только для суперадмина)."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         # Очищаем состояние при возврате в меню
         context.user_data.pop('admin_action', None)
@@ -2876,7 +2876,7 @@ class AdminHandlers(BaseHandler):
     async def add_admin_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало добавления админа (только для суперадмина)."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         user_id = update.effective_user.id
         
@@ -2904,7 +2904,7 @@ class AdminHandlers(BaseHandler):
     async def list_admins(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Список всех админов."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         admins = self.db.get_all_admins()
         
@@ -2927,7 +2927,7 @@ class AdminHandlers(BaseHandler):
     async def remove_admin_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало удаления админа (только для суперадмина)."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         user_id = update.effective_user.id
         
@@ -2966,7 +2966,7 @@ class AdminHandlers(BaseHandler):
         """Подтверждение удаления админа."""
         query = update.callback_query
         admin_id_to_remove = int(query.data.replace('remove_admin_confirm_', ''))
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         current_user_id = update.effective_user.id
         
@@ -3022,7 +3022,7 @@ class AdminHandlers(BaseHandler):
         """Выполнение удаления админа."""
         query = update.callback_query
         admin_id_to_remove = int(query.data.replace('remove_admin_execute_', ''))
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         current_user_id = update.effective_user.id
         
@@ -3098,7 +3098,7 @@ class AdminHandlers(BaseHandler):
     async def detailed_topics_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Подробная статистика по темам."""
         query = update.callback_query
-        await query.answer()
+        await self.safe_answer_callback(query)
         
         topics = self.db.get_all_topics(active_only=False)
         topic_stats = self.topic_manager.get_topic_statistics()
