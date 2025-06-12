@@ -31,6 +31,10 @@ class QuestionService:
         logging.info(f"[get_or_generate_tasks] error_tasks found: {len(error_tasks)}")
         error_questions = []
         for task in error_tasks:
+            # Проверяем что все основные поля задачи не пустые
+            if not task.get('question') or not task.get('answer') or not task.get('explanation'):
+                logging.warning(f"[get_or_generate_tasks] Skipping error_task with empty fields: {task}")
+                continue
             if task['question'] not in existing_question_texts_to_exclude:
                 options = [task['answer']]
                 if task['incorrect_options']:
@@ -99,6 +103,10 @@ class QuestionService:
                         continue
                     if result and len(result) >= 4:
                         question, correct_answer, incorrect_options, explanation = result
+                        # Дополнительная проверка что все основные поля не None
+                        if not question or not correct_answer or not explanation:
+                            logging.warning(f"[get_or_generate_tasks][retake][AI generation] Skipping result with None fields: question={question}, answer={correct_answer}, explanation={explanation}")
+                            continue
                         if question not in existing_question_texts_to_exclude:
                             # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
                             if not self.db.get_explanation_by_question_text(question):
@@ -156,6 +164,10 @@ class QuestionService:
             db_tasks_pool_raw = self.db.get_tasks_for_topic(topic, limit=needed * 2)
             logging.info(f"[get_or_generate_tasks] db_tasks_pool_raw found: {len(db_tasks_pool_raw)}")
             for task in db_tasks_pool_raw:
+                # Проверяем что все основные поля задачи не пустые
+                if not task.get('question') or not task.get('answer') or not task.get('explanation'):
+                    logging.warning(f"[get_or_generate_tasks] Skipping db_task with empty fields: {task}")
+                    continue
                 if task['question'] not in existing_question_texts_to_exclude:
                     options = [task['answer']]
                     if task['incorrect_options']:
@@ -205,6 +217,10 @@ class QuestionService:
                 continue
             if result:
                 question, correct_answer, incorrect_options, explanation = result
+                # Дополнительная проверка что все основные поля не None
+                if not question or not correct_answer or not explanation:
+                    logging.warning(f"[get_or_generate_tasks][final AI generation] Skipping result with None fields: question={question}, answer={correct_answer}, explanation={explanation}")
+                    continue
                 if question not in existing_question_texts_to_exclude:
                     # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
                     if not self.db.get_explanation_by_question_text(question):
@@ -266,9 +282,12 @@ class QuestionService:
                 is_retake=is_retake
             )
             return final_tasks
-        # Лог финального списка вопросов
+        # Лог финального списка вопросов - только после фильтрации
         for idx, q in enumerate(all_tasks[:needed]):
-            logging.info(f"[get_or_generate_tasks] Final task {idx+1}: {q[0][:80]}... (source: {q[4]})")
+            if q is not None and len(q) >= 5:
+                logging.info(f"[get_or_generate_tasks] Final task {idx+1}: {q[0][:80]}... (source: {q[4]})")
+            else:
+                logging.warning(f"[get_or_generate_tasks] Invalid task at index {idx}: {q}")
         return all_tasks[:needed]
 
     @staticmethod
