@@ -7,6 +7,7 @@ from telegram.ext import (
     MessageHandler,
     filters
 )
+from telegram.request import HTTPXRequest
 from config.constants import TELEGRAM_BOT_TOKEN
 from services.database import Database
 from services.question_service import QuestionService
@@ -34,8 +35,26 @@ def main() -> None:
     callback_handlers = CallbackHandlers(db, question_service)
     admin_handlers = AdminHandlers(db, question_service)
     
-    # Create the Application
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    # Create custom request with increased timeouts
+    request = HTTPXRequest(
+        connection_pool_size=8,
+        connect_timeout=30.0,
+        read_timeout=30.0,
+        write_timeout=30.0,
+        pool_timeout=30.0
+    )
+    
+    # Create separate request for get_updates with longer timeouts
+    get_updates_request = HTTPXRequest(
+        connection_pool_size=8,
+        connect_timeout=60.0,
+        read_timeout=60.0,
+        write_timeout=60.0,
+        pool_timeout=60.0
+    )
+    
+    # Create the Application with custom requests
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).request(request).get_updates_request(get_updates_request).build()
     
     # Add command handlers
     application.add_handler(CommandHandler("start", command_handlers.start))
