@@ -725,29 +725,29 @@ class Database:
         
         return False
     
-    def add_allowed_user(self, username: str, full_name: str, grade: int, added_by: int) -> bool:
+    def add_allowed_user(self, username: str, full_name: str, grade: int, added_by: int, phone_number: str = None) -> bool:
         """Add user to whitelist."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO allowed_users (username, full_name, grade, added_by)
-                    VALUES (?, ?, ?, ?)
-                ''', (username, full_name, grade, added_by))
+                    INSERT INTO allowed_users (username, full_name, grade, phone_number, added_by)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (username, full_name, grade, phone_number, added_by))
                 conn.commit()
                 return True
         except sqlite3.IntegrityError:
             return False
     
-    def add_allowed_user_by_id(self, user_id: int, full_name: str, grade: int, added_by: int, username: str = None) -> bool:
+    def add_allowed_user_by_id(self, user_id: int, full_name: str, grade: int, added_by: int, username: str = None, phone_number: str = None) -> bool:
         """Add user to whitelist by user_id (for users without username)."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO allowed_users (user_id, username, full_name, grade, added_by)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (user_id, username, full_name, grade, added_by))
+                    INSERT INTO allowed_users (user_id, username, full_name, grade, phone_number, added_by)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (user_id, username, full_name, grade, phone_number, added_by))
                 conn.commit()
                 return True
         except sqlite3.IntegrityError:

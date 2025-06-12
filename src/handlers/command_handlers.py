@@ -49,6 +49,17 @@ class CommandHandlers(BaseHandler):
             # Получаем информацию о пользователе после настройки
             user_info = self.db.get_user_info(user.id)
             
+            # Проверяем номер телефона
+            phone_number = self.db.get_user_phone(user.id)
+            if not phone_number:
+                # Если номер телефона не указан, предлагаем его ввести
+                context.user_data['awaiting_phone_number'] = True
+                await update.message.reply_text(
+                    "📱 Для лучшей связи, пожалуйста, введите ваш номер телефона (например: +77771234567).\n\n"
+                    "Или нажмите /skip чтобы пропустить этот шаг."
+                )
+                return
+            
             # Для обычных пользователей - проверяем ФИО и класс (на случай если автонастройка не сработала)
             if not user_info or not user_info[0]:  # Нет ФИО
                 context.user_data['awaiting_full_name'] = True
@@ -166,6 +177,20 @@ class CommandHandlers(BaseHandler):
             parse_mode='Markdown'
         )
 
+    async def skip_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Пропустить ввод номера телефона."""
+        if context.user_data.get('awaiting_phone_number'):
+            context.user_data['awaiting_phone_number'] = False
+            await update.message.reply_text(
+                "✅ Ввод номера телефона пропущен.\n\n📚 Теперь вы можете пользоваться ботом!",
+                reply_markup=self.main_menu_markup
+            )
+        else:
+            await update.message.reply_text(
+                "Эта команда используется только при запросе номера телефона.",
+                reply_markup=self.main_menu_markup
+            )
+
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         text = update.message.text.strip()
         user_id = update.effective_user.id
@@ -179,6 +204,30 @@ class CommandHandlers(BaseHandler):
                 f"Для получения доступа обратитесь к администратору."
             )
             return
+        
+        # Проверка на ввод номера телефона
+        if context.user_data.get('awaiting_phone_number'):
+            phone_number = text.strip()
+            
+            # Простая валидация номера телефона
+            if phone_number and (phone_number.startswith('+') or phone_number.startswith('8') or phone_number.startswith('7')):
+                # Сохраняем номер телефона
+                success = self.db.update_user_phone(user_id, phone_number)
+                if success:
+                    context.user_data['awaiting_phone_number'] = False
+                    await update.message.reply_text(
+                        f"✅ Спасибо! Ваш номер телефона {phone_number} сохранен.\n\n📚 Теперь вы можете пользоваться ботом!",
+                        reply_markup=self.main_menu_markup
+                    )
+                    return
+                else:
+                    await update.message.reply_text("❌ Ошибка при сохранении номера. Попробуйте еще раз:")
+                    return
+            else:
+                await update.message.reply_text(
+                    "❌ Неверный формат номера. Пожалуйста, введите номер в формате +77771234567 или нажмите /skip:"
+                )
+                return
         
         # Проверка на ввод ФИО для админа
         if context.user_data.get('awaiting_admin_full_name'):

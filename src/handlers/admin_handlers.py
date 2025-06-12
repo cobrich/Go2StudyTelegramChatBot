@@ -1827,6 +1827,10 @@ class AdminHandlers(BaseHandler):
             await self._handle_add_base_section_name(update, context, text)
         elif action == 'add_base_section_subtopics':
             await self._handle_add_base_section_subtopics(update, context, text)
+        elif action == 'student_phone':
+            await self._handle_student_phone(update, context, text)
+        elif action == 'student_by_id_phone':
+            await self._handle_student_by_id_phone(update, context, text)
         else:
             return False
             
@@ -1882,16 +1886,16 @@ class AdminHandlers(BaseHandler):
     async def _handle_student_fullname(self, update: Update, context: ContextTypes.DEFAULT_TYPE, fullname: str) -> None:
         """Обработка добавления ученика - этап 2 (ФИО)."""
         context.user_data['new_student_fullname'] = fullname
-        context.user_data['admin_action'] = 'student_grade'
+        context.user_data['admin_action'] = 'student_phone'
         
-        await update.message.reply_text("Введите класс ученика (число от 1 до 11):")
+        await update.message.reply_text("📱 Введите номер телефона ученика (например: +77771234567) или напишите 'пропустить' чтобы не указывать:")
     
     async def _handle_student_by_id_fullname(self, update: Update, context: ContextTypes.DEFAULT_TYPE, fullname: str) -> None:
         """Обработка добавления ученика по ID - этап 2 (ФИО)."""
         context.user_data['new_student_fullname'] = fullname
-        context.user_data['admin_action'] = 'student_by_id_grade'
+        context.user_data['admin_action'] = 'student_by_id_phone'
         
-        await update.message.reply_text("Введите класс ученика (число от 1 до 11):")
+        await update.message.reply_text("📱 Введите номер телефона ученика (например: +77771234567) или напишите 'пропустить' чтобы не указывать:")
 
     async def _handle_student_grade(self, update: Update, context: ContextTypes.DEFAULT_TYPE, grade_text: str) -> None:
         """Обработка добавления ученика - этап 3 (класс)."""
@@ -1906,6 +1910,7 @@ class AdminHandlers(BaseHandler):
         
         username = context.user_data.get('new_student_username')
         fullname = context.user_data.get('new_student_fullname')
+        phone_number = context.user_data.get('new_student_phone')
         admin_id = update.effective_user.id
         
         # СНАЧАЛА проверяем username и получаем user_id
@@ -1971,21 +1976,23 @@ class AdminHandlers(BaseHandler):
                 'username': username,
                 'fullname': fullname,
                 'grade': grade,
-                'user_id': student_user_id
+                'user_id': student_user_id,
+                'phone_number': phone_number
             }
+            context.user_data.pop('new_student_phone', None)
             return
         
         # Если username подтвержден, добавляем сразу
-        await self._add_student_to_database(update, context, username, fullname, grade, student_user_id, verification_message)
+        await self._add_student_to_database(update, context, username, fullname, grade, student_user_id, verification_message, phone_number)
     
     async def _add_student_to_database(self, update: Update, context: ContextTypes.DEFAULT_TYPE, 
                                      username: str, fullname: str, grade: int, 
-                                     student_user_id: int = None, verification_message: str = ""):
+                                     student_user_id: int = None, verification_message: str = "", phone_number: str = ""):
         """Добавление ученика в базу данных."""
         admin_id = update.effective_user.id
         
         # Добавляем ученика в allowed_users
-        success = self.db.add_allowed_user(username, fullname, grade, admin_id)
+        success = self.db.add_allowed_user(username, fullname, grade, admin_id, phone_number)
         
         if success:
             # Если удалось найти user_id, обновляем запись
@@ -2003,9 +2010,9 @@ class AdminHandlers(BaseHandler):
                         
                         # Также создаем/обновляем запись в users для синхронизации
                         cursor.execute('''
-                            INSERT OR REPLACE INTO users (user_id, username, full_name, grade)
-                            VALUES (?, ?, ?, ?)
-                        ''', (student_user_id, username, fullname, grade))
+                            INSERT OR REPLACE INTO users (user_id, username, full_name, grade, phone_number)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (student_user_id, username, fullname, grade, phone_number))
                         conn.commit()
                         logging.info(f"Synced user data in users table for user_id {student_user_id}")
                         
@@ -2024,6 +2031,8 @@ class AdminHandlers(BaseHandler):
             
             text = f"✅ Ученик @{username} успешно добавлен!\n\n"
             text += f"ФИО: {fullname}\nКласс: {grade}\n"
+            if phone_number:
+                text += f"📱 Телефон: {phone_number}\n"
             text += f"{verification_message}\n"
             
             if student_user_id:
@@ -2051,6 +2060,7 @@ class AdminHandlers(BaseHandler):
         context.user_data.pop('new_student_username', None)
         context.user_data.pop('new_student_fullname', None)
         context.user_data.pop('pending_student', None)
+        context.user_data.pop('new_student_phone', None)
     
     async def _handle_student_by_id_grade(self, update: Update, context: ContextTypes.DEFAULT_TYPE, grade_text: str) -> None:
         """Обработка добавления ученика по ID - этап 3 (класс)."""
@@ -2066,6 +2076,7 @@ class AdminHandlers(BaseHandler):
         student_user_id = context.user_data.get('new_student_user_id')
         fullname = context.user_data.get('new_student_fullname')
         admin_id = update.effective_user.id
+        phone_number = context.user_data.get('new_student_phone')
         
         # Пытаемся получить username пользователя через Telegram API
         username = None
@@ -2087,7 +2098,7 @@ class AdminHandlers(BaseHandler):
             except Exception as e2:
                 logging.warning(f"Could not find username for user_id {student_user_id}: {e2}")
         
-        success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id, username)
+        success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id, username, phone_number)
         
         if success:
             # Синхронизируем данные в таблице users
@@ -2095,9 +2106,9 @@ class AdminHandlers(BaseHandler):
                 with sqlite3.connect(self.db.db_path) as conn:
                     cursor = conn.cursor()
                     cursor.execute('''
-                        INSERT OR REPLACE INTO users (user_id, username, full_name, grade)
-                        VALUES (?, ?, ?, ?)
-                    ''', (student_user_id, username, fullname, grade))
+                        INSERT OR REPLACE INTO users (user_id, username, full_name, grade, phone_number)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (student_user_id, username, fullname, grade, phone_number))
                     conn.commit()
                     logging.info(f"Synced user data in users table for user_id {student_user_id}")
             except Exception as e:
@@ -2115,7 +2126,8 @@ class AdminHandlers(BaseHandler):
             
             text = f"✅ Ученик с ID {student_user_id} успешно добавлен!\n\n"
             text += f"ФИО: {fullname}\nКласс: {grade}\n"
-            
+            if phone_number:
+                text += f"📱 Телефон: {phone_number}\n"
             if username:
                 text += f"👤 Username: @{username}\n"
                 text += f"✅ Username автоматически найден и добавлен\n"
@@ -2142,6 +2154,7 @@ class AdminHandlers(BaseHandler):
         context.user_data.pop('admin_action', None)
         context.user_data.pop('new_student_user_id', None)
         context.user_data.pop('new_student_fullname', None)
+        context.user_data.pop('new_student_phone', None)
     
     async def _handle_add_topic(self, update: Update, context: ContextTypes.DEFAULT_TYPE, topic_name: str) -> None:
         """Обработка добавления темы - этап 1 (название)."""
@@ -3136,3 +3149,39 @@ class AdminHandlers(BaseHandler):
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def _handle_student_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE, phone_text: str) -> None:
+        """Обработка добавления ученика - этап 3 (номер телефона)."""
+        phone_number = None
+        
+        if phone_text.lower() not in ['пропустить', 'skip', '-']:
+            # Простая валидация номера телефона
+            phone_clean = phone_text.strip()
+            if phone_clean and (phone_clean.startswith('+') or phone_clean.startswith('8') or phone_clean.startswith('7')):
+                phone_number = phone_clean
+            else:
+                await update.message.reply_text("❌ Неверный формат номера. Введите номер в формате +77771234567 или напишите 'пропустить':")
+                return
+        
+        context.user_data['new_student_phone'] = phone_number
+        context.user_data['admin_action'] = 'student_grade'
+        
+        await update.message.reply_text("Введите класс ученика (число от 1 до 11):")
+    
+    async def _handle_student_by_id_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE, phone_text: str) -> None:
+        """Обработка добавления ученика по ID - этап 3 (номер телефона)."""
+        phone_number = None
+        
+        if phone_text.lower() not in ['пропустить', 'skip', '-']:
+            # Простая валидация номера телефона
+            phone_clean = phone_text.strip()
+            if phone_clean and (phone_clean.startswith('+') or phone_clean.startswith('8') or phone_clean.startswith('7')):
+                phone_number = phone_clean
+            else:
+                await update.message.reply_text("❌ Неверный формат номера. Введите номер в формате +77771234567 или напишите 'пропустить':")
+                return
+        
+        context.user_data['new_student_phone'] = phone_number
+        context.user_data['admin_action'] = 'student_by_id_grade'
+        
+        await update.message.reply_text("Введите класс ученика (число от 1 до 11):")
