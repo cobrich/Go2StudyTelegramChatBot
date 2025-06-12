@@ -160,6 +160,28 @@ def main() -> None:
         pattern="^confirm_add_student_"
     ))
     
+    # Student editing handlers
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_student_start,
+        pattern="^edit_student_[0-9]+$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_student_name_start,
+        pattern="^edit_student_name_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_student_grade_start,
+        pattern="^edit_student_grade_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_student_phone_start,
+        pattern="^edit_student_phone_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_student_status_toggle,
+        pattern="^edit_student_status_"
+    ))
+    
     # Topic management handlers
     application.add_handler(CallbackQueryHandler(
         admin_handlers.add_topic_start,
