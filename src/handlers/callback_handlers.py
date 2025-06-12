@@ -45,29 +45,6 @@ class CallbackHandlers(BaseHandler):
         else:
             topic_index = topic_data
             
-        # Показываем сообщение о поиске для всех выборов темы
-        try:
-            # Проверяем, есть ли вопросы в БД для этой темы
-            topic_counts = self.db.get_topic_question_counts()
-            has_questions_in_db = topic_counts.get(topic, 0) > 0
-            
-            if has_questions_in_db:
-                await query.message.edit_text("🔍 Формируются вопросы из базы данных...")
-            else:
-                await query.message.edit_text("🤖 ИИ генерирует вопросы для вас, это может занять некоторое время...")
-        except Exception:
-            # Если не удалось отредактировать, отправляем новое сообщение
-            try:
-                topic_counts = self.db.get_topic_question_counts()
-                has_questions_in_db = topic_counts.get(topic, 0) > 0
-                
-                if has_questions_in_db:
-                    await query.message.reply_text("🔍 Формируются вопросы из базы данных...")
-                else:
-                    await query.message.reply_text("🤖 ИИ генерирует вопросы для вас, это может занять некоторое время...")
-            except Exception:
-                await query.message.reply_text("🔍 Формируются вопросы, подождите...")
-            
         logging.info(f"[handle_topic_selection] after retake check: is_retake={is_retake}, topic_index={topic_index}")
         try:
             topic_index = int(topic_index)
@@ -85,6 +62,36 @@ class CallbackHandlers(BaseHandler):
             except Exception:
                 pass
             return
+        
+        # Показываем сообщение о поиске для всех выборов темы
+        try:
+            # Проверяем, есть ли вопросы в БД для этой темы
+            topic_counts = self.db.get_topic_question_counts()
+            has_questions_in_db = topic_counts.get(topic, 0) > 0
+            
+            # Создаем клавиатуру с кнопкой "В главное меню"
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]])
+            
+            if has_questions_in_db:
+                await query.message.edit_text("🔍 Формируются вопросы из базы данных...", reply_markup=keyboard)
+            else:
+                await query.message.edit_text("🤖 ИИ генерирует вопросы для вас, это может занять некоторое время...", reply_markup=keyboard)
+        except Exception:
+            # Если не удалось отредактировать, отправляем новое сообщение
+            try:
+                topic_counts = self.db.get_topic_question_counts()
+                has_questions_in_db = topic_counts.get(topic, 0) > 0
+                
+                # Создаем клавиатуру с кнопкой "В главное меню"
+                keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]])
+                
+                if has_questions_in_db:
+                    await query.message.reply_text("🔍 Формируются вопросы из базы данных...", reply_markup=keyboard)
+                else:
+                    await query.message.reply_text("🤖 ИИ генерирует вопросы для вас, это может занять некоторое время...", reply_markup=keyboard)
+            except Exception:
+                keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]])
+                await query.message.reply_text("🔍 Формируются вопросы, подождите...", reply_markup=keyboard)
         
         chat_id = query.message.chat_id
         

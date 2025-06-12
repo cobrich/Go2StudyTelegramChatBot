@@ -285,7 +285,7 @@ def main() -> None:
     ))
     application.add_handler(CallbackQueryHandler(
         callback_handlers.handle_main_menu,
-        pattern="^back_to_main$"
+        pattern="^main_menu$"
     ))
     application.add_handler(CallbackQueryHandler(
         callback_handlers.handle_back_to_main_topics,
