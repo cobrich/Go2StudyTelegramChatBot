@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  go2study-bot:
+    build: .
+    container_name: go2study-bot
+    restart: unless-stopped
+    volumes:
+      # Монтирование базы данных для сохранения данных
+      - ./data:/app/data
+      # Монтирование .env файла
+      - ./.env:/app/.env:ro
+      # Монтирование директории для загруженных файлов
+      - ./files:/app/files
+      # Монтирование директории для изображений вопросов
+      - ./question_images:/app/question_images
+    environment:
+      - PYTHONPATH=/app/src
+      - PYTHONUNBUFFERED=1
+    # Опциональный порт для будущего веб-интерфейса
+    # ports:
+    #   - "8000:8000"
+    
+    # Проверка здоровья контейнера
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Создание volume для данных (опционально)
+volumes:
+  bot_data:
+    driver: local 
