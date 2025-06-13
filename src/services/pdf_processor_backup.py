@@ -25,8 +25,10 @@ class PDFProcessor:
         # Паттерн для поиска заголовков тем
         self.topic_header_pattern = r'Тема:\s*([^(]+)\((\d+)\)'
         
-        # Паттерн для поиска вопросов (строгий - только цифра + точка или скобка)
-        self.question_pattern = r'^(\d+)[.)](\s*(.+))?$'
+        # # Паттерн для поиска вопросов (более гибкий - учитывает невидимые символы)
+        # self.question_pattern = r'^(\d+)[.)\s]*\s*(.+)'
+        # Улучшенный паттерн для поиска вопросов - только точка или скобка после числа
+        self.question_pattern = r'^(\d+)[.)\s]+(.+)'
         
         # Паттерны для поиска вариантов ответов
         self.option_patterns = [
@@ -60,234 +62,15 @@ class PDFProcessor:
         Извлечение тем и вопросов из текста PDF.
         Возвращает кортеж: (список_вопросов, статистика_по_темам)
         """
-        # Проверяем структуру текста для определения типа парсера
-        lines = text.split('\n')
-        non_empty_lines = [line.strip() for line in lines if line.strip()]
-        empty_lines_count = len(lines) - len(non_empty_lines)
-        
-        # Подсчитываем очень короткие строки (1-3 символа) - признак фрагментированного текста
-        very_short_lines_count = sum(1 for line in non_empty_lines if len(line) <= 3)
-        short_lines_count = sum(1 for line in non_empty_lines if len(line) <= 20)
-        
-        # Проверяем на фрагментированную структуру:
-        # 1. Много очень коротких строк (1-3 символа) - основной признак
-        # 2. Или много пустых строк + много коротких строк (для PyPDF2)
-        is_fragmented = (
-            (very_short_lines_count / len(non_empty_lines) > 0.4) or  # Более 40% очень коротких строк
-            (empty_lines_count / len(lines) > 0.3 and short_lines_count / len(non_empty_lines) > 0.5)  # Старое условие для PyPDF2
-        )
-        
-        if is_fragmented:
-            print(f"[DEBUG] Обнаружена фрагментированная структура PDF:")
-            print(f"[DEBUG] - Очень короткие строки (1-3 символа): {very_short_lines_count}/{len(non_empty_lines)} ({very_short_lines_count / len(non_empty_lines) * 100:.1f}%)")
-            print(f"[DEBUG] - Короткие строки (<=20 символов): {short_lines_count}/{len(non_empty_lines)} ({short_lines_count / len(non_empty_lines) * 100:.1f}%)")
-            print(f"[DEBUG] - Пустые строки: {empty_lines_count}/{len(lines)} ({empty_lines_count / len(lines) * 100:.1f}%)")
-            print("[DEBUG] Используем специальный парсер для фрагментированного текста")
-            return self._extract_from_fragmented_text(text)
-        else:
-            print("[DEBUG] Используем стандартный парсер")
-            return self._extract_topics_and_questions_standard(text)
-
-    def _extract_from_fragmented_text(self, text: str) -> Tuple[List[Dict], Dict[str, int]]:
-        """
-        Специальный метод для извлечения вопросов из PDF с фрагментированным текстом,
-        где каждое слово находится на отдельной строке.
-        """
-        questions = []
-        lines = text.split('\n')
-        
-        # Статистика обработки
-        topic_stats = {
-            'found_topics': {},
-            'valid_topics': {},
-            'invalid_topics': {},
-            'total_questions': 0,
-            'valid_questions': 0,
-            'invalid_questions': 0
-        }
-        
-        # Получаем список доступных тем из БД
-        available_topics = self.get_available_topics_from_db()
-        print(f"[DEBUG] Доступные темы в БД ({len(available_topics)}): {available_topics}")
-        
-        # Сначала склеиваем фрагментированный текст в нормальные строки
-        reconstructed_lines = []
-        current_line = ""
-        
-        i = 0
-        while i < len(lines):
-            line = lines[i].strip()
-            
-            if not line:  # Пустая строка
-                if current_line.strip():
-                    reconstructed_lines.append(current_line.strip())
-                    current_line = ""
-                i += 1
-                continue
-            
-            # Проверяем, является ли это началом нового элемента (номер вопроса, вариант ответа, тема)
-            is_question_number = re.match(r'^\d+\.$', line)
-            is_option = re.match(r'^[A-DА-Г]\)$', line)
-            is_topic_start = line == 'Тема:'
-            is_checkmark = line == '✅'
-            
-            if is_question_number or is_option or is_topic_start:
-                # Сохраняем предыдущую строку
-                if current_line.strip():
-                    reconstructed_lines.append(current_line.strip())
-                
-                # Начинаем новую строку с этого элемента
-                current_line = line
-            elif is_checkmark:
-                # Добавляем галочку к текущей строке
-                current_line += " " + line
-            else:
-                # Добавляем к текущей строке
-                if current_line:
-                    current_line += " " + line
-                else:
-                    current_line = line
-            
-            i += 1
-        
-        # Добавляем последнюю строку
-        if current_line.strip():
-            reconstructed_lines.append(current_line.strip())
-        
-        print(f"[DEBUG] Восстановлено строк: {len(reconstructed_lines)}")
-        for i, line in enumerate(reconstructed_lines[:20]):
-            print(f"[DEBUG][{i}] Восстановленная строка: '{line}'")
-        
-        # Теперь парсим восстановленные строки
-        current_topic = None
-        current_question = None
-        current_options = []
-        correct_answer = None
-        
-        i = 0
-        while i < len(reconstructed_lines):
-            line = reconstructed_lines[i].strip()
-            
-            # Проверяем на заголовок темы
-            if line == 'Тема:' and i + 1 < len(reconstructed_lines):
-                # Сохраняем предыдущий вопрос
-                if current_question and current_options and correct_answer:
-                    self._save_current_question(
-                        current_topic, current_question, current_options, 
-                        correct_answer, questions, topic_stats, available_topics
-                    )
-                
-                # Ищем название темы и количество вопросов в следующих строках
-                topic_name = ""
-                question_count = 0
-                j = i + 1
-                
-                while j < len(reconstructed_lines):
-                    next_line = reconstructed_lines[j].strip()
-                    
-                    # Проверяем, является ли это количеством вопросов в скобках
-                    count_match = re.match(r'^\((\d+)\)$', next_line)
-                    if count_match:
-                        question_count = int(count_match.group(1))
-                        break
-                    elif re.match(r'^\d+\.$', next_line):
-                        # Начался первый вопрос, прекращаем поиск
-                        break
-                    else:
-                        # Добавляем к названию темы
-                        if topic_name:
-                            topic_name += " " + next_line
-                        else:
-                            topic_name = next_line
-                    j += 1
-                
-                current_topic = topic_name.strip()
-                
-                # Проверяем валидность темы
-                topic_exists = self.validate_topic_exists(current_topic)
-                
-                if topic_exists:
-                    print(f"[✅ VALID] Найдена валидная тема: '{current_topic}' ({question_count} вопросов)")
-                    topic_stats['valid_topics'][current_topic] = 0
-                else:
-                    print(f"[❌ INVALID] Найдена невалидная тема: '{current_topic}' (не найдена в БД)")
-                    topic_stats['invalid_topics'][current_topic] = 0
-                
-                topic_stats['found_topics'][current_topic] = 0
-                
-                # Сбрасываем текущий вопрос
-                current_question = None
-                current_options = []
-                correct_answer = None
-                
-                i = j
-                continue
-            
-            # Проверяем на начало вопроса
-            question_match = re.match(self.question_pattern, line)
-            if question_match:
-                # Сохраняем предыдущий вопрос
-                if current_question and current_options and correct_answer:
-                    self._save_current_question(
-                        current_topic, current_question, current_options, 
-                        correct_answer, questions, topic_stats, available_topics
-                    )
-                
-                # Начинаем новый вопрос
-                question_number = question_match.group(1)
-                # Группа 3 содержит текст вопроса (может быть None)
-                question_text = question_match.group(3) if question_match.group(3) else ""
-                current_question = question_text.strip()
-                current_options = []
-                correct_answer = None
-                
-                print(f"[LOG] Вопрос {question_number}: {current_question[:100]}...")
-                i += 1
-                continue
-            
-            # Проверяем на вариант ответа
-            option_match = re.match(r'^([A-DА-Г])\)\s*(.*)', line)
-            if option_match:
-                option_letter = option_match.group(1)
-                option_text = option_match.group(2).strip()
-                has_checkmark = '✅' in line
-                
-                # Конвертируем русские буквы в латинские
-                if option_letter in 'АБВГ':
-                    option_letter = ['A', 'B', 'C', 'D']['АБВГ'.index(option_letter)]
-                
-                # Убираем галочку из текста
-                option_text = option_text.replace('✅', '').strip()
-                
-                if option_text:  # Добавляем только непустые варианты
-                    current_options.append(option_text)
-                    
-                    if has_checkmark:
-                        correct_answer = option_letter
-                        print(f"[LOG] Правильный ответ: {option_letter}) {option_text}")
-            
-            i += 1
-        
-        # Сохраняем последний вопрос
-        if current_question and current_options and correct_answer:
-            self._save_current_question(
-                current_topic, current_question, current_options, 
-                correct_answer, questions, topic_stats, available_topics
-            )
-        
-        print(f"[DEBUG] Итого извлечено вопросов: {len(questions)}")
-        return questions, topic_stats
-
-    def _extract_topics_and_questions_standard(self, text: str) -> Tuple[List[Dict], Dict[str, int]]:
-        """
-        Стандартный метод извлечения тем и вопросов из текста PDF.
-        """
         questions = []
         lines = text.split('\n')
         current_topic = None
         current_question = None
         current_options = []
         correct_answer = None
+        last_question_number = None  # Для отслеживания последовательности
+        last_question_number = None  # Для отслеживания последовательности
+        expected_questions_count = None  # Ожидаемое количество вопросов из заголовка
         
         # Статистика обработки
         topic_stats = {
@@ -331,13 +114,16 @@ class PDFProcessor:
                 
                 # Устанавливаем новую тему
                 current_topic = topic_match.group(1).strip()
-                expected_questions = int(topic_match.group(2))
+                expected_questions_count = int(topic_match.group(2))
+                
+                # Сбрасываем счетчик вопросов для новой темы
+                last_question_number = None
                 
                 # Проверяем, существует ли тема в БД
                 topic_exists = self.validate_topic_exists(current_topic)
                 
                 if topic_exists:
-                    print(f"[✅ VALID] Найдена валидная тема: '{current_topic}' ({expected_questions} вопросов)")
+                    print(f"[✅ VALID] Найдена валидная тема: '{current_topic}' (ожидается {expected_questions_count} вопросов)")
                     topic_stats['valid_topics'][current_topic] = 0
                 else:
                     print(f"[❌ INVALID] Найдена невалидная тема: '{current_topic}' (не найдена в БД)")
@@ -353,27 +139,35 @@ class PDFProcessor:
                 i += 1
                 continue
             
-            # Проверяем на начало вопроса
-            question_match = re.match(self.question_pattern, line)
-            if question_match:
-                # Сохраняем предыдущий вопрос, если он был
-                if current_question and current_options and correct_answer:
-                    self._save_current_question(
-                        current_topic, current_question, current_options, 
-                        correct_answer, questions, topic_stats, available_topics
-                    )
-                
-                # Начинаем новый вопрос
-                question_number = question_match.group(1)
-                # Группа 3 содержит текст вопроса (может быть None)
-                question_text = question_match.group(3) if question_match.group(3) else ""
-                current_question = question_text.strip()
-                current_options = []
-                correct_answer = None
-                
-                print(f"[LOG] Вопрос {question_number}: {current_question[:100]}...")
-                i += 1
-                continue
+            # Проверяем на начало вопроса с улучшенной валидацией
+            if self._is_likely_question_start(line):
+                question_match = re.match(self.question_pattern, line)
+                if question_match:
+                    question_number_str = question_match.group(1)
+                    
+                    # Дополнительная валидация номера вопроса
+                    if self._is_valid_question_number(question_number_str, 
+                                                    expected_questions_count, 
+                                                    last_question_number):
+                        # Сохраняем предыдущий вопрос, если он был
+                        if current_question and current_options and correct_answer:
+                            self._save_current_question(
+                                current_topic, current_question, current_options, 
+                                correct_answer, questions, topic_stats, available_topics
+                            )
+                        
+                        # Начинаем новый вопрос
+                        current_question_number = int(question_number_str)
+                        current_question = question_match.group(2).strip()
+                        current_options = []
+                        correct_answer = None
+                        last_question_number = current_question_number
+                        
+                        print(f"[✅ VALID_Q] Вопрос {current_question_number}: {current_question[:100]}...")
+                        i += 1
+                        continue
+                    else:
+                        print(f"[❌ INVALID_Q] Пропускаем недействительный номер вопроса: {question_number_str}")
             
             # Проверяем на вариант ответа
             option_found = False
@@ -416,7 +210,7 @@ class PDFProcessor:
                     # Проверяем, что это не номер страницы, не вариант ответа, и не начало нового вопроса
                     is_page_number = re.match(r'^\d+$', clean_line)
                     is_option = re.match(r'^[A-ZА-Г]\).*', clean_line)
-                    is_new_question = re.match(self.question_pattern, clean_line)  # Используем строгий паттерн
+                    is_new_question = self._is_likely_question_start(clean_line)
                     
                     if not is_page_number and not is_option and not is_new_question:
                         # Добавляем пробел только если предыдущая строка не заканчивается пробелом
@@ -629,6 +423,7 @@ class PDFProcessor:
         current_question = None
         current_options = []
         correct_answer = None
+        last_question_number = None  # Для отслеживания последовательности
         question_number = 0
         
         # Статистика (для совместимости)
@@ -656,9 +451,10 @@ class PDFProcessor:
                 i += 1
                 continue
             
-            # Проверяем на начало вопроса (любое число с закрывающей скобкой или точкой)
-            question_match = re.match(r'^(\d+)[.)\s]*\s*(.+)', line)
-            if question_match:
+            # Проверяем на начало вопроса с улучшенной валидацией
+            if self._is_likely_question_start(line):
+                question_match = re.match(r'^(\d+)[.)\s]+(.+)', line)
+                if question_match and self._is_valid_question_number(question_match.group(1), None, question_number):
                 # Сохраняем предыдущий вопрос, если он был
                 if current_question and current_options and correct_answer:
                     clean_question = ''.join(char for char in current_question if char.isprintable() or char.isspace())
@@ -672,13 +468,14 @@ class PDFProcessor:
                         topic_stats['invalid_topics']['Неопределенная тема'] += 1
                         print(f"[❌ SKIP] Вопрос без темы: {clean_question[:100]}...")
                 
-                # Начинаем новый вопрос
-                question_number = int(question_match.group(1))
-                current_question = question_match.group(2).strip()
-                current_options = []
-                correct_answer = None
-                
-                print(f"[LOG] Вопрос {question_number}: {current_question[:100]}...")
+                    # Начинаем новый вопрос
+                    question_number = int(question_match.group(1))
+                    current_question = question_match.group(2).strip()
+                    current_options = []
+                    correct_answer = None
+                    last_question_number = question_number
+                    
+                    print(f"[LOG] Вопрос {question_number}: {current_question[:100]}...")
                 i += 1
                 continue
             
@@ -723,7 +520,7 @@ class PDFProcessor:
                     # Проверяем, что это не номер страницы, не вариант ответа, и не начало нового вопроса
                     is_page_number = re.match(r'^\d+$', clean_line)
                     is_option = re.match(r'^[A-ZА-Г]\).*', clean_line)
-                    is_new_question = re.match(self.question_pattern, clean_line)  # Используем строгий паттерн
+                    is_new_question = re.match(r'^\d+[.)\s]*\s*', clean_line)
                     
                     if not is_page_number and not is_option and not is_new_question:
                         # Добавляем пробел только если предыдущая строка не заканчивается пробелом
@@ -750,6 +547,81 @@ class PDFProcessor:
                 print(f"[❌ SKIP] Последний вопрос без темы: {clean_question[:100]}...")
         
         return questions, topic_stats
+
+    def _is_valid_question_number(self, number_str: str, expected_number: int = None, 
+                                 last_question_number: int = None) -> bool:
+        """
+        Проверка валидности номера вопроса.
+        
+        Args:
+            number_str: Строка с номером вопроса
+            expected_number: Ожидаемый номер (из заголовка темы) 
+            last_question_number: Номер предыдущего вопроса
+        
+        Returns:
+            True если номер валиден, False иначе
+        """
+        try:
+            current_number = int(number_str)
+            
+            # Проверяем последовательность если есть предыдущий номер
+            if last_question_number is not None:
+                # Номер должен быть следующим по порядку (с учетом возможных пропусков)
+                if current_number <= last_question_number:
+                    print(f"[SEQUENCE_ERROR] Номер {current_number} не больше предыдущего {last_question_number}")
+                    return False
+                
+                # Допускаем пропуски, но не больше чем на 5 (разумный лимит)
+                if current_number - last_question_number > 5:
+                    print(f"[SEQUENCE_WARNING] Большой пропуск: {last_question_number} → {current_number}")
+                    # Не блокируем, но предупреждаем
+            
+            # Разумные границы для номеров вопросов (1-1000)
+            if current_number < 1 or current_number > 1000:
+                print(f"[RANGE_ERROR] Номер {current_number} вне разумных границ (1-1000)")
+                return False
+            
+            return True
+            
+        except ValueError:
+            print(f"[PARSE_ERROR] Не удалось преобразовать '{number_str}' в число")
+            return False
+
+    def _is_likely_question_start(self, line: str) -> bool:
+        """
+        Дополнительная проверка, является ли строка началом вопроса.
+        Исключает ложные срабатывания на числовых соотношениях.
+        """
+        # Базовая проверка паттерна
+        match = re.match(self.question_pattern, line)
+        if not match:
+            return False
+            
+        number_str = match.group(1)
+        question_text = match.group(2).strip()
+        
+        # Исключаем соотношения типа "2:1", "3:4" и т.д.
+        if re.match(r'^\d+:\d+', line):
+            print(f"[RATIO_SKIP] Пропускаем числовое соотношение: {line[:50]}...")
+            return False
+        
+        # Исключаем чистые числа без точки/скобки после них
+        if re.match(r'^\d+\s*$', line):
+            print(f"[NUMBER_SKIP] Пропускаем чистое число: {line}")
+            return False
+        
+        # Проверяем, что после номера есть осмысленный текст
+        if len(question_text) < 5:
+            print(f"[SHORT_TEXT_SKIP] Слишком короткий текст после номера: '{question_text}'")
+            return False
+        
+        # Исключаем строки, которые явно являются продолжением предыдущего текста
+        # (начинаются с маленькой буквы или специальных символов)
+        if question_text and question_text[0].islower():
+            print(f"[LOWERCASE_SKIP] Строка начинается с маленькой буквы: {question_text[:50]}...")
+            return False
+        
+        return True
 
 def add_questions_to_db(questions: List[Dict], db: Database) -> Dict[str, int]:
     """
