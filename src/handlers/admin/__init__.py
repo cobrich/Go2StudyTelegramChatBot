@@ -122,10 +122,6 @@ class AdminHandlers(AdminBaseHandler):
     async def list_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Список всех тем."""
         return await self.topics.list_topics(update, context)
-    
-    async def refresh_topics_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Обновить статистику тем."""
-        return await self.topics.refresh_topics_stats(update, context)
 
     # Временные заглушки для тем
     async def edit_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

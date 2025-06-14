@@ -415,10 +415,6 @@ def main() -> None:
         admin_handlers.list_topics,
         pattern="^list_topics_page_"
     ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.refresh_topics_stats,
-        pattern="^refresh_topics_stats$"
-    ))
     
     # Topic management handlers
     application.add_handler(CallbackQueryHandler(

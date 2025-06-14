@@ -24,7 +24,6 @@ class TopicsHandler(AdminBaseHandler):
             [InlineKeyboardButton("📋 Список тем", callback_data="list_topics")],
             [InlineKeyboardButton("✏️ Редактировать тему", callback_data="edit_topic_start")],
             [InlineKeyboardButton("🗑️ Удалить тему", callback_data="remove_topic")],
-            [InlineKeyboardButton("📊 Статистика тем", callback_data="detailed_topics_stats")],
             [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -129,7 +128,6 @@ class TopicsHandler(AdminBaseHandler):
                 text += "\n"
             
             keyboard = [
-                [InlineKeyboardButton("🔄 Обновить статистику", callback_data="refresh_topics_stats")],
                 [InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]
             ]
         
@@ -861,67 +859,3 @@ class TopicsHandler(AdminBaseHandler):
             
         except (ValueError, IndexError):
             await query.edit_message_text("❌ Ошибка при удалении темы.")
-
-    async def refresh_topics_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Обновить статистику тем."""
-        query = update.callback_query
-        
-        print(f"[DEBUG] refresh_topics_stats called by user {update.effective_user.id}")
-        
-        # Получаем новые данные
-        topics = self.db.get_all_topics(active_only=False)
-        print(f"[DEBUG] Found {len(topics)} topics")
-        
-        if not topics:
-            new_text = "📋 <b>Список тем</b>\n\nТемы не найдены."
-            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]]
-        else:
-            # Группируем темы по основным разделам
-            topics_by_section = {}
-            for topic in topics:
-                main_topic = topic.get('main_topic', 'Без раздела')
-                if main_topic not in topics_by_section:
-                    topics_by_section[main_topic] = []
-                topics_by_section[main_topic].append(topic)
-            
-            new_text = f"📋 <b>Список тем</b>\n\n"
-            new_text += f"Всего тем: {len(topics)}\n\n"
-            
-            for main_topic, section_topics in topics_by_section.items():
-                new_text += f"📚 <b>{main_topic}</b> ({len(section_topics)} тем)\n"
-                
-                # Сортируем темы: сначала активные, потом неактивные
-                active_topics = [t for t in section_topics if t['is_active']]
-                inactive_topics = [t for t in section_topics if not t['is_active']]
-                
-                for topic in active_topics:
-                    status = "✅"
-                    new_text += f"  {status} {topic['name']} ({topic['question_count']} вопросов)\n"
-                
-                for topic in inactive_topics:
-                    status = "❌"
-                    new_text += f"  {status} {topic['name']} ({topic['question_count']} вопросов)\n"
-                
-                new_text += "\n"
-            
-            keyboard = [
-                [InlineKeyboardButton("🔄 Обновить статистику", callback_data="refresh_topics_stats")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]
-            ]
-        
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        # Проверяем, изменился ли текст
-        current_text = query.message.text
-        print(f"[DEBUG] Current text length: {len(current_text) if current_text else 0}")
-        print(f"[DEBUG] New text length: {len(new_text)}")
-        
-        # Пытаемся обновить сообщение
-        try:
-            await query.edit_message_text(new_text, reply_markup=reply_markup, parse_mode='HTML')
-            print("[DEBUG] Message updated successfully")
-            await query.answer("✅ Статистика обновлена")
-        except Exception as e:
-            # Если произошла ошибка (сообщение не изменилось), показываем alert
-            print(f"[DEBUG] Error updating message: {e}")
-            await query.answer("✅ Статистика обновлена (изменений нет)")
