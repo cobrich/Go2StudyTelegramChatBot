@@ -185,7 +185,7 @@ class StudentsHandler(AdminBaseHandler):
         
         # Добавляем ученика в базу данных
         success = await self._add_student_to_database(
-            update, context, student_user_id, None, fullname, grade, admin_id
+            update, context, student_user_id, None, fullname, grade, admin_id, language
         )
         
         logging.info(f"[handle_student_language_selection] Student addition result: {success}")
@@ -240,11 +240,12 @@ class StudentsHandler(AdminBaseHandler):
 
     async def _add_student_to_database(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                                      student_user_id: int, username: str, fullname: str, 
-                                     grade: int, admin_id: int, phone_number: str = "") -> bool:
+                                     grade: int, admin_id: int, language: str = "ru", phone_number: str = "") -> bool:
         """Добавление ученика в базу данных (метод из старого файла)."""
         try:
             # Добавляем в allowed_users
-            success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id, username, phone_number)
+            # Параметры: user_id, full_name, grade, added_by, username, language
+            success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id, username, language)
             
             if success:
                 # Синхронизируем с таблицей users
@@ -252,8 +253,8 @@ class StudentsHandler(AdminBaseHandler):
                     cursor = conn.cursor()
                     cursor.execute('''
                         INSERT OR REPLACE INTO users (user_id, username, full_name, grade, phone_number, language)
-                        VALUES (?, ?, ?, ?, ?, 'ru')
-                    ''', (student_user_id, username, fullname, grade, phone_number, 'ru'))
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (student_user_id, username, fullname, grade, phone_number, language))
                     conn.commit()
                     
                 logging.info(f"Student {student_user_id} added to database successfully")
@@ -264,7 +265,7 @@ class StudentsHandler(AdminBaseHandler):
                 
         except Exception as e:
             logging.error(f"Error adding student to database: {e}")
-            return False 
+            return False
 
     # === МЕТОДЫ ПРОСМОТРА И УПРАВЛЕНИЯ УЧЕНИКАМИ ===
 
