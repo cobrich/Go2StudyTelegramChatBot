@@ -770,3 +770,113 @@ TOPIC_HIERARCHY_KK = {
 - 🇷🇺 **5 русских разделов + 25 подтем**
 - 🇰🇿 **5 казахских разделов + 25 подтем**
 - **Всего: 10 разделов и 50 подтем**
+
+---
+
+### 📚 Task 2: Complete Topics Management Implementation (January 2025)
+
+**✅ TASK 2 COMPLETED: Full topics management functionality implemented**
+
+#### 🎯 What was implemented:
+
+**1. ➕ Adding Topics with Language Support**:
+- **Language-aware topic creation**: When adding topics, language is inherited from the selected main section
+- **Section selection interface**: Beautiful grouped display of main sections by language
+- **Existing topics preview**: Shows existing topics in selected section to avoid duplicates
+- **Validation**: Prevents duplicate topic names within the same section
+- **Full workflow**: Section selection → Topic name → Description → Automatic addition with language
+
+**2. 📋 Enhanced Topics List Display**:
+- **Grouped by sections**: Topics organized by main sections (e.g., "Numbers and Operations", "Geometry")
+- **Status indicators**: ✅ for active topics, ❌ for inactive topics
+- **Question count**: Shows number of questions in each topic
+- **Language indicators**: Clear display of topic language for admins
+- **Hierarchical structure**: Main sections as headers, topics as sub-items
+
+**3. ✏️ Complete Topic Editing**:
+- **Name editing**: Change topic names with duplicate validation
+- **Description editing**: Update topic descriptions
+- **Section changing**: Move topics between main sections (planned)
+- **Status toggling**: Activate/deactivate topics instantly
+- **Real-time updates**: Changes reflected immediately in the interface
+
+**4. 🗑️ Safe Topic Deletion**:
+- **Complete deletion**: Removes topic, all questions, test results, and references
+- **Warning system**: Clear warnings about what will be deleted
+- **Confirmation flow**: Two-step confirmation to prevent accidental deletion
+- **Statistics display**: Shows exactly what will be removed (X questions, Y test results)
+- **Cascade deletion**: Properly removes all related data from database
+
+**5. 📊 Enhanced Statistics**:
+- **Per-topic statistics**: Questions count, unique users, total tests, average score
+- **Grouped display**: Statistics organized by main sections
+- **Active/inactive status**: Clear indication of topic status
+- **Performance metrics**: Average scores to identify difficult topics
+- **Real-time data**: Statistics update automatically
+
+**6. 🚫 Removed Merge Topics Function**:
+- **Function removed**: Merge topics functionality removed as requested
+- **Clean interface**: No merge button in topics menu
+- **Graceful handling**: Existing merge callbacks show informative message about removal
+
+#### 🔧 Technical Implementation:
+
+**Database Methods Added (`src/services/database.py`)**:
+```python
+def get_subtopics_by_main_topic(main_topic_name: str) -> list
+def toggle_topic_status(topic_id: int) -> bool  
+def update_topic_name(topic_id: int, new_name: str) -> bool
+def update_topic_description(topic_id: int, new_description: str) -> bool
+def delete_topic_completely(topic_id: int) -> bool
+```
+
+**Topics Handler (`src/handlers/admin/topics.py`)**:
+- **Complete rewrite**: Replaced all placeholder functions with full implementations
+- **Language support**: All functions now work with language-aware topics
+- **Error handling**: Proper error handling and user feedback
+- **State management**: Proper cleanup of user data after operations
+- **Callback handling**: All callback patterns properly implemented
+
+**Admin Integration (`src/handlers/admin/__init__.py`)**:
+- **Text handlers**: Added support for topic name/description editing
+- **Callback delegation**: All topic callbacks properly delegated to topics handler
+- **Removed merge functions**: Cleaned up merge-related code
+
+#### 🎨 User Experience Improvements:
+
+**For Admins**:
+- **Intuitive workflow**: Clear step-by-step process for all operations
+- **Visual feedback**: Immediate confirmation of all actions
+- **Safety measures**: Multiple confirmations for destructive operations
+- **Information display**: Rich information about topics and their content
+- **Error prevention**: Validation to prevent common mistakes
+
+**Interface Features**:
+- **Grouped display**: Topics organized by main sections for easy navigation
+- **Status indicators**: Clear visual indication of active/inactive topics
+- **Question counts**: Immediate visibility of topic content
+- **Language awareness**: Proper handling of multilingual content
+- **Responsive design**: Works smoothly with Telegram's interface limitations
+
+#### ✅ Functionality Status:
+
+- ✅ **Add Topics**: Full implementation with language support
+- ✅ **List Topics**: Beautiful grouped display with statistics
+- ✅ **Edit Topics**: Name, description, and status editing
+- ✅ **Delete Topics**: Safe deletion with cascade removal
+- ✅ **Topic Statistics**: Detailed per-topic and overall statistics
+- ❌ **Merge Topics**: Removed as requested
+- ✅ **Language Support**: All functions work with multilingual topics
+
+#### 🚀 Result:
+**Complete topics management system is now fully functional!** Admins can:
+- Add new topics with proper language assignment
+- View topics in a beautiful organized interface
+- Edit topic properties safely
+- Delete topics with all related data
+- View detailed statistics for each topic
+- All operations respect the multilingual structure of the bot
+
+**Status**: ✅ **TASK 2 COMPLETED** - Topics management fully implemented
+
+---

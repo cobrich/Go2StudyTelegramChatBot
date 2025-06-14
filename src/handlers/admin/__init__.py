@@ -139,9 +139,6 @@ class AdminHandlers(AdminBaseHandler):
     async def edit_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.edit_topic_start(update, context)
     
-    async def merge_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.merge_topics_start(update, context)
-    
     async def remove_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.remove_topic_start(update, context)
 
@@ -178,15 +175,6 @@ class AdminHandlers(AdminBaseHandler):
     
     async def remove_topic_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.remove_topic_execute(update, context)
-    
-    async def merge_topics_select_target(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.merge_topics_select_target(update, context)
-    
-    async def merge_topics_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.merge_topics_confirm(update, context)
-    
-    async def merge_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.merge_topics_execute(update, context)
     
     async def remove_topic_permanent(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.remove_topic_permanent(update, context)

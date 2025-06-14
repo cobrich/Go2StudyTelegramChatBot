@@ -2648,3 +2648,130 @@ class Database:
             )
             
             return result
+
+    def get_subtopics_by_main_topic(self, main_topic_name: str) -> list:
+        """Получить список подтем для основной темы."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT s.name 
+                    FROM subtopics s
+                    JOIN main_topics m ON s.main_topic_id = m.id
+                    WHERE m.name = ?
+                    ORDER BY s.name
+                ''', (main_topic_name,))
+                
+                return [row[0] for row in cursor.fetchall()]
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения подтем: {e}")
+            return []
+
+    def toggle_topic_status(self, topic_id: int) -> bool:
+        """Переключить статус активности темы."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Получаем текущий статус
+                cursor.execute('SELECT is_active FROM subtopics WHERE id = ?', (topic_id,))
+                result = cursor.fetchone()
+                
+                if not result:
+                    return False
+                
+                current_status = result[0]
+                new_status = not current_status
+                
+                # Обновляем статус
+                cursor.execute('UPDATE subtopics SET is_active = ? WHERE id = ?', (new_status, topic_id))
+                conn.commit()
+                
+                print(f"[LOG] Статус темы {topic_id} изменен на {'активна' if new_status else 'неактивна'}")
+                return True
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка переключения статуса темы: {e}")
+            return False
+
+    def update_topic_name(self, topic_id: int, new_name: str) -> bool:
+        """Обновить название темы."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Проверяем, не существует ли уже тема с таким названием
+                cursor.execute('SELECT id FROM subtopics WHERE name = ? AND id != ?', (new_name, topic_id))
+                if cursor.fetchone():
+                    print(f"[ERROR] Тема с названием '{new_name}' уже существует")
+                    return False
+                
+                # Обновляем название
+                cursor.execute('UPDATE subtopics SET name = ? WHERE id = ?', (new_name, topic_id))
+                
+                # Также обновляем в таблице вопросов
+                cursor.execute('UPDATE questions SET topic = ? WHERE topic = (SELECT name FROM subtopics WHERE id = ?)', 
+                             (new_name, topic_id))
+                
+                conn.commit()
+                print(f"[LOG] Название темы {topic_id} обновлено на '{new_name}'")
+                return True
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка обновления названия темы: {e}")
+            return False
+
+    def update_topic_description(self, topic_id: int, new_description: str) -> bool:
+        """Обновить описание темы."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('UPDATE subtopics SET description = ? WHERE id = ?', (new_description, topic_id))
+                conn.commit()
+                
+                print(f"[LOG] Описание темы {topic_id} обновлено")
+                return True
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка обновления описания темы: {e}")
+            return False
+
+    def delete_topic_completely(self, topic_id: int) -> bool:
+        """Полностью удалить тему и все связанные данные."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Получаем название темы для логирования
+                cursor.execute('SELECT name FROM subtopics WHERE id = ?', (topic_id,))
+                result = cursor.fetchone()
+                if not result:
+                    print(f"[ERROR] Тема с ID {topic_id} не найдена")
+                    return False
+                
+                topic_name = result[0]
+                
+                # Удаляем все связанные данные в правильном порядке
+                
+                # 1. Удаляем результаты тестов
+                cursor.execute('DELETE FROM test_results WHERE topic = ?', (topic_name,))
+                deleted_results = cursor.rowcount
+                
+                # 2. Удаляем вопросы
+                cursor.execute('DELETE FROM questions WHERE topic = ?', (topic_name,))
+                deleted_questions = cursor.rowcount
+                
+                # 3. Удаляем саму тему
+                cursor.execute('DELETE FROM subtopics WHERE id = ?', (topic_id,))
+                
+                conn.commit()
+                
+                print(f"[LOG] Тема '{topic_name}' полностью удалена:")
+                print(f"  - Удалено вопросов: {deleted_questions}")
+                print(f"  - Удалено результатов тестов: {deleted_results}")
+                
+                return True
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка полного удаления темы: {e}")
+            return False
