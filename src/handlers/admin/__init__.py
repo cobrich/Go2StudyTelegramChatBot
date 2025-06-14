@@ -3,10 +3,11 @@
 """
 
 from .base import AdminBaseHandler
-from .students import StudentsHandler
 from .topics import TopicsHandler
-from .questions import QuestionsHandler
+from .sections import SectionsHandler
+from .students import StudentsHandler
 from .admins import AdminsHandler
+from .questions import QuestionsHandler
 from .stats import StatsHandler
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -20,10 +21,11 @@ class AdminHandlers(AdminBaseHandler):
         super().__init__(db, question_service)
         
         # Инициализируем все модули
-        self.students = StudentsHandler(db, question_service)
         self.topics = TopicsHandler(db, question_service)
-        self.questions = QuestionsHandler(db, question_service)
+        self.sections = SectionsHandler(db)
+        self.students = StudentsHandler(db, question_service)
         self.admins = AdminsHandler(db, question_service)
+        self.questions = QuestionsHandler(db, question_service)
         self.stats = StatsHandler(db, question_service)
 
     # === ДЕЛЕГИРОВАНИЕ МЕТОДОВ УПРАВЛЕНИЯ УЧЕНИКАМИ ===
@@ -132,15 +134,6 @@ class AdminHandlers(AdminBaseHandler):
     # Временные заглушки для тем
     async def add_custom_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.add_custom_topic_start(update, context)
-    
-    async def add_base_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.add_base_topics(update, context)
-    
-    async def add_base_topic_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.add_base_topic_execute(update, context)
-    
-    async def add_all_missing_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.add_all_missing_topics_execute(update, context)
     
     async def edit_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.edit_topic_start(update, context)
@@ -382,6 +375,14 @@ class AdminHandlers(AdminBaseHandler):
             await self.admins.handle_add_admin_fullname(update, context, text)
             return True
         
+        # Обработка действий для разделов
+        elif context.user_data.get('awaiting_section_name'):
+            await self.sections.handle_section_name(update, context)
+            return True
+        elif context.user_data.get('awaiting_section_new_name'):
+            await self.sections.handle_section_new_name(update, context)
+            return True
+        
         # Обработка действий для базовой структуры
         elif action == 'add_base_section_name':
             await self.handle_add_base_section_name(update, context, text)
@@ -437,6 +438,55 @@ class AdminHandlers(AdminBaseHandler):
     
     async def delete_base_section_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await super().delete_base_section_execute(update, context)
+    
+    async def confirm_add_student(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await super().confirm_add_student(update, context)
+
+    # === ДЕЛЕГИРОВАНИЕ МЕТОДОВ УПРАВЛЕНИЯ РАЗДЕЛАМИ ===
+    
+    async def sections_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Главное меню управления разделами."""
+        return await self.sections.sections_menu(update, context)
+    
+    async def list_all_sections(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Список всех разделов."""
+        return await self.sections.list_all_sections(update, context)
+    
+    async def add_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начать добавление раздела."""
+        return await self.sections.add_section_start(update, context)
+    
+    async def add_section_language_selected(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выбран язык для нового раздела."""
+        return await self.sections.add_section_language_selected(update, context)
+    
+    async def edit_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начать редактирование раздела."""
+        return await self.sections.edit_section_start(update, context)
+    
+    async def edit_section_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выбрать раздел для редактирования."""
+        return await self.sections.edit_section_select(update, context)
+    
+    async def edit_section_name_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начать изменение названия раздела."""
+        return await self.sections.edit_section_name_start(update, context)
+    
+    async def edit_section_toggle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Переключить статус раздела."""
+        return await self.sections.edit_section_toggle_status(update, context)
+    
+    async def delete_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начать удаление раздела."""
+        return await self.sections.delete_section_start(update, context)
+    
+    async def delete_section_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтвердить удаление раздела."""
+        return await self.sections.delete_section_confirm(update, context)
+    
+    async def delete_section_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнить удаление раздела."""
+        return await self.sections.delete_section_execute(update, context)
     
     async def confirm_add_student(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await super().confirm_add_student(update, context) 

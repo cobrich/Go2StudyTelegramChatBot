@@ -213,6 +213,10 @@ def main() -> None:
         pattern="^add_custom_topic$"
     ))
     application.add_handler(CallbackQueryHandler(
+        admin_handlers.sections_menu,
+        pattern="^sections_menu$"
+    ))
+    application.add_handler(CallbackQueryHandler(
         admin_handlers.add_base_topics,
         pattern="^add_base_topics$"
     ))
@@ -425,6 +429,52 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(
         admin_handlers.detailed_topics_stats,
         pattern="^detailed_topics_stats$"
+    ))
+    
+    # Sections management handlers
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.sections_menu,
+        pattern="^sections_menu$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.list_all_sections,
+        pattern="^list_all_sections$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_section_start,
+        pattern="^add_section_start$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_section_language_selected,
+        pattern="^add_section_lang_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_section_start,
+        pattern="^edit_section_start$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_section_select,
+        pattern="^edit_section_select_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_section_name_start,
+        pattern="^edit_section_name$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_section_toggle_status,
+        pattern="^edit_section_toggle_status$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_section_start,
+        pattern="^delete_section_start$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_section_confirm,
+        pattern="^delete_section_confirm_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.delete_section_execute,
+        pattern="^delete_section_execute$"
     ))
     
     # Start the Bot
