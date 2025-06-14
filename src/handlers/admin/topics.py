@@ -224,21 +224,10 @@ class TopicsHandler(AdminBaseHandler):
             await query.edit_message_text("❌ Ошибка при отображении тем.")
 
     async def handle_add_topic(self, update: Update, context: ContextTypes.DEFAULT_TYPE, topic_name: str) -> None:
-        """Обработка добавления темы - этап 1 (название)."""
-        context.user_data['new_topic_name'] = topic_name
-        context.user_data['admin_action'] = 'topic_description'
-        
-        await update.message.reply_text(f"Введите описание для темы '{topic_name}' (или отправьте '-' для пропуска):")
-
-    async def handle_topic_description(self, update: Update, context: ContextTypes.DEFAULT_TYPE, description: str) -> None:
-        """Обработка добавления темы - этап 2 (описание)."""
-        topic_name = context.user_data.get('new_topic_name')
+        """Обработка добавления темы."""
         selected_main_topic = context.user_data.get('selected_main_topic')
         selected_language = context.user_data.get('selected_main_topic_language')
         admin_id = update.effective_user.id
-        
-        if description == '-':
-            description = f"Тема: {topic_name}"
         
         # Добавляем тему с указанием языка
         success = self.db.add_topic_with_language(topic_name, selected_language, selected_main_topic, admin_id)
@@ -444,16 +433,23 @@ class TopicsHandler(AdminBaseHandler):
         
         try:
             topic_id = int(query.data.replace('edit_topic_section_', ''))
+            print(f"[DEBUG] edit_topic_section_start: topic_id = {topic_id}")
+            
             topics = self.db.get_all_topics(active_only=False)
             topic = next((t for t in topics if t['id'] == topic_id), None)
             
             if not topic:
+                print(f"[ERROR] Тема с ID {topic_id} не найдена")
                 await query.edit_message_text("❌ Тема не найдена.")
                 return
+            
+            print(f"[DEBUG] Найдена тема: {topic['name']}")
             
             # Получаем все разделы для обоих языков
             ru_sections = self.db.get_main_topics_by_language("ru", active_only=True)
             kk_sections = self.db.get_main_topics_by_language("kk", active_only=True)
+            
+            print(f"[DEBUG] Найдено разделов: ru={len(ru_sections)}, kk={len(kk_sections)}")
             
             # Объединяем разделы с указанием языка (сначала казахские, потом русские)
             all_sections = []
@@ -465,12 +461,18 @@ class TopicsHandler(AdminBaseHandler):
                 all_sections.append(section)
             
             if not all_sections:
-                await query.edit_message_text("❌ Разделы не найдены.")
+                print(f"[ERROR] Разделы не найдены")
+                text = "❌ Разделы не найдены."
+                keyboard = [[InlineKeyboardButton("🔙 К редактированию темы", callback_data=f"edit_topic_select_{topic_id}")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(text, reply_markup=reply_markup)
                 return
             
             # Сохраняем данные в контексте
             context.user_data['edit_topic_id'] = topic_id
             context.user_data['edit_sections_list'] = all_sections
+            
+            print(f"[DEBUG] Сохранены данные в context: topic_id={topic_id}, sections_count={len(all_sections)}")
             
             text = f"📚 <b>Изменение раздела темы</b>\n\n"
             text += f"Тема: <b>{topic['name']}</b>\n"
@@ -500,33 +502,59 @@ class TopicsHandler(AdminBaseHandler):
                         callback_data=f"edit_topic_section_select_{kk_count + i}"
                     )])
             
-            keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_topic_select_{topic_id}")])
+            keyboard.append([InlineKeyboardButton("🔙 К редактированию темы", callback_data=f"edit_topic_select_{topic_id}")])
             
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
             
-        except (ValueError, IndexError):
-            await query.edit_message_text("❌ Ошибка при редактировании темы.")
+            print(f"[DEBUG] Сообщение отправлено, кнопок создано: {len(keyboard)}")
+            
+        except (ValueError, IndexError) as e:
+            print(f"[ERROR] Ошибка в edit_topic_section_start: {e}")
+            # Добавляем кнопку "Назад" даже при ошибке
+            topic_id = context.user_data.get('edit_topic_id', 'unknown')
+            text = "❌ Ошибка при редактировании темы."
+            keyboard = [[InlineKeyboardButton("🔙 К редактированию темы", callback_data=f"edit_topic_select_{topic_id}" if topic_id != 'unknown' else "edit_topic_start")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup)
+        except Exception as e:
+            print(f"[ERROR] Неожиданная ошибка в edit_topic_section_start: {e}")
+            # Добавляем кнопку "Назад" даже при ошибке
+            topic_id = context.user_data.get('edit_topic_id', 'unknown')
+            text = "❌ Произошла неожиданная ошибка."
+            keyboard = [[InlineKeyboardButton("🔙 К редактированию темы", callback_data=f"edit_topic_select_{topic_id}" if topic_id != 'unknown' else "edit_topic_start")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup)
 
     async def edit_topic_section_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выбор нового раздела для темы."""
         query = update.callback_query
+        print(f"[DEBUG] edit_topic_section_select ВЫЗВАН! callback_data: {query.data}")
         await self.safe_answer_callback(query)
         
         try:
             section_index = int(query.data.replace('edit_topic_section_select_', ''))
+            print(f"[DEBUG] edit_topic_section_select: section_index = {section_index}")
+            
             sections_list = context.user_data.get('edit_sections_list', [])
             topic_id = context.user_data.get('edit_topic_id')
             
+            print(f"[DEBUG] Данные из context: topic_id={topic_id}, sections_count={len(sections_list)}")
+            
             if section_index >= len(sections_list) or not topic_id:
+                print(f"[ERROR] Неверные данные: section_index={section_index}, sections_count={len(sections_list)}, topic_id={topic_id}")
                 await query.edit_message_text("❌ Ошибка при выборе раздела.")
                 return
             
             selected_section = sections_list[section_index]
             section_name = selected_section['name']
             
+            print(f"[DEBUG] Выбран раздел: {section_name}")
+            
             # Обновляем раздел темы в базе данных
+            print(f"[DEBUG] Вызываем db.update_topic_section({topic_id}, '{section_name}')")
             success = self.db.update_topic_section(topic_id, section_name)
+            print(f"[DEBUG] Результат update_topic_section: {success}")
             
             if success:
                 text = f"✅ Раздел темы успешно изменен на '{section_name}'!"
@@ -541,9 +569,24 @@ class TopicsHandler(AdminBaseHandler):
             # Очищаем данные
             context.user_data.pop('edit_topic_id', None)
             context.user_data.pop('edit_sections_list', None)
+            print(f"[DEBUG] Очищены данные context")
             
-        except (ValueError, IndexError):
-            await query.edit_message_text("❌ Ошибка при выборе раздела.")
+        except (ValueError, IndexError) as e:
+            print(f"[ERROR] Ошибка в edit_topic_section_select: {e}")
+            # Добавляем кнопку "Назад" даже при ошибке
+            topic_id = context.user_data.get('edit_topic_id', 'unknown')
+            text = "❌ Ошибка при выборе раздела."
+            keyboard = [[InlineKeyboardButton("🔙 К редактированию темы", callback_data=f"edit_topic_select_{topic_id}" if topic_id != 'unknown' else "edit_topic_start")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup)
+        except Exception as e:
+            print(f"[ERROR] Неожиданная ошибка в edit_topic_section_select: {e}")
+            # Добавляем кнопку "Назад" даже при ошибке
+            topic_id = context.user_data.get('edit_topic_id', 'unknown')
+            text = "❌ Произошла неожиданная ошибка."
+            keyboard = [[InlineKeyboardButton("🔙 К редактированию темы", callback_data=f"edit_topic_select_{topic_id}" if topic_id != 'unknown' else "edit_topic_start")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup)
 
     async def edit_topic_toggle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Переключение статуса темы."""
@@ -577,7 +620,6 @@ class TopicsHandler(AdminBaseHandler):
                     text = f"✏️ <b>Редактирование темы</b>\n\n"
                     text += f"📝 <b>Название:</b> {updated_topic['name']}\n"
                     text += f"📚 <b>Раздел:</b> {updated_topic.get('main_topic', 'Не указан')}\n"
-                    text += f"📄 <b>Описание:</b> {updated_topic.get('description', 'Не указано')}\n"
                     text += f"📊 <b>Статус:</b> {status}\n"
                     text += f"❓ <b>Вопросов:</b> {updated_topic.get('question_count', 0)}\n\n"
                     text += f"✅ <b>Статус темы успешно изменен!</b>"

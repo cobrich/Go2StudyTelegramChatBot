@@ -157,6 +157,7 @@ class AdminHandlers(AdminBaseHandler):
         return await self.topics.edit_topic_section_start(update, context)
     
     async def edit_topic_section_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        print(f"[DEBUG] edit_topic_section_select в __init__.py ВЫЗВАН!")
         return await self.topics.edit_topic_section_select(update, context)
     
     async def edit_topic_toggle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -317,9 +318,6 @@ class AdminHandlers(AdminBaseHandler):
         # Обработка действий для тем
         elif action == 'add_topic':
             await self.topics.handle_add_topic(update, context, text)
-            return True
-        elif action == 'topic_description':
-            await self.topics.handle_topic_description(update, context, text)
             return True
         elif action == 'edit_topic_name':
             await self.topics.handle_edit_topic_name(update, context, text)

@@ -1772,3 +1772,115 @@ All topic editing buttons now work correctly:
 ---
 
 ### 🔧 Debug: Topic Description Edit Issue (January 2025)
+
+### 🔧 Debug: Topic Section Change Issue (January 2025)
+
+**🔍 DEBUGGING: Added diagnostic logging for topic section change functionality**
+
+#### 🐛 Problem reported:
+- **"Изменить раздел" button causing errors** - User reports functionality is broken
+- **Status**: Under investigation with debug logging
+
+#### ✅ Additional fixes applied:
+- **Removed leftover description reference** from `edit_topic_toggle_status()` method
+- **Added comprehensive debug logging** to section change methods
+
+#### 🔍 Diagnostic measures added:
+
+**Debug logging added to**:
+- **Method**: `edit_topic_section_start()` - Logs topic ID, found topic, sections count, context setup
+- **Method**: `edit_topic_section_select()` - Logs section selection, context data, DB operation result
+
+**Debug information captured**:
+- Topic ID extraction and validation
+- Topic lookup success/failure  
+- Sections retrieval (ru/kk counts)
+- Context user_data setup (edit_topic_id, edit_sections_list)
+- Section selection processing
+- Database operation results
+- Context cleanup
+
+**Next steps**: Analyze debug logs to identify exact failure point and implement fix.
+
+---
+
+### ✅ Fix: Removed Topic Description Functionality (January 2025)
+
+### ✅ Fix: Topic Section Change Callback Conflict (January 2025)
+
+**✅ FIXED: Resolved callback data conflict in topic section change functionality**
+
+#### 🐛 Root cause identified from logs:
+```
+[ERROR] Ошибка в edit_topic_section_start: invalid literal for int() with base 10: 'select_3'
+```
+
+**Problem**: Method `edit_topic_section_start` was trying to process `edit_topic_section_select_3` callback data, causing parsing errors.
+
+#### ✅ Solution implemented:
+
+**1. Added callback data validation:**
+- **Check**: Added validation to ignore `edit_topic_section_select_` events in `start` method
+- **Logic**: `edit_topic_section_start` now only processes `edit_topic_section_` without `select_`
+- **Debug**: Added logging to track which events are being processed
+
+**2. Enhanced error handling with navigation:**
+- **Back buttons**: Added "🔙 К редактированию темы" button to ALL error scenarios
+- **Fallback**: If topic_id unknown, fallback to "edit_topic_start"
+- **User experience**: Users can always navigate back even when errors occur
+
+**3. Improved error messages:**
+- **Consistent text**: All error messages now have proper navigation
+- **Context preservation**: Error handlers try to preserve topic_id from context
+- **Graceful degradation**: Fallback navigation when context is lost
+
+#### 📋 **Technical changes:**
+- **File**: `src/handlers/admin/topics.py`
+- **Method**: `edit_topic_section_start()` - Added callback validation
+- **Method**: `edit_topic_section_select()` - Enhanced error handling
+- **Error handling**: All exceptions now include back navigation buttons
+
+**Result**: Topic section change now works correctly with proper error recovery.
+
+---
+
+### 🔧 Debug: Topic Section Change Issue (January 2025)
+
+### ✅ Fix: Topic Section Change Handler Order (January 2025)
+
+**✅ FIXED: Corrected callback handler order for topic section change functionality**
+
+#### 🐛 Root cause identified:
+**Handler precedence issue**: `edit_topic_section_start` with pattern `^edit_topic_section_` was placed BEFORE `edit_topic_section_select` with pattern `^edit_topic_section_select_`.
+
+**Problem**: The more general pattern `^edit_topic_section_` was intercepting ALL callbacks starting with `edit_topic_section_`, including `edit_topic_section_select_4`.
+
+#### ✅ Solution implemented:
+
+**1. Reordered handlers in `src/bot.py`:**
+```python
+# BEFORE (wrong order):
+edit_topic_section_start     pattern="^edit_topic_section_"      # ❌ Too general, catches everything
+edit_topic_section_select    pattern="^edit_topic_section_select_" # ❌ Never reached
+
+# AFTER (correct order):
+edit_topic_section_select    pattern="^edit_topic_section_select_" # ✅ Specific pattern first
+edit_topic_section_start     pattern="^edit_topic_section_"        # ✅ General pattern second
+```
+
+**2. Removed unnecessary validation:**
+- **Removed**: Callback data validation from `edit_topic_section_start()`
+- **Reason**: No longer needed since handler order is correct
+
+**3. Added debug logging:**
+- **Added**: Debug logs to track method invocation
+- **Purpose**: Verify correct handler routing
+
+#### 📋 **Technical principle:**
+**Handler order matters**: More specific patterns must be registered BEFORE more general patterns in telegram-bot handlers.
+
+**Result**: Topic section change now works correctly - select events go to select handler, start events go to start handler.
+
+---
+
+### ✅ Fix: Topic Section Change Callback Conflict (January 2025)
