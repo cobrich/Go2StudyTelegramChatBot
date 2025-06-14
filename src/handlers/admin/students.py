@@ -471,63 +471,39 @@ class StudentsHandler(AdminBaseHandler):
                 text += f"• Первый тест: {test_stats['first_test'][:10] if test_stats['first_test'] else 'н/д'}\n"
                 text += f"• Последний тест: {test_stats['last_test'][:10] if test_stats['last_test'] else 'н/д'}\n"
             
-            # Показываем топ-5 тем по активности
-            if stats['topic_performance']:
-                text += f"\n🎯 <b>Активность по темам (топ-5):</b>\n"
-                for i, topic in enumerate(stats['topic_performance'][:5], 1):
-                    text += f"{i}. {topic['topic']}: {topic['tests_count']} тестов, {topic['avg_score']}%\n"
-            
-            # Показываем проблемные темы
-            if stats['error_analysis']:
-                text += f"\n❌ <b>Проблемные темы:</b>\n"
-                for i, error in enumerate(stats['error_analysis'][:3], 1):
-                    text += f"{i}. {error['topic']}: {error['unique_errors']} ошибок ({error['total_errors']} всего)\n"
-            
-            keyboard = [
-                [InlineKeyboardButton("📈 Подробная статистика", callback_data=f"student_full_stats_{user_id}")],
-                [InlineKeyboardButton("🔙 Назад к списку", callback_data="list_students")]
-            ]
-        
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
-
-    async def show_student_full_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Показать полную статистику ученика."""
-        query = update.callback_query
-        await self.safe_answer_callback(query)
-        
-        user_id = int(query.data.split('_')[-1])
-        stats = self.db.get_student_detailed_statistics(user_id)
-        
-        if not stats:
-            text = "❌ Данные не найдены."
-            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"student_details_{user_id}")]]
-        else:
-            user_info = stats['user_info']
-            text = f"📈 <b>Полная статистика: {user_info['full_name'] or 'ID_' + str(user_id)}</b>\n\n"
-            
-            # Прогресс по дням (последние 10 дней)
+            # Показываем активность по дням (последние 10 дней)
             if stats['daily_progress']:
-                text += f"📅 <b>Активность (последние дни):</b>\n"
+                text += f"\n📅 <b>Активность по дням (последние 10 дней):</b>\n"
                 for day in stats['daily_progress'][:10]:
                     text += f"• {day['date']}: {day['tests_count']} тестов, {day['avg_score']}%\n"
-                text += "\n"
             
-            # Все темы с результатами
+            # Показываем ВСЕ темы с результатами
             if stats['topic_performance']:
-                text += f"🎯 <b>Результаты по всем темам:</b>\n"
-                for topic in stats['topic_performance']:
-                    text += f"• {topic['topic']}: {topic['tests_count']} тестов, {topic['avg_score']}%\n"
-                text += "\n"
+                text += f"\n🎯 <b>Результаты по всем темам:</b>\n"
+                for i, topic in enumerate(stats['topic_performance'], 1):
+                    text += f"{i}. <b>{topic['topic']}</b>: {topic['tests_count']} тестов, {topic['avg_score']}%\n"
+                    text += f"   Последний тест: {topic['last_attempt'][:10] if topic['last_attempt'] else 'н/д'}\n"
             
-            # Последние ошибки
+            # Показываем проблемные темы с детальной информацией
+            if stats['error_analysis']:
+                text += f"\n❌ <b>Анализ ошибок по темам:</b>\n"
+                for i, error in enumerate(stats['error_analysis'], 1):
+                    text += f"{i}. <b>{error['topic']}</b>:\n"
+                    text += f"   • Уникальных ошибок: {error['unique_errors']}\n"
+                    text += f"   • Всего ошибок: {error['total_errors']}\n"
+                    text += f"   • Последняя ошибка: {error['last_error'][:10] if error['last_error'] else 'н/д'}\n"
+            
+            # Показываем последние ошибки
             if stats['recent_errors']:
-                text += f"❌ <b>Последние ошибки:</b>\n"
-                for i, error in enumerate(stats['recent_errors'][:5], 1):
-                    text += f"{i}. [{error['topic']}] {error['question']}\n"
-                    text += f"   Ошибок: {error['error_count']}, {error['timestamp'][:10]}\n"
+                text += f"\n🔍 <b>Последние ошибки (топ-10):</b>\n"
+                for i, error in enumerate(stats['recent_errors'][:10], 1):
+                    question_preview = error['question'][:50] + '...' if len(error['question']) > 50 else error['question']
+                    text += f"{i}. <b>[{error['topic']}]</b> {question_preview}\n"
+                    text += f"   Ошибок: {error['error_count']}, Дата: {error['timestamp'][:10]}\n"
             
-            keyboard = [[InlineKeyboardButton("🔙 Назад к краткой статистике", callback_data=f"student_details_{user_id}")]]
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад к списку", callback_data="list_students")]
+            ]
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
