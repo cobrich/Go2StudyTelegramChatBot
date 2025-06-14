@@ -551,18 +551,18 @@ class Database:
             
             # Получаем данные из whitelist если есть
             cursor.execute('''
-                SELECT full_name, grade, phone_number 
+                SELECT full_name, grade 
                 FROM allowed_users 
                 WHERE user_id = ? OR username = ?
             ''', (user_id, username))
             whitelist_data = cursor.fetchone()
             
             if whitelist_data:
-                full_name, grade, phone_number = whitelist_data
+                full_name, grade = whitelist_data
                 cursor.execute('''
-                    INSERT OR REPLACE INTO users (user_id, username, full_name, grade, phone_number, last_activity)
-                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ''', (user_id, username, full_name, grade, phone_number))
+                    INSERT OR REPLACE INTO users (user_id, username, full_name, grade, last_activity)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (user_id, username, full_name, grade))
             else:
                 cursor.execute('''
                     INSERT OR REPLACE INTO users (user_id, username, last_activity)
@@ -823,29 +823,39 @@ class Database:
         
         return False
     
-    def add_allowed_user(self, username: str, full_name: str, grade: int, added_by: int, phone_number: str = None, user_id: int = None, language: str = "ru") -> bool:
+    def add_allowed_user(self, username: str, full_name: str, grade: int, added_by: int, user_id: int = None, language: str = "ru") -> bool:
         """Add user to whitelist with language support."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
+                
+                # Проверяем, что есть хотя бы один идентификатор
+                if not user_id:
+                    return False
+                
                 cursor.execute('''
-                    INSERT INTO allowed_users (username, full_name, grade, phone_number, user_id, added_by, language)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (username, full_name, grade, phone_number, user_id, added_by, language))
+                    INSERT INTO allowed_users (username, full_name, grade, user_id, added_by, language)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (username, full_name, grade, user_id, added_by, language))
                 conn.commit()
                 return True
         except sqlite3.IntegrityError:
             return False
     
-    def add_allowed_user_by_id(self, user_id: int, full_name: str, grade: int, added_by: int, username: str = None, phone_number: str = None, language: str = "ru") -> bool:
+    def add_allowed_user_by_id(self, user_id: int, full_name: str, grade: int, added_by: int, username: str = None, language: str = "ru") -> bool:
         """Add user to whitelist by user_id (for users without username) with language support."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
+                
+                # Проверяем, что есть хотя бы один идентификатор
+                if not user_id:
+                    return False
+                
                 cursor.execute('''
-                    INSERT INTO allowed_users (user_id, username, full_name, grade, phone_number, added_by, language)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (user_id, username, full_name, grade, phone_number, added_by, language))
+                    INSERT INTO allowed_users (user_id, username, full_name, grade, added_by, language)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (user_id, username, full_name, grade, added_by, language))
                 conn.commit()
                 return True
         except sqlite3.IntegrityError:
@@ -911,7 +921,7 @@ class Database:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT user_id, username, full_name, grade, phone_number, is_active, added_at
+                    SELECT user_id, username, full_name, grade, is_active, added_at
                     FROM allowed_users
                     ORDER BY added_at DESC
                 ''')
@@ -927,7 +937,7 @@ class Database:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT user_id, username, full_name, grade, phone_number, is_active, added_at, added_by
+                    SELECT user_id, username, full_name, grade, is_active, added_at, added_by
                     FROM allowed_users
                     WHERE user_id = ?
                 ''', (user_id,))
@@ -1308,7 +1318,7 @@ class Database:
                 
                 # Получаем данные из allowed_users
                 cursor.execute('''
-                    SELECT full_name, grade, phone_number, is_active
+                    SELECT full_name, grade, is_active
                     FROM allowed_users 
                     WHERE user_id = ? OR username = ?
                     ORDER BY user_id IS NOT NULL DESC
@@ -1319,7 +1329,7 @@ class Database:
                 if not whitelist_data:
                     return False
                 
-                full_name, grade, phone_number, is_whitelist_active = whitelist_data
+                full_name, grade, is_whitelist_active = whitelist_data
                 
                 # Обновляем данные в users
                 cursor.execute('''
@@ -1327,6 +1337,13 @@ class Database:
                     (user_id, username, full_name, grade, phone_number, last_activity)
                     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ''', (user_id, username, full_name, grade, phone_number))
+                
+                # Обновляем данные в users
+                cursor.execute('''
+                    INSERT OR REPLACE INTO users 
+                    (user_id, username, full_name, grade, last_activity)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (user_id, username, full_name, grade))
                 
                 # Обновляем user_id в allowed_users если его не было
                 cursor.execute('''
@@ -1828,7 +1845,7 @@ class Database:
             return None
 
     def find_student_by_identifier(self, identifier: str) -> Dict[str, Any]:
-        """Найти ученика по любому идентификатору (user_id, username, phone)."""
+        """Найти ученика по любому идентификатору (user_id, username)."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
@@ -1836,7 +1853,7 @@ class Database:
             try:
                 user_id = int(identifier)
                 cursor.execute('''
-                    SELECT user_id, username, full_name, grade, phone_number, is_active
+                    SELECT user_id, username, full_name, grade, is_active
                     FROM allowed_users 
                     WHERE user_id = ?
                 ''', (user_id,))
@@ -1847,8 +1864,7 @@ class Database:
                         'username': result[1],
                         'full_name': result[2],
                         'grade': result[3],
-                        'phone_number': result[4],
-                        'is_active': bool(result[5]),
+                        'is_active': bool(result[4]),
                         'found_by': 'user_id'
                     }
             except ValueError:
@@ -1856,7 +1872,7 @@ class Database:
             
             # Пробуем найти по username
             cursor.execute('''
-                SELECT user_id, username, full_name, grade, phone_number, is_active
+                SELECT user_id, username, full_name, grade, is_active
                 FROM allowed_users 
                 WHERE username = ? OR username = ?
             ''', (identifier, identifier.lstrip('@')))
@@ -1867,53 +1883,11 @@ class Database:
                     'username': result[1],
                     'full_name': result[2],
                     'grade': result[3],
-                    'phone_number': result[4],
-                    'is_active': bool(result[5]),
+                    'is_active': bool(result[4]),
                     'found_by': 'username'
                 }
             
-            # Пробуем найти по номеру телефона
-            cursor.execute('''
-                SELECT user_id, username, full_name, grade, phone_number, is_active
-                FROM allowed_users 
-                WHERE phone_number = ?
-            ''', (identifier,))
-            result = cursor.fetchone()
-            if result:
-                return {
-                    'user_id': result[0],
-                    'username': result[1],
-                    'full_name': result[2],
-                    'grade': result[3],
-                    'phone_number': result[4],
-                    'is_active': bool(result[5]),
-                    'found_by': 'phone_number'
-                }
-            
             return None
-
-    def get_students_without_phone(self) -> List[Dict[str, Any]]:
-        """Получить список учеников без номера телефона."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT user_id, username, full_name, grade, added_at
-                FROM allowed_users 
-                WHERE (phone_number IS NULL OR phone_number = '') AND is_active = 1
-                ORDER BY added_at DESC
-            ''')
-            
-            results = cursor.fetchall()
-            return [
-                {
-                    'user_id': row[0],
-                    'username': row[1],
-                    'full_name': row[2],
-                    'grade': row[3],
-                    'added_at': row[4]
-                }
-                for row in results
-            ]
 
     def get_comprehensive_user_access_check(self, user_id: int, username: str = None) -> Dict[str, Any]:
         """Комплексная проверка доступа пользователя с детальной информацией."""
@@ -1927,7 +1901,7 @@ class Database:
             # Ищем в whitelist по user_id
             whitelist_by_id = None
             cursor.execute('''
-                SELECT user_id, username, full_name, grade, phone_number, is_active, added_at
+                SELECT user_id, username, full_name, grade, is_active, added_at
                 FROM allowed_users WHERE user_id = ?
             ''', (user_id,))
             result = cursor.fetchone()
@@ -1937,16 +1911,15 @@ class Database:
                     'username': result[1],
                     'full_name': result[2],
                     'grade': result[3],
-                    'phone_number': result[4],
-                    'is_active': bool(result[5]),
-                    'added_at': result[6]
+                    'is_active': bool(result[4]),
+                    'added_at': result[5]
                 }
             
             # Ищем в whitelist по username
             whitelist_by_username = None
             if username:
                 cursor.execute('''
-                    SELECT user_id, username, full_name, grade, phone_number, is_active, added_at
+                    SELECT user_id, username, full_name, grade, is_active, added_at
                     FROM allowed_users WHERE username = ?
                 ''', (username,))
                 result = cursor.fetchone()
@@ -1956,21 +1929,16 @@ class Database:
                         'username': result[1],
                         'full_name': result[2],
                         'grade': result[3],
-                        'phone_number': result[4],
-                        'is_active': bool(result[5]),
-                        'added_at': result[6]
+                        'is_active': bool(result[4]),
+                        'added_at': result[5]
                     }
-            
-            # Определяем финальный доступ
-            has_access = is_admin or (whitelist_by_id and whitelist_by_id['is_active']) or (whitelist_by_username and whitelist_by_username['is_active'])
             
             return {
                 'user_id': user_id,
                 'username': username,
-                'has_access': has_access,
-                'access_reason': 'admin' if is_admin else ('whitelist_id' if whitelist_by_id and whitelist_by_id['is_active'] else ('whitelist_username' if whitelist_by_username and whitelist_by_username['is_active'] else 'none')),
                 'is_admin': is_admin,
                 'is_super_admin': is_super_admin,
+                'has_access': is_admin or (whitelist_by_id and whitelist_by_id['is_active']) or (whitelist_by_username and whitelist_by_username['is_active']),
                 'whitelist_by_id': whitelist_by_id,
                 'whitelist_by_username': whitelist_by_username,
                 'needs_sync': whitelist_by_id and whitelist_by_username and whitelist_by_id['user_id'] != whitelist_by_username['user_id']
