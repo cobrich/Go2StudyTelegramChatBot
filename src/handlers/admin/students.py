@@ -485,7 +485,6 @@ class StudentsHandler(AdminBaseHandler):
             
             keyboard = [
                 [InlineKeyboardButton("📈 Подробная статистика", callback_data=f"student_full_stats_{user_id}")],
-                [InlineKeyboardButton("✏️ Редактировать", callback_data=f"edit_student_{user_id}")],
                 [InlineKeyboardButton("🔙 Назад к списку", callback_data="list_students")]
             ]
         

@@ -60,7 +60,6 @@ def main() -> None:
     application.add_handler(CommandHandler("start", command_handlers.start))
     application.add_handler(CommandHandler("stop", command_handlers.stop))
     application.add_handler(CommandHandler("reset", command_handlers.reset))
-    application.add_handler(CommandHandler("skip", command_handlers.skip_phone))
     application.add_handler(CommandHandler("change_fio", command_handlers.handle_text))
     application.add_handler(CommandHandler("change_grade", command_handlers.handle_text))
     application.add_handler(CommandHandler("change_language", command_handlers.handle_text))
