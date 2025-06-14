@@ -684,14 +684,26 @@ class CallbackHandlers(BaseHandler):
         
         user_id = query.from_user.id
         user_language = self.db.get_user_language(user_id)
+        is_admin = user_id and self.db.is_admin(user_id)
         
         # Извлекаем индекс основной темы
         try:
             main_topic_index = int(query.data.replace('main_topic_', ''))
-            # Получаем основные разделы из БД
-            base_structure = self.db.get_base_topic_structure()
-            main_topics = list(base_structure.keys())
-            main_topic = main_topics[main_topic_index]
+            
+            # Получаем основные разделы в зависимости от роли пользователя
+            if is_admin:
+                # Админы видят все разделы (русские и казахские)
+                russian_topics = self.db.get_main_topics_by_language('ru', active_only=True)
+                kazakh_topics = self.db.get_main_topics_by_language('kk', active_only=True)
+                all_topics = russian_topics + kazakh_topics
+                # Сортируем по order_index
+                all_topics.sort(key=lambda x: x['order_index'])
+                main_topic = all_topics[main_topic_index]['name']
+            else:
+                # Ученики видят только разделы на своем языке
+                user_topics = self.db.get_main_topics_by_language(user_language, active_only=True)
+                main_topic = user_topics[main_topic_index]['name']
+            
             logging.info(f"[handle_main_topic_selection] main_topic_index={main_topic_index}, main_topic={main_topic}")
         except (ValueError, IndexError):
             logging.error(f"Invalid main topic selected: {query.data}")
@@ -712,7 +724,6 @@ class CallbackHandlers(BaseHandler):
             info_text += "Выберите конкретную тему:"
         
         # Добавляем объяснение индикаторов только для админов
-        is_admin = user_id and self.db.is_admin(user_id)
         if is_admin:
             if user_language == 'kk':
                 info_text += "\n\n🟢 - дерекқорда сұрақтар бар\n🟡 - ЖИ сіз үшін сұрақтар жасайды"

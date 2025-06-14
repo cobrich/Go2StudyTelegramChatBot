@@ -57,6 +57,17 @@ class Database:
                 # Column already exists
                 pass
             
+            # Add language column to main_topics if it doesn't exist
+            try:
+                cursor.execute('ALTER TABLE main_topics ADD COLUMN language TEXT DEFAULT "ru"')
+                # Update existing records to have 'ru' as default language
+                cursor.execute('UPDATE main_topics SET language = "ru" WHERE language IS NULL')
+                conn.commit()
+                print("[LOG] Добавлено поле language в таблицу main_topics")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+            
             # Admins table - для управления администраторами
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS admins (
@@ -1019,7 +1030,7 @@ class Database:
     # === BASE TOPIC STRUCTURE MANAGEMENT (Updated for normalized structure) ===
     
     def get_base_topic_structure(self) -> Dict[str, List[str]]:
-        """Get the current base topic structure from normalized database tables."""
+        """Get the current base topic structure from normalized database tables (все языки)."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
@@ -1030,6 +1041,27 @@ class Database:
                 WHERE mt.is_active = 1 AND st.is_active = 1
                 ORDER BY mt.order_index, st.order_index
             ''')
+            
+            structure = {}
+            for main_topic, subtopic in cursor.fetchall():
+                if main_topic not in structure:
+                    structure[main_topic] = []
+                structure[main_topic].append(subtopic)
+            
+            return structure
+
+    def get_base_topic_structure_by_language(self, language: str) -> Dict[str, List[str]]:
+        """Get the base topic structure for specific language."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT mt.name, st.name
+                FROM main_topics mt
+                JOIN subtopics st ON mt.id = st.main_topic_id
+                WHERE mt.is_active = 1 AND st.is_active = 1 AND mt.language = ?
+                ORDER BY mt.order_index, st.order_index
+            ''', (language,))
             
             structure = {}
             for main_topic, subtopic in cursor.fetchall():
@@ -2334,4 +2366,175 @@ class Database:
                 
         except Exception as e:
             print(f"[ERROR] Ошибка обновления языка подтемы {subtopic_id}: {e}")
+            return False
+
+    def create_kazakh_main_topics(self) -> bool:
+        """Создает казахские версии основных разделов."""
+        try:
+            from config.constants_kk import MAIN_TOPICS_KK, TOPIC_HIERARCHY_KK
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Получаем существующие русские разделы
+                cursor.execute('SELECT id, name, order_index FROM main_topics WHERE language = "ru"')
+                russian_topics = cursor.fetchall()
+                
+                created_count = 0
+                for topic_id, russian_name, order_index in russian_topics:
+                    # Проверяем, есть ли перевод для этого раздела
+                    if russian_name in MAIN_TOPICS_KK:
+                        kazakh_name = MAIN_TOPICS_KK[russian_name]
+                        
+                        # Проверяем, не существует ли уже казахская версия
+                        cursor.execute('SELECT id FROM main_topics WHERE name = ? AND language = "kk"', (kazakh_name,))
+                        if cursor.fetchone():
+                            continue  # Уже существует
+                        
+                        # Создаем казахскую версию основного раздела
+                        cursor.execute('''
+                            INSERT INTO main_topics (name, order_index, language, is_active)
+                            VALUES (?, ?, "kk", 1)
+                        ''', (kazakh_name, order_index))
+                        
+                        kazakh_main_topic_id = cursor.lastrowid
+                        created_count += 1
+                        
+                        # Создаем казахские подтемы для этого раздела
+                        if kazakh_name in TOPIC_HIERARCHY_KK:
+                            kazakh_subtopics = TOPIC_HIERARCHY_KK[kazakh_name]
+                            for subtopic_order, kazakh_subtopic in enumerate(kazakh_subtopics):
+                                # Проверяем, не существует ли уже эта подтема
+                                cursor.execute('''
+                                    SELECT id FROM subtopics 
+                                    WHERE main_topic_id = ? AND name = ?
+                                ''', (kazakh_main_topic_id, kazakh_subtopic))
+                                
+                                if not cursor.fetchone():
+                                    cursor.execute('''
+                                        INSERT INTO subtopics (main_topic_id, name, order_index, language, is_active)
+                                        VALUES (?, ?, ?, "kk", 1)
+                                    ''', (kazakh_main_topic_id, kazakh_subtopic, subtopic_order))
+                
+                conn.commit()
+                print(f"[LOG] Создано {created_count} казахских основных разделов")
+                return True
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка создания казахских основных разделов: {e}")
+            return False
+
+    def get_main_topics_by_language(self, language: str, active_only: bool = True) -> List[Dict[str, Any]]:
+        """Получает основные разделы для конкретного языка."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                query = '''
+                    SELECT id, name, order_index, language, is_active
+                    FROM main_topics
+                    WHERE language = ?
+                '''
+                params = [language]
+                
+                if active_only:
+                    query += ' AND is_active = 1'
+                
+                query += ' ORDER BY order_index'
+                
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                
+                return [
+                    {
+                        'id': row[0],
+                        'name': row[1],
+                        'order_index': row[2],
+                        'language': row[3],
+                        'is_active': bool(row[4])
+                    }
+                    for row in rows
+                ]
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения основных разделов по языку {language}: {e}")
+            return []
+
+    def get_full_topic_structure_by_language(self, language: str, active_only: bool = True) -> Dict[str, List[Dict[str, Any]]]:
+        """Получает полную структуру тем (разделы + подтемы) для конкретного языка."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                query = '''
+                    SELECT mt.name as main_topic, mt.id as main_topic_id,
+                           st.name as subtopic, st.id as subtopic_id, st.order_index,
+                           COUNT(q.id) as question_count
+                    FROM main_topics mt
+                    LEFT JOIN subtopics st ON mt.id = st.main_topic_id AND st.language = ?
+                    LEFT JOIN questions q ON st.name = q.topic
+                    WHERE mt.language = ?
+                '''
+                params = [language, language]
+                
+                if active_only:
+                    query += ' AND mt.is_active = 1 AND (st.is_active = 1 OR st.is_active IS NULL)'
+                
+                query += '''
+                    GROUP BY mt.name, mt.id, st.name, st.id, st.order_index
+                    ORDER BY mt.order_index, st.order_index
+                '''
+                
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                
+                structure = {}
+                for main_topic, main_topic_id, subtopic, subtopic_id, subtopic_order, question_count in rows:
+                    if main_topic not in structure:
+                        structure[main_topic] = []
+                    
+                    if subtopic:  # Если есть подтема
+                        structure[main_topic].append({
+                            'id': subtopic_id,
+                            'name': subtopic,
+                            'order_index': subtopic_order,
+                            'question_count': question_count or 0,
+                            'has_questions': (question_count or 0) > 0
+                        })
+                
+                return structure
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения структуры тем по языку {language}: {e}")
+            return {}
+
+    def sync_subtopic_languages_with_main_topics(self) -> bool:
+        """Синхронизирует языки подтем с языками их основных разделов."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Обновляем языки подтем в соответствии с языками основных разделов
+                cursor.execute('''
+                    UPDATE subtopics 
+                    SET language = (
+                        SELECT mt.language 
+                        FROM main_topics mt 
+                        WHERE mt.id = subtopics.main_topic_id
+                    )
+                    WHERE EXISTS (
+                        SELECT 1 FROM main_topics mt 
+                        WHERE mt.id = subtopics.main_topic_id 
+                        AND mt.language != subtopics.language
+                    )
+                ''')
+                
+                updated_count = cursor.rowcount
+                conn.commit()
+                
+                print(f"[LOG] Синхронизировано {updated_count} подтем с языками основных разделов")
+                return True
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка синхронизации языков подтем: {e}")
             return False

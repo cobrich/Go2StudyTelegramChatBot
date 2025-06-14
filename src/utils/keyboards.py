@@ -12,25 +12,21 @@ def build_topic_selection_keyboard(user_id: int = None) -> InlineKeyboardMarkup:
     user_language = _db.get_user_language(user_id) if user_id else 'ru'
     is_admin = user_id and _db.is_admin(user_id)
     
-    # Получаем темы с информацией о языке
-    topics_dict = _db.get_topics_with_language_info(active_only=True, for_admin=is_admin)
-    
-    # Фильтруем темы по языку пользователя (для учеников) или показываем все (для админов)
+    # Получаем основные разделы по языку пользователя
     if is_admin:
-        # Админы видят все темы с индикаторами языка
-        main_topics = list(topics_dict.keys())
+        # Админы видят все разделы (русские и казахские)
+        russian_topics = _db.get_main_topics_by_language('ru', active_only=True)
+        kazakh_topics = _db.get_main_topics_by_language('kk', active_only=True)
+        main_topics = russian_topics + kazakh_topics
+        # Сортируем по order_index
+        main_topics.sort(key=lambda x: x['order_index'])
     else:
-        # Ученики видят только темы на своем языке
-        filtered_topics = {}
-        for main_topic, subtopics in topics_dict.items():
-            filtered_subtopics = [st for st in subtopics if st['language'] == user_language]
-            if filtered_subtopics:
-                filtered_topics[main_topic] = filtered_subtopics
-        main_topics = list(filtered_topics.keys())
+        # Ученики видят только разделы на своем языке
+        main_topics = _db.get_main_topics_by_language(user_language, active_only=True)
     
     keyboard = [
-        [InlineKeyboardButton(main_topic, callback_data=f"main_topic_{i}")]
-        for i, main_topic in enumerate(main_topics)
+        [InlineKeyboardButton(topic['name'], callback_data=f"main_topic_{i}")]
+        for i, topic in enumerate(main_topics)
     ]
     # Add "Back to main menu" button at the end
     keyboard.append([InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")])
@@ -42,15 +38,20 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, us
     user_language = _db.get_user_language(user_id) if user_id else 'ru'
     is_admin = user_id and _db.is_admin(user_id)
     
-    # Получаем темы с информацией о языке
-    topics_dict = _db.get_topics_with_language_info(active_only=True, for_admin=is_admin)
+    # Получаем полную структуру тем по языку
+    if is_admin:
+        # Для админов получаем структуру для обоих языков
+        ru_structure = _db.get_full_topic_structure_by_language('ru', active_only=True)
+        kk_structure = _db.get_full_topic_structure_by_language('kk', active_only=True)
+        
+        # Объединяем структуры
+        full_structure = {**ru_structure, **kk_structure}
+    else:
+        # Для учеников только их язык
+        full_structure = _db.get_full_topic_structure_by_language(user_language, active_only=True)
     
     # Получаем подтемы для выбранного основного раздела
-    subtopics_for_main = topics_dict.get(main_topic, [])
-    
-    # Фильтруем по языку для учеников
-    if not is_admin:
-        subtopics_for_main = [st for st in subtopics_for_main if st['language'] == user_language]
+    subtopics_for_main = full_structure.get(main_topic, [])
     
     # Получаем активные темы из БД для получения индексов
     all_active_topics = _db.get_topic_names(active_only=True)
@@ -58,7 +59,18 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, us
     keyboard = []
     for topic_info in subtopics_for_main:
         subtopic_name = topic_info['name']
-        display_name = topic_info['display_name']  # Уже сформировано в зависимости от роли
+        question_count = topic_info['question_count']
+        
+        # Формируем отображаемое название в зависимости от роли
+        if is_admin:
+            # Для админов: показываем количество вопросов и индикатор наличия
+            if question_count > 0:
+                display_name = f"🟢 {subtopic_name} ({question_count})"
+            else:
+                display_name = f"🟡 {subtopic_name} (ИИ)"
+        else:
+            # Для учеников: только название темы
+            display_name = subtopic_name
         
         # Находим индекс подтемы в общем списке активных тем
         try:
