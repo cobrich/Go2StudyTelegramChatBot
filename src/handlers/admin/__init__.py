@@ -149,15 +149,6 @@ class AdminHandlers(AdminBaseHandler):
     async def show_section_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.show_section_topics(update, context)
     
-    async def add_base_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.add_base_topics_start(update, context)
-    
-    async def add_base_topic_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.add_base_topic_execute(update, context)
-    
-    async def add_all_missing_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.add_all_missing_topics_execute(update, context)
-    
     async def edit_topic_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.edit_topic_select(update, context)
     
@@ -176,12 +167,6 @@ class AdminHandlers(AdminBaseHandler):
     async def remove_topic_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.remove_topic_execute(update, context)
     
-    async def remove_topic_permanent(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.remove_topic_permanent(update, context)
-    
-    async def remove_topic_permanent_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.remove_topic_permanent_confirm(update, context)
-
     # === ДЕЛЕГИРОВАНИЕ МЕТОДОВ УПРАВЛЕНИЯ ВОПРОСАМИ ===
     
     async def questions_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

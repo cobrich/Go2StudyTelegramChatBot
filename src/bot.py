@@ -221,18 +221,6 @@ def main() -> None:
         pattern="^show_section_topics_"
     ))
     application.add_handler(CallbackQueryHandler(
-        admin_handlers.add_base_topics_start,
-        pattern="^add_base_topics$"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.add_base_topic_execute,
-        pattern="^add_base_topic_"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.add_all_missing_topics_execute,
-        pattern="^add_all_missing_topics$"
-    ))
-    application.add_handler(CallbackQueryHandler(
         admin_handlers.list_topics,
         pattern="^list_topics$"
     ))
@@ -267,10 +255,6 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(
         admin_handlers.remove_topic_execute,
         pattern="^remove_topic_execute_"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.remove_topic_permanent_confirm,
-        pattern="^remove_topic_permanent_confirm_"
     ))
     
     # Questions management handlers
