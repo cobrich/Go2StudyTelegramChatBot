@@ -53,25 +53,38 @@ class Database:
             
             # Add language column to main_topics if it doesn't exist
             try:
-                cursor.execute('ALTER TABLE main_topics ADD COLUMN language TEXT DEFAULT "ru"')
-                # Update existing records to have 'ru' as default language
-                cursor.execute('UPDATE main_topics SET language = "ru" WHERE language IS NULL')
-                conn.commit()
-                print("[LOG] Добавлено поле language в таблицу main_topics")
+                # Проверяем, существует ли уже поле language
+                cursor.execute("PRAGMA table_info(main_topics)")
+                columns = [column[1] for column in cursor.fetchall()]
+                
+                if 'language' not in columns:
+                    cursor.execute('ALTER TABLE main_topics ADD COLUMN language TEXT DEFAULT "ru"')
+                    # Update existing records to have 'ru' as default language
+                    cursor.execute('UPDATE main_topics SET language = "ru" WHERE language IS NULL')
+                    conn.commit()
+                    print("[LOG] Добавлено поле language в таблицу main_topics")
             except sqlite3.OperationalError:
                 # Column already exists
                 pass
             
             # Update main_topics UNIQUE constraint to support (name, language)
             try:
+                # Проверяем, существует ли уже индекс
                 cursor.execute('''
-                    CREATE UNIQUE INDEX IF NOT EXISTS idx_main_topics_name_language 
-                    ON main_topics(name, language)
+                    SELECT name FROM sqlite_master 
+                    WHERE type='index' AND name='idx_main_topics_name_language'
                 ''')
-                conn.commit()
-                print("[LOG] Обновлен UNIQUE constraint для main_topics")
+                index_exists = cursor.fetchone() is not None
+                
+                if not index_exists:
+                    cursor.execute('''
+                        CREATE UNIQUE INDEX idx_main_topics_name_language 
+                        ON main_topics(name, language)
+                    ''')
+                    conn.commit()
+                    print("[LOG] Обновлен UNIQUE constraint для main_topics")
             except sqlite3.OperationalError:
-                # Index already exists
+                # Index already exists or other error
                 pass
             
             # Admins table - для управления администраторами
@@ -119,11 +132,16 @@ class Database:
             
             # Add language column to allowed_users
             try:
-                cursor.execute('ALTER TABLE allowed_users ADD COLUMN language TEXT DEFAULT "ru"')
-                # Update existing records to have 'ru' as default language
-                cursor.execute('UPDATE allowed_users SET language = "ru" WHERE language IS NULL')
-                conn.commit()
-                print("[LOG] Добавлено поле language в таблицу allowed_users")
+                # Проверяем, существует ли уже поле language
+                cursor.execute("PRAGMA table_info(allowed_users)")
+                columns = [column[1] for column in cursor.fetchall()]
+                
+                if 'language' not in columns:
+                    cursor.execute('ALTER TABLE allowed_users ADD COLUMN language TEXT DEFAULT "ru"')
+                    # Update existing records to have 'ru' as default language
+                    cursor.execute('UPDATE allowed_users SET language = "ru" WHERE language IS NULL')
+                    conn.commit()
+                    print("[LOG] Добавлено поле language в таблицу allowed_users")
             except sqlite3.OperationalError:
                 # Column already exists
                 pass
@@ -179,9 +197,14 @@ class Database:
             
             # Add phone_number column to users table if it doesn't exist
             try:
-                cursor.execute('ALTER TABLE users ADD COLUMN phone_number TEXT')
-                conn.commit()
-                print("[LOG] Добавлено поле phone_number в таблицу users")
+                # Проверяем, существует ли уже поле phone_number
+                cursor.execute("PRAGMA table_info(users)")
+                columns = [column[1] for column in cursor.fetchall()]
+                
+                if 'phone_number' not in columns:
+                    cursor.execute('ALTER TABLE users ADD COLUMN phone_number TEXT')
+                    conn.commit()
+                    print("[LOG] Добавлено поле phone_number в таблицу users")
             except sqlite3.OperationalError:
                 # Column already exists
                 pass

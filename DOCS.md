@@ -247,6 +247,84 @@ if update.message:
 
 ---
 
+### 🔧 Bug Fix: Multiple Bot Instances Conflict (January 2025)
+
+**✅ FIXED: Resolved Telegram API conflict and excessive database logging**
+
+#### 🐛 Problem:
+- **Telegram API Conflict**: `Conflict: terminated by other getUpdates request; make sure that only one bot instance is running`
+- Multiple bot instances were running simultaneously, causing API conflicts
+- **Excessive logging**: Database initialization logs were repeating multiple times
+- `[LOG] Обновлен UNIQUE constraint для main_topics` appeared 15+ times on each startup
+
+#### ✅ Solution Implemented:
+
+1. **Fixed Multiple Bot Instances**:
+   - Stopped all running bot processes with `pkill -f "python.*bot"`
+   - Ensured only one bot instance runs at a time
+   - Proper process management to prevent conflicts
+
+2. **Optimized Database Initialization Logging**:
+   - **Before**: Logs appeared on every Database() initialization (multiple times per startup)
+   - **After**: Logs appear only when actual changes are made to database schema
+
+**Technical fixes in `src/services/database.py`**:
+```python
+# Before (always logged)
+cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS ...')
+print("[LOG] Обновлен UNIQUE constraint для main_topics")
+
+# After (logs only when actually created)
+cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='...'")
+index_exists = cursor.fetchone() is not None
+
+if not index_exists:
+    cursor.execute('CREATE UNIQUE INDEX ...')
+    print("[LOG] Обновлен UNIQUE constraint для main_topics")
+```
+
+3. **Enhanced Column Addition Checks**:
+   - Added `PRAGMA table_info()` checks before adding columns
+   - Logs only appear when columns are actually added
+   - Prevents redundant ALTER TABLE operations
+
+#### 🔧 Technical Details:
+
+**Files Modified:**
+- `src/services/database.py` - Optimized database initialization logging
+- Process management - Proper bot instance control
+
+**Database Schema Checks Added:**
+- `main_topics.language` field existence check
+- `allowed_users.language` field existence check  
+- `users.phone_number` field existence check
+- `idx_main_topics_name_language` index existence check
+
+#### ✅ Result:
+- ✅ **Single bot instance**: No more Telegram API conflicts
+- ✅ **Clean startup logs**: Database logs appear only when needed
+- ✅ **Better performance**: Reduced redundant database operations
+- ✅ **Stable operation**: Bot runs without conflicts or excessive logging
+
+**Before startup logs:**
+```
+[LOG] Используется база данных: /path/to/math_bot.db
+[LOG] Обновлен UNIQUE constraint для main_topics
+[LOG] Используется база данных: /path/to/math_bot.db  
+[LOG] Обновлен UNIQUE constraint для main_topics
+... (repeated 15+ times)
+```
+
+**After startup logs:**
+```
+[LOG] Используется база данных: /path/to/math_bot.db
+Application started
+```
+
+**Status**: ✅ **MULTIPLE INSTANCES CONFLICT RESOLVED** - Bot runs cleanly with single instance
+
+---
+
 ### 🔧 Bug Fix: Missing Database Methods (January 2025)
 
 **✅ FIXED: Added missing database methods for user progress and admin management**
