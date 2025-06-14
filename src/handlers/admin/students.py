@@ -17,11 +17,13 @@ class StudentsHandler(AdminBaseHandler):
         query = update.callback_query
         await self.safe_answer_callback(query)
         
+        # Очищаем состояние при возврате в меню
+        context.user_data.pop('admin_action', None)
+        
         text = f"👥 <b>Управление учениками</b>\n\nВыберите действие:"
         
         keyboard = [
-            [InlineKeyboardButton("➕ Добавить ученика (по username)", callback_data="add_student")],
-            [InlineKeyboardButton("🆔 Добавить ученика (по ID)", callback_data="add_student_by_id")],
+            [InlineKeyboardButton("🆔 Добавить ученика", callback_data="add_student_by_id")],
             [InlineKeyboardButton("📋 Список учеников", callback_data="list_students")],
             [InlineKeyboardButton("✏️ Редактировать ученика", callback_data="edit_student_start")],
             [InlineKeyboardButton("🗑️ Удалить ученика", callback_data="remove_student")],
@@ -31,141 +33,106 @@ class StudentsHandler(AdminBaseHandler):
         
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
-    async def add_student_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Начало добавления ученика по username."""
-        query = update.callback_query
-        await self.safe_answer_callback(query)
-        
-        text = f"👤 <b>Добавление ученика</b>\n\nВведите username ученика (с @ или без):"
-        
-        context.user_data['admin_action'] = 'add_student'
-        
-        await query.edit_message_text(text, parse_mode='HTML')
-
     async def add_student_by_id_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало добавления ученика по ID."""
         query = update.callback_query
         await self.safe_answer_callback(query)
         
-        text = f"🆔 <b>Добавление ученика по ID</b>\n\nВведите Telegram ID ученика:"
+        text = f"🆔 <b>Добавление ученика</b>\n\n"
+        text += f"Введите Telegram ID ученика:\n\n"
+        text += f"💡 <b>Как узнать ID:</b>\n"
+        text += f"• Попросите ученика написать команду /myid боту\n"
+        text += f"• Или используйте @userinfobot"
         
         context.user_data['admin_action'] = 'add_student_by_id'
         
-        await query.edit_message_text(text, parse_mode='HTML')
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     # === ОБРАБОТЧИКИ ТЕКСТА ДЛЯ ДОБАВЛЕНИЯ УЧЕНИКА ===
-
-    async def handle_add_student(self, update: Update, context: ContextTypes.DEFAULT_TYPE, username: str) -> None:
-        """Обработка добавления ученика - этап 1 (username)."""
-        if username.startswith('@'):
-            username = username[1:]
-        
-        context.user_data['new_student_username'] = username
-        context.user_data['admin_action'] = 'student_fullname'
-        
-        await update.message.reply_text(f"Введите ФИО ученика @{username}:")
 
     async def handle_add_student_by_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id_text: str) -> None:
         """Обработка добавления ученика по ID - этап 1 (user_id)."""
         try:
             student_user_id = int(user_id_text)
         except ValueError:
-            await update.message.reply_text("❌ Введите корректный user_id (число). Попробуйте еще раз:")
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(
+                "❌ Введите корректный user_id (число). Попробуйте еще раз:",
+                reply_markup=reply_markup
+            )
             return
         
         # Проверяем, что этот пользователь еще не добавлен
         if self.db.check_user_access(student_user_id):
-            await update.message.reply_text(f"❌ Пользователь с ID {student_user_id} уже имеет доступ к боту.")
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(
+                f"❌ Пользователь с ID {student_user_id} уже имеет доступ к боту.",
+                reply_markup=reply_markup
+            )
             context.user_data.pop('admin_action', None)
             return
         
         context.user_data['new_student_user_id'] = student_user_id
         context.user_data['admin_action'] = 'student_by_id_fullname'
         
-        await update.message.reply_text(f"Введите ФИО ученика с ID {student_user_id}:")
-
-    async def handle_student_fullname(self, update: Update, context: ContextTypes.DEFAULT_TYPE, fullname: str) -> None:
-        """Обработка добавления ученика - этап 2 (ФИО)."""
-        context.user_data['new_student_fullname'] = fullname
-        context.user_data['admin_action'] = 'student_phone'
-        
-        await update.message.reply_text("📱 Введите номер телефона ученика (например: +77771234567) или напишите 'пропустить' чтобы не указывать:")
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(
+            f"👤 Введите ФИО ученика с ID {student_user_id}:",
+            reply_markup=reply_markup
+        )
 
     async def handle_student_by_id_fullname(self, update: Update, context: ContextTypes.DEFAULT_TYPE, fullname: str) -> None:
         """Обработка добавления ученика по ID - этап 2 (ФИО)."""
-        context.user_data['new_student_fullname'] = fullname
-        context.user_data['admin_action'] = 'student_by_id_phone'
-        
-        await update.message.reply_text("📱 Введите номер телефона ученика (например: +77771234567) или напишите 'пропустить' чтобы не указывать:")
-
-    async def handle_student_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE, phone_text: str) -> None:
-        """Обработка добавления ученика - этап 3 (телефон)."""
-        phone_number = phone_text.strip() if phone_text.lower() != 'пропустить' else ""
-        context.user_data['new_student_phone'] = phone_number
-        context.user_data['admin_action'] = 'student_grade'
-        
-        await update.message.reply_text("🎓 Введите класс ученика (от 1 до 11):")
-
-    async def handle_student_by_id_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE, phone_text: str) -> None:
-        """Обработка добавления ученика по ID - этап 3 (телефон)."""
-        phone_number = phone_text.strip() if phone_text.lower() != 'пропустить' else ""
-        context.user_data['new_student_phone'] = phone_number
+        if not fullname.strip():
+            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(
+                "❌ ФИО не может быть пустым. Попробуйте еще раз:",
+                reply_markup=reply_markup
+            )
+            return
+            
+        context.user_data['new_student_fullname'] = fullname.strip()
         context.user_data['admin_action'] = 'student_by_id_grade'
         
-        await update.message.reply_text("🎓 Введите класс ученика (от 1 до 11):")
-
-    async def handle_student_grade(self, update: Update, context: ContextTypes.DEFAULT_TYPE, grade_text: str) -> None:
-        """Обработка добавления ученика - этап 4 (класс) - переход к выбору языка."""
-        logging.info(f"[handle_student_grade] Called with grade_text: {grade_text}")
-        
-        try:
-            grade = int(grade_text)
-            if grade < 1 or grade > 11:
-                await update.message.reply_text("❌ Класс должен быть от 1 до 11. Попробуйте еще раз:")
-                return
-        except ValueError:
-            await update.message.reply_text("❌ Введите корректный номер класса (число). Попробуйте еще раз:")
-            return
-        
-        # Сохраняем класс и переходим к выбору языка
-        context.user_data['new_student_grade'] = grade
-        context.user_data['admin_action'] = 'student_language'
-        
-        logging.info(f"[handle_student_grade] Saved grade: {grade}, set admin_action to 'student_language'")
-        logging.info(f"[handle_student_grade] Current context data: {dict(context.user_data)}")
-        
-        # Показываем выбор языка
-        text = f"🌐 <b>Выбор языка для ученика</b>\n\n"
-        text += f"Выберите язык интерфейса для нового ученика:"
-        
-        keyboard = [
-            [InlineKeyboardButton("🇷🇺 Русский", callback_data="student_lang_ru")],
-            [InlineKeyboardButton("🇰🇿 Қазақша", callback_data="student_lang_kk")],
-        ]
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        await update.message.reply_text(
+            "🎓 Введите класс ученика (от 1 до 11):",
+            reply_markup=reply_markup
+        )
 
     async def handle_student_by_id_grade(self, update: Update, context: ContextTypes.DEFAULT_TYPE, grade_text: str) -> None:
-        """Обработка добавления ученика по ID - этап 4 (класс) - переход к выбору языка."""
-        logging.info(f"[handle_student_by_id_grade] Called with grade_text: {grade_text}")
-        
+        """Обработка добавления ученика по ID - этап 3 (класс) - переход к выбору языка."""
         try:
             grade = int(grade_text)
             if grade < 1 or grade > 11:
-                await update.message.reply_text("❌ Класс должен быть от 1 до 11. Попробуйте еще раз:")
+                keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text(
+                    "❌ Класс должен быть от 1 до 11. Попробуйте еще раз:",
+                    reply_markup=reply_markup
+                )
                 return
         except ValueError:
-            await update.message.reply_text("❌ Введите корректный номер класса (число). Попробуйте еще раз:")
+            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(
+                "❌ Введите корректный номер класса (число). Попробуйте еще раз:",
+                reply_markup=reply_markup
+            )
             return
         
         # Сохраняем класс и переходим к выбору языка
         context.user_data['new_student_grade'] = grade
         context.user_data['admin_action'] = 'student_by_id_language'
         
-        logging.info(f"[handle_student_by_id_grade] Saved grade: {grade}, set admin_action to 'student_by_id_language'")
-        logging.info(f"[handle_student_by_id_grade] Current context data: {dict(context.user_data)}")
-        
         # Показываем выбор языка
         text = f"🌐 <b>Выбор языка для ученика</b>\n\n"
         text += f"Выберите язык интерфейса для нового ученика:"
@@ -173,6 +140,7 @@ class StudentsHandler(AdminBaseHandler):
         keyboard = [
             [InlineKeyboardButton("🇷🇺 Русский", callback_data="student_lang_ru")],
             [InlineKeyboardButton("🇰🇿 Қазақша", callback_data="student_lang_kk")],
+            [InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -194,13 +162,11 @@ class StudentsHandler(AdminBaseHandler):
         
         # Получаем все сохраненные данные
         student_user_id = context.user_data.get('new_student_user_id')
-        username = context.user_data.get('new_student_username')
         fullname = context.user_data.get('new_student_fullname')
-        phone_number = context.user_data.get('new_student_phone', "")
         grade = context.user_data.get('new_student_grade')
         admin_id = update.effective_user.id
         
-        logging.info(f"[handle_student_language_selection] Context data: user_id={student_user_id}, username={username}, fullname={fullname}, grade={grade}")
+        logging.info(f"[handle_student_language_selection] Context data: user_id={student_user_id}, fullname={fullname}, grade={grade}")
         
         if not all([fullname, grade]):
             logging.error(f"[handle_student_language_selection] Missing required data: fullname={fullname}, grade={grade}")
@@ -209,7 +175,7 @@ class StudentsHandler(AdminBaseHandler):
             text += "Что вы хотите сделать?"
             
             keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать заново", callback_data="add_student" if not student_user_id else "add_student_by_id")],
+                [InlineKeyboardButton("🔄 Попробовать заново", callback_data="add_student_by_id")],
                 [InlineKeyboardButton("🔙 Назад к управлению учениками", callback_data="admin_students")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -217,43 +183,19 @@ class StudentsHandler(AdminBaseHandler):
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
             return
         
-        # Определяем тип добавления (по username или по ID)
-        if student_user_id:
-            logging.info(f"[handle_student_language_selection] Adding student by ID: {student_user_id}")
-            # Добавление по ID
-            success = await self._add_student_by_id_with_language(
-                student_user_id, fullname, grade, admin_id, phone_number, language, context
-            )
-        elif username:
-            logging.info(f"[handle_student_language_selection] Adding student by username: {username}")
-            # Добавление по username
-            success = await self._add_student_by_username_with_language(
-                username, fullname, grade, admin_id, phone_number, language, context
-            )
-        else:
-            logging.error(f"[handle_student_language_selection] No user_id or username found")
-            
-            text = "❌ <b>Ошибка: не найден ни ID, ни username ученика</b>\n\n"
-            text += "Что вы хотите сделать?"
-            
-            keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать заново", callback_data="add_student")],
-                [InlineKeyboardButton("🆔 Добавить по ID", callback_data="add_student_by_id")],
-                [InlineKeyboardButton("🔙 Назад к управлению учениками", callback_data="admin_students")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
-            return
+        # Добавляем ученика в базу данных
+        success = await self._add_student_to_database(
+            update, context, student_user_id, None, fullname, grade, admin_id
+        )
         
         logging.info(f"[handle_student_language_selection] Student addition result: {success}")
         
         if success:
             # Показываем сообщение об успехе и возвращаемся в меню управления учениками
             keyboard = [
-                [InlineKeyboardButton("➕ Добавить ученика (по username)", callback_data="add_student")],
-                [InlineKeyboardButton("🆔 Добавить ученика (по ID)", callback_data="add_student_by_id")],
+                [InlineKeyboardButton("🆔 Добавить ученика", callback_data="add_student_by_id")],
                 [InlineKeyboardButton("📋 Список учеников", callback_data="list_students")],
+                [InlineKeyboardButton("✏️ Редактировать ученика", callback_data="edit_student_start")],
                 [InlineKeyboardButton("🗑️ Удалить ученика", callback_data="remove_student")],
                 [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
             ]
@@ -264,12 +206,6 @@ class StudentsHandler(AdminBaseHandler):
             text = f"✅ Ученик успешно добавлен!\n\n"
             text += f"ФИО: {fullname}\nКласс: {grade}\n"
             text += f"🌐 Язык: {language_name}\n"
-            if phone_number:
-                text += f"📱 Телефон: {phone_number}\n"
-            if student_user_id:
-                text += f"🆔 ID: {student_user_id}\n"
-            if username:
-                text += f"👤 Username: @{username}\n"
             
             text += f"\n👥 <b>Управление учениками</b>\n\nВыберите действие:"
             
@@ -284,7 +220,7 @@ class StudentsHandler(AdminBaseHandler):
             text += "Что вы хотите сделать?"
             
             keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать заново", callback_data="add_student" if username else "add_student_by_id")],
+                [InlineKeyboardButton("🔄 Попробовать заново", callback_data="add_student_by_id")],
                 [InlineKeyboardButton("📋 Список учеников", callback_data="list_students")],
                 [InlineKeyboardButton("🔙 Назад к управлению учениками", callback_data="admin_students")]
             ]
@@ -295,100 +231,40 @@ class StudentsHandler(AdminBaseHandler):
         # Очищаем данные
         context.user_data.pop('admin_action', None)
         context.user_data.pop('new_student_user_id', None)
-        context.user_data.pop('new_student_username', None)
         context.user_data.pop('new_student_fullname', None)
-        context.user_data.pop('new_student_phone', None)
         context.user_data.pop('new_student_grade', None)
         
         logging.info(f"[handle_student_language_selection] Completed successfully")
 
     # === ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===
 
-    async def _add_student_by_id_with_language(self, student_user_id: int, fullname: str, grade: int, 
-                                             admin_id: int, phone_number: str, language: str, 
-                                             context: ContextTypes.DEFAULT_TYPE) -> bool:
-        """Добавление ученика по ID с установкой языка."""
-        # Пытаемся получить username пользователя через Telegram API
-        username = None
+    async def _add_student_to_database(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                                     student_user_id: int, username: str, fullname: str, 
+                                     grade: int, admin_id: int, phone_number: str = "") -> bool:
+        """Добавление ученика в базу данных (метод из старого файла)."""
         try:
-            user_info = await context.bot.get_chat(student_user_id)
-            if user_info and user_info.username:
-                username = user_info.username
-                logging.info(f"Found username @{username} for user_id {student_user_id}")
-        except Exception as e:
-            # Если не удалось получить через API, проверяем локальную базу
-            try:
-                with sqlite3.connect(self.db.db_path) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute('SELECT username FROM users WHERE user_id = ?', (student_user_id,))
-                    result = cursor.fetchone()
-                    if result and result[0]:
-                        username = result[0]
-                        logging.info(f"Found username @{username} for user_id {student_user_id} in local database")
-            except Exception as e2:
-                logging.warning(f"Could not find username for user_id {student_user_id}: {e2}")
-        
-        # Добавляем ученика в базу данных
-        success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id, username, phone_number)
-        
-        if success:
-            # Устанавливаем язык пользователя
-            self.db.update_user_language(student_user_id, language)
+            # Добавляем в allowed_users
+            success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id, username, phone_number)
             
-            # Синхронизируем данные в таблице users
-            try:
+            if success:
+                # Синхронизируем с таблицей users
                 with sqlite3.connect(self.db.db_path) as conn:
                     cursor = conn.cursor()
                     cursor.execute('''
                         INSERT OR REPLACE INTO users (user_id, username, full_name, grade, phone_number, language)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (student_user_id, username, fullname, grade, phone_number, language))
+                        VALUES (?, ?, ?, ?, ?, 'ru')
+                    ''', (student_user_id, username, fullname, grade, phone_number, 'ru'))
                     conn.commit()
-                    logging.info(f"Synced user data in users table for user_id {student_user_id} with language {language}")
-            except Exception as e:
-                logging.error(f"Error syncing user data for user_id {student_user_id}: {e}")
-        
-        return success
-
-    async def _add_student_by_username_with_language(self, username: str, fullname: str, grade: int, 
-                                                   admin_id: int, phone_number: str, language: str, 
-                                                   context: ContextTypes.DEFAULT_TYPE) -> bool:
-        """Добавление ученика по username с установкой языка."""
-        # Получаем user_id через Telegram API
-        student_user_id = None
-        try:
-            chat_info = await context.bot.get_chat(f"@{username}")
-            if chat_info and chat_info.id:
-                student_user_id = chat_info.id
-                logging.info(f"Found user_id {student_user_id} for username @{username}")
+                    
+                logging.info(f"Student {student_user_id} added to database successfully")
+                return True
+            else:
+                logging.error(f"Failed to add student {student_user_id} to allowed_users")
+                return False
+                
         except Exception as e:
-            logging.warning(f"Telegram API verification failed for @{username}: {e}")
-            return False
-        
-        if not student_user_id:
-            return False
-        
-        # Добавляем ученика в базу данных
-        success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id, username, phone_number)
-        
-        if success:
-            # Устанавливаем язык пользователя
-            self.db.update_user_language(student_user_id, language)
-            
-            # Синхронизируем данные в таблице users
-            try:
-                with sqlite3.connect(self.db.db_path) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO users (user_id, username, full_name, grade, phone_number, language)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (student_user_id, username, fullname, grade, phone_number, language))
-                    conn.commit()
-                    logging.info(f"Synced user data in users table for user_id {student_user_id} with language {language}")
-            except Exception as e:
-                logging.error(f"Error syncing user data for user_id {student_user_id}: {e}")
-        
-        return success
+            logging.error(f"Error adding student to database: {e}")
+            return False 
 
     # === МЕТОДЫ ПРОСМОТРА И УПРАВЛЕНИЯ УЧЕНИКАМИ ===
 
@@ -760,50 +636,47 @@ class StudentsHandler(AdminBaseHandler):
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def edit_student_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Выбор параметра для редактирования ученика."""
+        """Выбор параметра для редактирования."""
         query = update.callback_query
         await self.safe_answer_callback(query)
         
         user_id = int(query.data.split('_')[-1])
         
+        # Получаем информацию об ученике
         try:
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT au.username, au.full_name, au.grade, au.phone_number, au.is_active,
-                           u.language
-                    FROM allowed_users au
-                    LEFT JOIN users u ON au.user_id = u.user_id
-                    WHERE au.user_id = ?
+                    SELECT username, full_name, grade, is_active, language 
+                    FROM allowed_users 
+                    WHERE user_id = ?
                 ''', (user_id,))
                 student = cursor.fetchone()
                 
                 if not student:
-                    await query.edit_message_text("❌ Ученик не найден.")
+                    keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="edit_student_start")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await query.edit_message_text("❌ Ученик не найден.", reply_markup=reply_markup)
                     return
                 
-                username, full_name, grade, phone_number, is_active, language = student
-                
-                identifier = f"@{username}" if username else f"ID: {user_id}"
-                status_text = "Активен" if is_active else "Неактивен"
-                language_text = "Русский" if language == 'ru' else ("Қазақша" if language == 'kk' else language or 'не указан')
+                username, full_name, grade, is_active, language = student
                 
                 text = f"✏️ <b>Редактирование ученика</b>\n\n"
-                text += f"👤 <b>{identifier}</b>\n\n"
-                text += f"<b>Текущие данные:</b>\n"
+                text += f"👤 <b>Текущие данные:</b>\n"
+                if username:
+                    text += f"• Username: @{username}\n"
+                text += f"• ID: {user_id}\n"
                 text += f"• ФИО: {full_name or 'не указано'}\n"
                 text += f"• Класс: {grade or 'не указан'}\n"
-                text += f"• Телефон: {phone_number or 'не указан'}\n"
-                text += f"• Язык: {language_text}\n"
-                text += f"• Статус: {status_text}\n\n"
+                text += f"• Язык: {'Русский' if language == 'ru' else 'Қазақша' if language == 'kk' else language}\n"
+                text += f"• Статус: {'Активен' if is_active else 'Неактивен'}\n\n"
                 text += f"Что хотите изменить?"
                 
                 keyboard = [
                     [InlineKeyboardButton("📝 Изменить ФИО", callback_data=f"edit_student_name_{user_id}")],
                     [InlineKeyboardButton("🎓 Изменить класс", callback_data=f"edit_student_grade_{user_id}")],
-                    [InlineKeyboardButton("📱 Изменить телефон", callback_data=f"edit_student_phone_{user_id}")],
                     [InlineKeyboardButton("🌐 Изменить язык", callback_data=f"edit_student_language_{user_id}")],
-                    [InlineKeyboardButton("🔄 Переключить статус", callback_data=f"edit_student_status_{user_id}")],
+                    [InlineKeyboardButton("🔄 Изменить статус", callback_data=f"edit_student_status_{user_id}")],
                     [InlineKeyboardButton("🔙 Назад к списку", callback_data="edit_student_start")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -812,7 +685,9 @@ class StudentsHandler(AdminBaseHandler):
                 
         except Exception as e:
             logging.error(f"Error in edit_student_select: {e}")
-            await query.edit_message_text("❌ Ошибка при получении информации об ученике.")
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="edit_student_start")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text("❌ Ошибка при получении информации об ученике.", reply_markup=reply_markup)
 
     async def edit_student_name_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало изменения ФИО ученика."""
@@ -846,22 +721,6 @@ class StudentsHandler(AdminBaseHandler):
         
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
-    async def edit_student_phone_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Начало изменения телефона ученика."""
-        query = update.callback_query
-        await self.safe_answer_callback(query)
-        
-        user_id = int(query.data.split('_')[-1])
-        context.user_data['edit_student_id'] = user_id
-        context.user_data['admin_action'] = 'edit_student_phone'
-        
-        text = f"📱 <b>Изменение телефона</b>\n\nВведите новый номер телефона или 'удалить' чтобы убрать:"
-        
-        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_select_{user_id}")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
-
     async def edit_student_language_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало изменения языка ученика."""
         query = update.callback_query
@@ -869,15 +728,11 @@ class StudentsHandler(AdminBaseHandler):
         
         user_id = int(query.data.split('_')[-1])
         
-        text = f"🌐 <b>Изменение языка</b>\n\n"
-        text += f"⚠️ <b>Внимание:</b> При смене языка будут очищены:\n"
-        text += f"• История ошибок ученика\n"
-        text += f"• Результаты тестов\n\n"
-        text += f"Выберите новый язык:"
+        text = f"🌐 <b>Изменение языка</b>\n\nВыберите новый язык для ученика:"
         
         keyboard = [
-            [InlineKeyboardButton("🇷🇺 Русский", callback_data=f"set_language_ru_{user_id}")],
-            [InlineKeyboardButton("🇰🇿 Қазақша", callback_data=f"set_language_kk_{user_id}")],
+            [InlineKeyboardButton("🇷🇺 Русский", callback_data=f"set_student_lang_ru_{user_id}")],
+            [InlineKeyboardButton("🇰🇿 Қазақша", callback_data=f"set_student_lang_kk_{user_id}")],
             [InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_select_{user_id}")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -889,28 +744,27 @@ class StudentsHandler(AdminBaseHandler):
         query = update.callback_query
         await self.safe_answer_callback(query)
         
-        # Парсим callback_data: set_language_ru_123456 или set_language_kk_123456
+        # Парсим callback_data: set_student_lang_ru_123456 или set_student_lang_kk_123456
         parts = query.data.split('_')
-        language = parts[2]  # ru или kk
-        user_id = int(parts[3])
+        language = parts[3]  # ru или kk
+        user_id = int(parts[4])
         
         try:
-            # Устанавливаем язык и очищаем данные
+            # Обновляем язык в базе данных
             self.db.update_user_language(user_id, language)
             
-            language_name = 'Русский' if language == 'ru' else 'Қазақша'
+            # Очищаем данные пользователя при смене языка
+            self.db.clear_user_data_on_language_change(user_id)
+            
+            language_name = "Русский" if language == "ru" else "Қазақша"
             
             text = f"✅ <b>Язык изменен</b>\n\n"
-            text += f"Язык ученика изменен на: <b>{language_name}</b>\n\n"
-            text += f"📝 <b>Очищены данные:</b>\n"
-            text += f"• История ошибок\n"
-            text += f"• Результаты тестов\n\n"
-            text += f"Ученик теперь будет видеть темы на выбранном языке."
+            text += f"Язык ученика успешно изменен на: {language_name}\n\n"
+            text += f"ℹ️ Данные пользователя (активные тесты, прогресс) были сброшены."
             
             keyboard = [
                 [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
-                [InlineKeyboardButton("📋 К списку учеников", callback_data="list_students")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+                [InlineKeyboardButton("🔙 Назад к списку", callback_data="edit_student_start")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -918,18 +772,9 @@ class StudentsHandler(AdminBaseHandler):
             
         except Exception as e:
             logging.error(f"Error setting student language: {e}")
-            
-            text = "❌ <b>Ошибка при изменении языка</b>\n\n"
-            text += "Не удалось изменить язык ученика. Что вы хотите сделать?"
-            
-            keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_language_{user_id}")],
-                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
-            ]
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_student_select_{user_id}")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            await query.edit_message_text("❌ Ошибка при изменении языка.", reply_markup=reply_markup)
 
     async def edit_student_status_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Переключение статуса ученика (активен/неактивен)."""
@@ -947,16 +792,9 @@ class StudentsHandler(AdminBaseHandler):
                 result = cursor.fetchone()
                 
                 if not result:
-                    text = "❌ <b>Ученик не найден</b>\n\n"
-                    text += "Возможно, ученик был удален из системы. Что вы хотите сделать?"
-                    
-                    keyboard = [
-                        [InlineKeyboardButton("📋 К списку учеников", callback_data="list_students")],
-                        [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
-                    ]
+                    keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="edit_student_start")]]
                     reply_markup = InlineKeyboardMarkup(keyboard)
-                    
-                    await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+                    await query.edit_message_text("❌ Ученик не найден.", reply_markup=reply_markup)
                     return
                 
                 current_status, full_name = result
@@ -970,12 +808,15 @@ class StudentsHandler(AdminBaseHandler):
                 status_emoji = "✅" if new_status else "❌"
                 
                 text = f"{status_emoji} <b>Статус изменен</b>\n\n"
-                text += f"Ученик <b>{full_name}</b> {status_text}."
+                text += f"Ученик {full_name} {status_text}.\n\n"
+                if new_status:
+                    text += f"Ученик теперь может пользоваться ботом."
+                else:
+                    text += f"Ученик больше не может пользоваться ботом."
                 
                 keyboard = [
                     [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
-                    [InlineKeyboardButton("📋 К списку учеников", callback_data="list_students")],
-                    [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+                    [InlineKeyboardButton("🔙 Назад к списку", callback_data="edit_student_start")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -983,240 +824,115 @@ class StudentsHandler(AdminBaseHandler):
                 
         except Exception as e:
             logging.error(f"Error toggling student status: {e}")
-            
-            text = "❌ <b>Ошибка при изменении статуса</b>\n\n"
-            text += "Не удалось изменить статус ученика. Что вы хотите сделать?"
-            
-            keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_status_{user_id}")],
-                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
-            ]
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_student_select_{user_id}")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            await query.edit_message_text("❌ Ошибка при изменении статуса.", reply_markup=reply_markup)
 
-    # === ОБРАБОТЧИКИ РЕДАКТИРОВАНИЯ ===
+    # === ОБРАБОТЧИКИ ТЕКСТА ДЛЯ РЕДАКТИРОВАНИЯ ===
 
     async def handle_edit_student_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_name: str) -> None:
         """Обработка изменения ФИО ученика."""
         user_id = context.user_data.get('edit_student_id')
+        
         if not user_id:
-            text = "❌ <b>Ошибка: ID ученика не найден</b>\n\n"
-            text += "Возможно, сессия истекла. Что вы хотите сделать?"
-            
-            keyboard = [
-                [InlineKeyboardButton("✏️ Выбрать ученика для редактирования", callback_data="edit_student_start")],
-                [InlineKeyboardButton("📋 К списку учеников", callback_data="list_students")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
-            ]
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            await update.message.reply_text("❌ Ошибка: не найден ID ученика.", reply_markup=reply_markup)
+            return
+        
+        if not new_name.strip():
+            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_select_{user_id}")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text("❌ ФИО не может быть пустым. Попробуйте еще раз:", reply_markup=reply_markup)
             return
         
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
+            # Обновляем ФИО в базе данных
+            success = self.db.update_allowed_user_by_id(user_id, full_name=new_name.strip())
+            
+            if success:
+                text = f"✅ <b>ФИО изменено</b>\n\n"
+                text += f"ФИО ученика успешно изменено на: {new_name.strip()}"
                 
-                # Обновляем в allowed_users
-                cursor.execute('UPDATE allowed_users SET full_name = ? WHERE user_id = ?', (new_name, user_id))
+                keyboard = [
+                    [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
+                    [InlineKeyboardButton("🔙 Назад к списку", callback_data="edit_student_start")]
+                ]
+            else:
+                text = f"❌ <b>Ошибка при изменении ФИО</b>\n\n"
+                text += f"Не удалось изменить ФИО ученика."
                 
-                # Обновляем в users (если есть)
-                cursor.execute('UPDATE users SET full_name = ? WHERE user_id = ?', (new_name, user_id))
-                
-                conn.commit()
-                
-                await update.message.reply_text(
-                    f"✅ ФИО ученика изменено на: <b>{new_name}</b>",
-                    parse_mode='HTML'
-                )
-                
+                keyboard = [
+                    [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_name_{user_id}")],
+                    [InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_select_{user_id}")]
+                ]
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
         except Exception as e:
             logging.error(f"Error updating student name: {e}")
-            
-            text = "❌ <b>Ошибка при изменении ФИО</b>\n\n"
-            text += "Не удалось обновить ФИО ученика в базе данных. Что вы хотите сделать?"
-            
-            keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_name_{user_id}")],
-                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
-            ]
+            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_select_{user_id}")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            await update.message.reply_text("❌ Ошибка при изменении ФИО.", reply_markup=reply_markup)
         
         # Очищаем состояние
-        context.user_data.pop('edit_student_id', None)
         context.user_data.pop('admin_action', None)
+        context.user_data.pop('edit_student_id', None)
 
     async def handle_edit_student_grade(self, update: Update, context: ContextTypes.DEFAULT_TYPE, grade_text: str) -> None:
         """Обработка изменения класса ученика."""
         user_id = context.user_data.get('edit_student_id')
+        
         if not user_id:
-            text = "❌ <b>Ошибка: ID ученика не найден</b>\n\n"
-            text += "Возможно, сессия истекла. Что вы хотите сделать?"
-            
-            keyboard = [
-                [InlineKeyboardButton("✏️ Выбрать ученика для редактирования", callback_data="edit_student_start")],
-                [InlineKeyboardButton("📋 К списку учеников", callback_data="list_students")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
-            ]
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            await update.message.reply_text("❌ Ошибка: не найден ID ученика.", reply_markup=reply_markup)
             return
         
         try:
             grade = int(grade_text)
             if grade < 1 or grade > 11:
-                text = "❌ <b>Неверный класс</b>\n\n"
-                text += "Класс должен быть от 1 до 11. Что вы хотите сделать?"
+                keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_select_{user_id}")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text("❌ Класс должен быть от 1 до 11. Попробуйте еще раз:", reply_markup=reply_markup)
+                return
+        except ValueError:
+            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_select_{user_id}")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text("❌ Введите корректный номер класса (число). Попробуйте еще раз:", reply_markup=reply_markup)
+            return
+        
+        try:
+            # Обновляем класс в базе данных
+            success = self.db.update_allowed_user_by_id(user_id, grade=grade)
+            
+            if success:
+                text = f"✅ <b>Класс изменен</b>\n\n"
+                text += f"Класс ученика успешно изменен на: {grade}"
+                
+                keyboard = [
+                    [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
+                    [InlineKeyboardButton("🔙 Назад к списку", callback_data="edit_student_start")]
+                ]
+            else:
+                text = f"❌ <b>Ошибка при изменении класса</b>\n\n"
+                text += f"Не удалось изменить класс ученика."
                 
                 keyboard = [
                     [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_grade_{user_id}")],
-                    [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
-                    [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+                    [InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_select_{user_id}")]
                 ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
-                return
-        except ValueError:
-            text = "❌ <b>Неверный формат</b>\n\n"
-            text += "Введите корректный номер класса (число от 1 до 11). Что вы хотите сделать?"
             
-            keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_grade_{user_id}")],
-                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
-            ]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
             await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
-            return
-        
-        try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Обновляем в allowed_users
-                cursor.execute('UPDATE allowed_users SET grade = ? WHERE user_id = ?', (grade, user_id))
-                
-                # Обновляем в users (если есть)
-                cursor.execute('UPDATE users SET grade = ? WHERE user_id = ?', (grade, user_id))
-                
-                conn.commit()
-                
-                await update.message.reply_text(
-                    f"✅ Класс ученика изменен на: <b>{grade}</b>",
-                    parse_mode='HTML'
-                )
-                
+            
         except Exception as e:
             logging.error(f"Error updating student grade: {e}")
-            
-            text = "❌ <b>Ошибка при изменении класса</b>\n\n"
-            text += "Не удалось обновить класс ученика в базе данных. Что вы хотите сделать?"
-            
-            keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_grade_{user_id}")],
-                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
-            ]
+            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_select_{user_id}")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            await update.message.reply_text("❌ Ошибка при изменении класса.", reply_markup=reply_markup)
         
         # Очищаем состояние
-        context.user_data.pop('edit_student_id', None)
         context.user_data.pop('admin_action', None)
-
-    async def handle_edit_student_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE, phone_text: str) -> None:
-        """Обработка изменения телефона ученика."""
-        user_id = context.user_data.get('edit_student_id')
-        if not user_id:
-            text = "❌ <b>Ошибка: ID ученика не найден</b>\n\n"
-            text += "Возможно, сессия истекла. Что вы хотите сделать?"
-            
-            keyboard = [
-                [InlineKeyboardButton("✏️ Выбрать ученика для редактирования", callback_data="edit_student_start")],
-                [InlineKeyboardButton("📋 К списку учеников", callback_data="list_students")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
-            return
-        
-        phone_number = "" if phone_text.lower() == 'удалить' else phone_text.strip()
-        
-        try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Обновляем в allowed_users
-                cursor.execute('UPDATE allowed_users SET phone_number = ? WHERE user_id = ?', (phone_number, user_id))
-                
-                # Обновляем в users (если есть)
-                cursor.execute('UPDATE users SET phone_number = ? WHERE user_id = ?', (phone_number, user_id))
-                
-                conn.commit()
-                
-                if phone_number:
-                    await update.message.reply_text(
-                        f"✅ Телефон ученика изменен на: <b>{phone_number}</b>",
-                        parse_mode='HTML'
-                    )
-                else:
-                    await update.message.reply_text("✅ Телефон ученика удален.")
-                
-        except Exception as e:
-            logging.error(f"Error updating student phone: {e}")
-            
-            text = "❌ <b>Ошибка при изменении телефона</b>\n\n"
-            text += "Не удалось обновить телефон ученика в базе данных. Что вы хотите сделать?"
-            
-            keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_phone_{user_id}")],
-                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
-                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
-        
-        # Очищаем состояние
-        context.user_data.pop('edit_student_id', None)
-        context.user_data.pop('admin_action', None)
-
-    # === ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ИЗ СТАРОГО ФАЙЛА ===
-
-    async def _add_student_to_database(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
-                                     student_user_id: int, username: str, fullname: str, 
-                                     grade: int, admin_id: int, phone_number: str = "") -> bool:
-        """Добавление ученика в базу данных (метод из старого файла)."""
-        try:
-            # Добавляем в allowed_users
-            success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id, username, phone_number)
-            
-            if success:
-                # Синхронизируем с таблицей users
-                with sqlite3.connect(self.db.db_path) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO users (user_id, username, full_name, grade, phone_number, language)
-                        VALUES (?, ?, ?, ?, ?, 'ru')
-                    ''', (student_user_id, username, fullname, grade, phone_number))
-                    conn.commit()
-                    
-                logging.info(f"Student {student_user_id} added to database successfully")
-                return True
-            else:
-                logging.error(f"Failed to add student {student_user_id} to allowed_users")
-                return False
-                
-        except Exception as e:
-            logging.error(f"Error adding student to database: {e}")
-            return False 
+        context.user_data.pop('edit_student_id', None) 
