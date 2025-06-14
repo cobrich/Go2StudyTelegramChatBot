@@ -689,46 +689,88 @@ class TopicsHandler(AdminBaseHandler):
         # Просто перенаправляем на список тем для обновления
         await self.list_topics(update, context)
 
-    # === ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ИЗ СТАРОГО ФАЙЛА ===
-
-    async def add_base_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Начало добавления базовых тем."""
+    # === УДАЛЕННЫЕ ФУНКЦИИ ===
+    
+    async def merge_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Функция слияния тем удалена по запросу."""
         query = update.callback_query
         await self.safe_answer_callback(query)
-        await query.edit_message_text("🚧 Функция добавления базовых тем в разработке...")
+        
+        text = "ℹ️ <b>Функция удалена</b>\n\n"
+        text += "Функция объединения тем была удалена по запросу.\n"
+        text += "Используйте другие функции управления темами."
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад к темам", callback_data="admin_topics")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def merge_topics_select_target(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Функция слияния тем удалена."""
+        await self.merge_topics_start(update, context)
+
+    async def merge_topics_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Функция слияния тем удалена."""
+        await self.merge_topics_start(update, context)
+
+    async def merge_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Функция слияния тем удалена."""
+        await self.merge_topics_start(update, context)
+
+    # === ЗАГЛУШКИ ДЛЯ НЕИСПОЛЬЗУЕМЫХ ФУНКЦИЙ ===
+    
+    async def add_base_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Заглушка: добавление базовых тем."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        text = "ℹ️ <b>Функция не реализована</b>\n\n"
+        text += "Функция автоматического добавления базовых тем не используется.\n"
+        text += "Используйте 'Добавить тему' для ручного добавления."
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад к темам", callback_data="admin_topics")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def add_base_topic_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Выполнение добавления базовой темы."""
-        query = update.callback_query
-        await self.safe_answer_callback(query)
-        await query.edit_message_text("🚧 Функция выполнения добавления базовой темы в разработке...")
+        """Заглушка: выполнение добавления базовой темы."""
+        await self.add_base_topics_start(update, context)
 
     async def add_all_missing_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Добавление всех отсутствующих тем."""
+        """Заглушка: добавление всех отсутствующих тем из констант.
+        
+        Эта функция предназначалась для автоматического добавления всех тем
+        из файлов constants.py и constants_kk.py в базу данных.
+        Сейчас не используется, так как темы добавляются вручную через интерфейс.
+        """
         query = update.callback_query
         await self.safe_answer_callback(query)
-        await query.edit_message_text("🚧 Функция добавления всех отсутствующих тем в разработке...")
-
-    async def remove_topic_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Подтверждение удаления темы."""
-        query = update.callback_query
-        await self.safe_answer_callback(query)
-        await query.edit_message_text("🚧 Функция подтверждения удаления темы в разработке...")
-
-    async def remove_topic_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Выполнение удаления темы."""
-        query = update.callback_query
-        await self.safe_answer_callback(query)
-        await query.edit_message_text("🚧 Функция выполнения удаления темы в разработке...")
+        
+        text = "ℹ️ <b>Функция не используется</b>\n\n"
+        text += "Автоматическое добавление всех тем из констант не используется.\n"
+        text += "Темы добавляются вручную через интерфейс 'Добавить тему'.\n\n"
+        text += "Это обеспечивает лучший контроль над содержимым базы данных."
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад к темам", callback_data="admin_topics")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def remove_topic_permanent(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Постоянное удаление темы."""
+        """Заглушка: постоянное удаление темы."""
         query = update.callback_query
         await self.safe_answer_callback(query)
-        await query.edit_message_text("🚧 Функция постоянного удаления темы в разработке...")
+        
+        text = "ℹ️ <b>Функция не используется</b>\n\n"
+        text += "Функция постоянного удаления не используется.\n"
+        text += "Используйте обычное удаление тем - оно уже удаляет все данные полностью."
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад к темам", callback_data="admin_topics")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def remove_topic_permanent_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Подтверждение постоянного удаления темы."""
-        query = update.callback_query
-        await self.safe_answer_callback(query)
-        await query.edit_message_text("🚧 Функция подтверждения постоянного удаления темы в разработке...") 
+        """Заглушка: подтверждение постоянного удаления темы."""
+        await self.remove_topic_permanent(update, context) 
