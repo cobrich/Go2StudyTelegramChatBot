@@ -136,6 +136,12 @@ class AdminHandlers(AdminBaseHandler):
     async def add_base_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.add_base_topics(update, context)
     
+    async def add_base_topic_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.add_base_topic_execute(update, context)
+    
+    async def add_all_missing_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.add_all_missing_topics_execute(update, context)
+    
     async def edit_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.edit_topic_start(update, context)
     
