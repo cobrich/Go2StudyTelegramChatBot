@@ -57,7 +57,7 @@ class CallbackHandlers(BaseHandler):
             try:
                 await query.message.edit_text(
                     "Произошла ошибка при выборе темы. Пожалуйста, попробуйте еще раз.",
-                    reply_markup=build_topic_selection_keyboard()
+                    reply_markup=build_topic_selection_keyboard(user_id)
                 )
             except Exception:
                 pass
@@ -112,7 +112,7 @@ class CallbackHandlers(BaseHandler):
             try:
                 await query.message.edit_text(
                     "Произошла ошибка при получении вопросов. Пожалуйста, попробуйте еще раз.",
-                    reply_markup=build_topic_selection_keyboard()
+                    reply_markup=build_topic_selection_keyboard(user_id)
                 )
             except Exception:
                 pass
@@ -176,7 +176,7 @@ class CallbackHandlers(BaseHandler):
             try:
                 await query.message.edit_text(
                     "Произошла ошибка. Пожалуйста, начните тест заново.",
-                    reply_markup=build_topic_selection_keyboard()
+                    reply_markup=build_topic_selection_keyboard(user_id)
                 )
             except Exception:
                 pass
@@ -305,7 +305,7 @@ class CallbackHandlers(BaseHandler):
             try:
                 await query.message.edit_text(
                     "Произошла ошибка. Пожалуйста, начните тест заново.",
-                    reply_markup=build_topic_selection_keyboard()
+                    reply_markup=build_topic_selection_keyboard(user_id)
                 )
             except Exception as e:
                 logging.error(f"[handle_continue] Exception in error message: {e}")
@@ -335,7 +335,7 @@ class CallbackHandlers(BaseHandler):
         if not topic or not questions or not user_results:
             await query.message.edit_text(
                 "Произошла ошибка. Пожалуйста, начните тест заново.",
-                reply_markup=build_topic_selection_keyboard()
+                reply_markup=build_topic_selection_keyboard(user_id)
             )
             return
         total = len(user_results)
@@ -441,7 +441,7 @@ class CallbackHandlers(BaseHandler):
         if not topic or not questions or not user_results:
             await query.message.edit_text(
                 "Произошла ошибка. Пожалуйста, начните тест заново.",
-                reply_markup=build_topic_selection_keyboard()
+                reply_markup=build_topic_selection_keyboard(user_id)
             )
             return
         total = len(user_results)
@@ -508,7 +508,7 @@ class CallbackHandlers(BaseHandler):
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text="📚 **Выберите раздел математики:**",
-                reply_markup=build_topic_selection_keyboard(),
+                reply_markup=build_topic_selection_keyboard(user_id),
                 parse_mode='Markdown'
             )
         except Exception:
@@ -665,7 +665,7 @@ class CallbackHandlers(BaseHandler):
             try:
                 await query.message.edit_text(
                     "Произошла ошибка при выборе раздела. Пожалуйста, попробуйте еще раз.",
-                    reply_markup=build_topic_selection_keyboard()
+                    reply_markup=build_topic_selection_keyboard(user_id)
                 )
             except Exception:
                 pass
@@ -701,7 +701,7 @@ class CallbackHandlers(BaseHandler):
         try:
             await query.message.edit_text(
                 "📚 **Выберите раздел математики:**",
-                reply_markup=build_topic_selection_keyboard(),
+                reply_markup=build_topic_selection_keyboard(user_id),
                 parse_mode='Markdown'
             )
         except Exception as e:

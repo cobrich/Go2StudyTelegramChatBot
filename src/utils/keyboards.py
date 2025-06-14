@@ -5,11 +5,27 @@ from services.database import Database
 # Инициализируем БД для получения тем
 _db = Database()
 
-def build_topic_selection_keyboard() -> InlineKeyboardMarkup:
+def build_topic_selection_keyboard(user_id: int = None) -> InlineKeyboardMarkup:
     """Create InlineKeyboardMarkup for main topic categories selection."""
-    # Получаем основные разделы из БД
-    base_structure = _db.get_base_topic_structure()
-    main_topics = list(base_structure.keys())
+    # Получаем язык пользователя
+    user_language = _db.get_user_language(user_id) if user_id else 'ru'
+    is_admin = user_id and _db.is_admin(user_id)
+    
+    # Получаем темы с информацией о языке
+    topics_dict = _db.get_topics_with_language_info(active_only=True, for_admin=is_admin)
+    
+    # Фильтруем темы по языку пользователя (для учеников) или показываем все (для админов)
+    if is_admin:
+        # Админы видят все темы с индикаторами языка
+        main_topics = list(topics_dict.keys())
+    else:
+        # Ученики видят только темы на своем языке
+        filtered_topics = {}
+        for main_topic, subtopics in topics_dict.items():
+            filtered_subtopics = [st for st in subtopics if st['language'] == user_language]
+            if filtered_subtopics:
+                filtered_topics[main_topic] = filtered_subtopics
+        main_topics = list(filtered_topics.keys())
     
     keyboard = [
         [InlineKeyboardButton(main_topic, callback_data=f"main_topic_{i}")]
@@ -21,44 +37,32 @@ def build_topic_selection_keyboard() -> InlineKeyboardMarkup:
 
 def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, user_id: int = None) -> InlineKeyboardMarkup:
     """Create InlineKeyboardMarkup for subtopic selection within a main topic."""
-    # Получаем подтемы с количеством вопросов
-    topics_with_counts = _db.get_topics_with_question_counts(active_only=True)
+    # Получаем язык пользователя и проверяем роль
+    user_language = _db.get_user_language(user_id) if user_id else 'ru'
+    is_admin = user_id and _db.is_admin(user_id)
     
-    # Фильтруем подтемы для выбранного основного раздела
-    subtopics_for_main = [
-        topic for topic in topics_with_counts 
-        if topic['main_topic'] == main_topic
-    ]
+    # Получаем темы с информацией о языке
+    topics_dict = _db.get_topics_with_language_info(active_only=True, for_admin=is_admin)
+    
+    # Получаем подтемы для выбранного основного раздела
+    subtopics_for_main = topics_dict.get(main_topic, [])
+    
+    # Фильтруем по языку для учеников
+    if not is_admin:
+        subtopics_for_main = [st for st in subtopics_for_main if st['language'] == user_language]
     
     # Получаем активные темы из БД для получения индексов
     all_active_topics = _db.get_topic_names(active_only=True)
     
-    # Проверяем, является ли пользователь админом
-    is_admin = user_id and _db.is_admin(user_id)
-    
     keyboard = []
     for topic_info in subtopics_for_main:
         subtopic_name = topic_info['name']
-        question_count = topic_info['question_count']
-        has_questions = topic_info['has_questions']
-        
-        # Создаем текст кнопки в зависимости от роли пользователя
-        if is_admin:
-            # Для админов: показываем кружочки, количество вопросов и язык
-            if has_questions:
-                # 🟢 = есть вопросы в БД
-                button_text = f"🟢 {subtopic_name} ({question_count}) [ru]"
-            else:
-                # 🟡 = ИИ генерация доступна
-                button_text = f"🟡 {subtopic_name} (ИИ) [ru]"
-        else:
-            # Для учеников: только название темы без индикаторов
-            button_text = subtopic_name
+        display_name = topic_info['display_name']  # Уже сформировано в зависимости от роли
         
         # Находим индекс подтемы в общем списке активных тем
         try:
             subtopic_index = all_active_topics.index(subtopic_name)
-            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"topic_{subtopic_index}")])
+            keyboard.append([InlineKeyboardButton(display_name, callback_data=f"topic_{subtopic_index}")])
         except ValueError:
             continue
     
@@ -97,7 +101,7 @@ def build_question_keyboard(options: list, q_num: int, max_reached: int, total_q
     
     return InlineKeyboardMarkup(keyboard)
 
-def build_results_keyboard(errors_list: list, current_topic: str) -> InlineKeyboardMarkup:
+def build_results_keyboard(errors_list: list, current_topic: str, user_id: int = None) -> InlineKeyboardMarkup:
     """Build keyboard for test results display."""
     buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]]
     
@@ -108,11 +112,22 @@ def build_results_keyboard(errors_list: list, current_topic: str) -> InlineKeybo
                 callback_data=f"show_expl_{err['q_num']}"
             )])
     else:
-        topics = _db.get_topic_names(active_only=True)
-        if current_topic in topics:
-            topic_index = topics.index(current_topic)
-            buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", 
-                                               callback_data=f"topic_retake_{topic_index}")])
+        # Получаем темы на языке пользователя
+        user_language = _db.get_user_language(user_id) if user_id else 'ru'
+        topics_dict = _db.get_topics_by_language(user_language, active_only=True)
+        
+        # Создаем плоский список тем для поиска индекса
+        user_topics = []
+        for main_topic, subtopics in topics_dict.items():
+            user_topics.extend([st['name'] for st in subtopics])
+        
+        if current_topic in user_topics:
+            # Получаем общий список активных тем для индекса
+            all_active_topics = _db.get_topic_names(active_only=True)
+            if current_topic in all_active_topics:
+                topic_index = all_active_topics.index(current_topic)
+                buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", 
+                                                   callback_data=f"topic_retake_{topic_index}")])
     
     buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
     return InlineKeyboardMarkup(buttons)

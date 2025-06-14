@@ -371,9 +371,13 @@ class CommandHandlers(BaseHandler):
             db_info = self.db.get_user_info(user_id)
             full_name = db_info[0] if db_info else None
             grade = db_info[1] if db_info else None
+            
+            # Обновляем язык пользователя (это автоматически очистит его данные при смене языка)
+            self.db.update_user_language(user_id, language)
             self.db.set_user_info_with_language(user_id, full_name, grade, language)
+            
             context.user_data['awaiting_language_only'] = False
-            await update.message.reply_text(f"Спасибо, {full_name}! Язык изменен на: {language_name}.", reply_markup=self.main_menu_markup)
+            await update.message.reply_text(f"Спасибо, {full_name}! Язык изменен на: {language_name}.\n\n⚠️ При смене языка ваша история ошибок и результатов была очищена.", reply_markup=self.main_menu_markup)
             return
         # If user is in a test, block main menu actions
         if self.db.is_user_active(user_id):
@@ -388,7 +392,7 @@ class CommandHandlers(BaseHandler):
             # Если пользователь в режиме выбора темы, возвращаем к списку тем
             await update.message.reply_text(
                 "📚 **Выберите раздел математики:**",
-                reply_markup=build_topic_selection_keyboard(),
+                reply_markup=build_topic_selection_keyboard(user_id),
                 parse_mode='Markdown'
             )
             return
@@ -404,7 +408,7 @@ class CommandHandlers(BaseHandler):
             # Затем отправляем сообщение с inline-кнопками
             await update.message.reply_text(
                 "📚 **Выберите раздел математики:**",
-                reply_markup=build_topic_selection_keyboard(),
+                reply_markup=build_topic_selection_keyboard(user_id),
                 parse_mode='Markdown'
             )
         elif text == "📊 Мой прогресс":

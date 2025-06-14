@@ -46,6 +46,17 @@ class Database:
                 # Column already exists
                 pass
             
+            # Add language column to subtopics if it doesn't exist
+            try:
+                cursor.execute('ALTER TABLE subtopics ADD COLUMN language TEXT DEFAULT "ru"')
+                # Update existing records to have 'ru' as default language
+                cursor.execute('UPDATE subtopics SET language = "ru" WHERE language IS NULL')
+                conn.commit()
+                print("[LOG] Добавлено поле language в таблицу subtopics")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+            
             # Admins table - для управления администраторами
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS admins (
@@ -601,13 +612,25 @@ class Database:
             conn.commit()
 
     def update_user_language(self, user_id: int, language: str) -> None:
-        """Update user's language."""
+        """Update user's language and clear their data if language changed."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            
+            # Получаем текущий язык пользователя
+            cursor.execute('SELECT language FROM users WHERE user_id = ?', (user_id,))
+            result = cursor.fetchone()
+            current_language = result[0] if result else 'ru'
+            
+            # Обновляем язык
             cursor.execute('''
                 UPDATE users SET language = ? WHERE user_id = ?
             ''', (language, user_id))
             conn.commit()
+            
+            # Если язык изменился, очищаем данные пользователя
+            if current_language != language:
+                print(f"[LOG] Язык пользователя {user_id} изменен с '{current_language}' на '{language}', очищаем данные")
+                self.clear_user_data_on_language_change(user_id)
 
     def get_user_language(self, user_id: int) -> str:
         """Get user's language."""
@@ -2066,3 +2089,211 @@ class Database:
                 }
                 for row in rows
             ]
+    
+    # ===== МЕТОДЫ ДЛЯ РАБОТЫ С ЯЗЫКАМИ =====
+    
+    def clear_user_data_on_language_change(self, user_id: int) -> None:
+        """Очищает user_errors и test_results при смене языка пользователя."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Очищаем ошибки пользователя
+                cursor.execute('DELETE FROM user_errors WHERE user_id = ?', (user_id,))
+                deleted_errors = cursor.rowcount
+                
+                # Очищаем результаты тестов
+                cursor.execute('DELETE FROM test_results WHERE user_id = ?', (user_id,))
+                deleted_results = cursor.rowcount
+                
+                conn.commit()
+                print(f"[LOG] Очищены данные пользователя {user_id}: {deleted_errors} ошибок, {deleted_results} результатов")
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка очистки данных пользователя {user_id}: {e}")
+    
+    def get_topics_by_language(self, language: str, active_only: bool = True) -> List[Dict]:
+        """Получает темы для конкретного языка."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                query = '''
+                    SELECT mt.name as main_topic, st.name as subtopic, st.id, st.language
+                    FROM main_topics mt
+                    JOIN subtopics st ON mt.id = st.main_topic_id
+                    WHERE st.language = ?
+                '''
+                params = [language]
+                
+                if active_only:
+                    query += ' AND mt.is_active = 1 AND st.is_active = 1'
+                
+                query += ' ORDER BY mt.order_index, st.order_index'
+                
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                
+                # Группируем по основным темам
+                topics_dict = {}
+                for main_topic, subtopic, subtopic_id, lang in rows:
+                    if main_topic not in topics_dict:
+                        topics_dict[main_topic] = []
+                    topics_dict[main_topic].append({
+                        'id': subtopic_id,
+                        'name': subtopic,
+                        'language': lang
+                    })
+                
+                return topics_dict
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения тем по языку {language}: {e}")
+            return {}
+    
+    def get_questions_by_user_language(self, user_id: int, topic: str = None) -> List[Dict]:
+        """Получает вопросы на языке пользователя через связь с темами."""
+        try:
+            user_language = self.get_user_language(user_id)
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Получаем вопросы через связь с темами по языку
+                query = '''
+                    SELECT DISTINCT q.id, q.topic, q.question, q.answer, q.explanation, 
+                           q.incorrect_options, q.question_type, q.source, q.image_path
+                    FROM questions q
+                    JOIN subtopics st ON q.topic = st.name
+                    WHERE st.language = ?
+                '''
+                params = [user_language]
+                
+                if topic:
+                    query += ' AND q.topic = ?'
+                    params.append(topic)
+                
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+                
+                return [
+                    {
+                        'id': row[0],
+                        'topic': row[1],
+                        'question': row[2],
+                        'answer': row[3],
+                        'explanation': row[4],
+                        'incorrect_options': row[5],
+                        'question_type': row[6],
+                        'source': row[7],
+                        'image_path': row[8]
+                    }
+                    for row in rows
+                ]
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения вопросов по языку пользователя {user_id}: {e}")
+            return []
+    
+    def add_topic_with_language(self, name: str, language: str, main_topic_name: str, created_by: int = None) -> bool:
+        """Добавляет новую тему с указанием языка."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Находим ID основной темы
+                cursor.execute('SELECT id FROM main_topics WHERE name = ?', (main_topic_name,))
+                main_topic_result = cursor.fetchone()
+                
+                if not main_topic_result:
+                    print(f"[ERROR] Основная тема '{main_topic_name}' не найдена")
+                    return False
+                
+                main_topic_id = main_topic_result[0]
+                
+                # Добавляем подтему с языком
+                cursor.execute('''
+                    INSERT INTO subtopics (main_topic_id, name, language, is_active)
+                    VALUES (?, ?, ?, 1)
+                ''', (main_topic_id, name, language))
+                
+                conn.commit()
+                print(f"[LOG] Добавлена тема '{name}' на языке '{language}' в раздел '{main_topic_name}'")
+                return True
+                
+        except sqlite3.IntegrityError:
+            print(f"[ERROR] Тема '{name}' уже существует в разделе '{main_topic_name}'")
+            return False
+        except Exception as e:
+            print(f"[ERROR] Ошибка добавления темы с языком: {e}")
+            return False
+    
+    def get_topics_with_language_info(self, active_only: bool = True, for_admin: bool = False) -> List[Dict[str, Any]]:
+        """Получает темы с информацией о языке для админов или учеников."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                query = '''
+                    SELECT mt.name as main_topic, st.name as subtopic, st.language, 
+                           COUNT(q.id) as question_count, st.id
+                    FROM main_topics mt
+                    JOIN subtopics st ON mt.id = st.main_topic_id
+                    LEFT JOIN questions q ON st.name = q.topic
+                '''
+                
+                if active_only:
+                    query += ' WHERE mt.is_active = 1 AND st.is_active = 1'
+                
+                query += '''
+                    GROUP BY mt.name, st.name, st.language, st.id
+                    ORDER BY mt.order_index, st.order_index
+                '''
+                
+                cursor.execute(query)
+                rows = cursor.fetchall()
+                
+                topics_dict = {}
+                for main_topic, subtopic, language, question_count, subtopic_id in rows:
+                    if main_topic not in topics_dict:
+                        topics_dict[main_topic] = []
+                    
+                    # Формируем название в зависимости от роли
+                    if for_admin:
+                        # Для админов: показываем количество вопросов и язык
+                        display_name = f"{subtopic} ({question_count}) [{language}]"
+                    else:
+                        # Для учеников: только название темы
+                        display_name = subtopic
+                    
+                    topics_dict[main_topic].append({
+                        'id': subtopic_id,
+                        'name': subtopic,
+                        'display_name': display_name,
+                        'language': language,
+                        'question_count': question_count
+                    })
+                
+                return topics_dict
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения тем с информацией о языке: {e}")
+            return {}
+    
+    def update_subtopic_language(self, subtopic_id: int, language: str) -> bool:
+        """Обновляет язык подтемы."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE subtopics 
+                    SET language = ?
+                    WHERE id = ?
+                ''', (language, subtopic_id))
+                
+                conn.commit()
+                return cursor.rowcount > 0
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка обновления языка подтемы {subtopic_id}: {e}")
+            return False
