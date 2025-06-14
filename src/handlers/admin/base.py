@@ -32,19 +32,45 @@ class AdminBaseHandler(BaseHandler):
 
     async def admin_panel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Главная админ-панель."""
-        query = update.callback_query
-        if query:
-            await self.safe_answer_callback(query)
-        
         user_id = update.effective_user.id
         
         if not self.db.is_admin(user_id):
-            text = "❌ У вас нет прав администратора."
-            if query:
-                await query.edit_message_text(text)
+            if update.message:
+                await update.message.reply_text("❌ У вас нет прав администратора.")
             else:
-                await update.message.reply_text(text)
+                await update.callback_query.answer("❌ У вас нет прав администратора.")
             return
+        
+        # Удаляем предыдущие сообщения для чистого интерфейса
+        if update.message:
+            try:
+                # Удаляем сообщение с командой /admin
+                await update.message.delete()
+            except Exception:
+                pass  # Игнорируем ошибки удаления (например, если сообщение уже удалено)
+            
+            # Пытаемся удалить предыдущие сообщения (обычно там выбор тем)
+            chat_id = update.message.chat_id
+            message_id = update.message.message_id
+            
+            # Пытаемся удалить несколько предыдущих сообщений (обычно там выбор тем)
+            for i in range(1, 6):  # Проверяем 5 предыдущих сообщений
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=message_id - i)
+                except Exception:
+                    # Если не удалось удалить, пытаемся убрать клавиатуру
+                    try:
+                        await context.bot.edit_message_reply_markup(
+                            chat_id=chat_id, 
+                            message_id=message_id - i, 
+                            reply_markup=None
+                        )
+                    except Exception:
+                        pass  # Игнорируем ошибки
+        
+        query = update.callback_query
+        if query:
+            await self.safe_answer_callback(query)
         
         # Получаем статистику для админ-панели
         try:
@@ -89,10 +115,11 @@ class AdminBaseHandler(BaseHandler):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        if query:
-            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
-        else:
+        if update.message:
+            # Отправляем новое сообщение (старые уже удалены/очищены)
             await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        else:
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def handle_admin_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
         """Обработка текстовых сообщений в админ-режиме. Возвращает True если сообщение обработано."""

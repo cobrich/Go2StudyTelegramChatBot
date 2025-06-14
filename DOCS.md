@@ -187,6 +187,66 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 ---
 
+### 🔧 Bug Fix: Admin Panel Message Cleanup (January 2025)
+
+**✅ FIXED: Restored message cleanup functionality when opening admin panel**
+
+#### 🐛 Problem:
+- When opening admin panel with `/admin` command, previous messages (including topic selection) remained visible
+- Users could still click on topic selection buttons even after admin panel was opened
+- This created confusion and poor user experience
+- The cleanup functionality existed in old code but was missing in the new modular admin system
+
+#### ✅ Solution:
+**Added message cleanup logic to admin panel**:
+- **File**: `src/handlers/admin/base.py`
+- **Method**: `admin_panel()` - enhanced with message deletion logic
+- **Functionality**:
+  - Deletes the `/admin` command message
+  - Attempts to delete 5 previous messages (usually topic selection)
+  - If deletion fails, removes inline keyboards from previous messages
+  - Provides clean interface when entering admin panel
+
+**Technical implementation**:
+```python
+# Delete previous messages for clean interface
+if update.message:
+    try:
+        # Delete the /admin command message
+        await update.message.delete()
+    except Exception:
+        pass  # Ignore deletion errors
+    
+    # Try to delete previous messages (usually topic selection)
+    chat_id = update.message.chat_id
+    message_id = update.message.message_id
+    
+    # Try to delete several previous messages
+    for i in range(1, 6):  # Check 5 previous messages
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=message_id - i)
+        except Exception:
+            # If deletion failed, try to remove keyboard
+            try:
+                await context.bot.edit_message_reply_markup(
+                    chat_id=chat_id, 
+                    message_id=message_id - i, 
+                    reply_markup=None
+                )
+            except Exception:
+                pass  # Ignore errors
+```
+
+#### 🎯 Result:
+- **Clean admin interface**: No leftover topic selection buttons when entering admin panel
+- **Better UX**: Users can't accidentally click on disabled topic buttons
+- **Consistent behavior**: Admin panel now works the same as in the original implementation
+- **Error handling**: Graceful handling of message deletion failures
+
+**Status**: ✅ **ADMIN PANEL MESSAGE CLEANUP RESTORED** - Clean interface when entering admin mode
+
+---
+
 ### 🔧 Bug Fix: Missing Database Methods (January 2025)
 
 **✅ FIXED: Added missing database methods for user progress and admin management**
@@ -770,95 +830,4 @@ await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML'
 2. **Verified all delegation methods exist**:
    - ✅ All student editing methods properly delegated in `__init__.py`
    - ✅ All deletion methods properly delegated
-   - ✅ Complete method chain: `bot.py` → `__init__.py` → `students.py`
-
-#### 🔧 Technical Details:
-
-**Callback Data Flow (Fixed):**
-1. **Deletion**: `remove_student` → `remove_student_confirm_{user_id}` → `remove_student_execute_{user_id}`
-2. **Editing**: `edit_student_start` → `edit_student_select_{user_id}` → specific edit actions
-
-**Handler Registration (Fixed):**
-- `^remove_student_confirm_` - Now matches `remove_student_confirm_123456`
-- `^edit_student_start$` - Now matches `edit_student_start` exactly
-- `^edit_student_select_` - Now matches `edit_student_select_123456`
-
-#### 📊 Affected Functionality (Now Working):
-
-**Student Deletion:**
-- ✅ Select student for deletion
-- ✅ Confirm deletion with student details
-- ✅ Execute deletion with success message
-- ✅ Error handling with recovery options
-
-**Student Editing:**
-- ✅ Select student for editing
-- ✅ Choose field to edit (name, grade, phone, language, status)
-- ✅ Process text input for changes
-- ✅ Toggle student status (active/inactive)
-- ✅ Change student language with data clearing
-
-#### ✅ Result:
-- ✅ **Student deletion works correctly** - Can delete students with confirmation
-- ✅ **Student editing works correctly** - Can edit all student fields
-- ✅ **Proper error handling** - User-friendly error messages with recovery options
-- ✅ **Complete workflow** - All admin student management functions operational
-
-**Status**: ✅ **STUDENT DELETION AND EDITING FIXED** - Admin panel now works correctly
-
----
-
-## 🔧 Enhancement: Improved Admin Panel Navigation (January 2025)
-
-**✅ ENHANCED: Cleaner admin panel with proper exit functionality**
-
-#### 🎯 Problem:
-- Admin panel had unnecessary "Базовая структура" (Base Structure) button that wasn't needed
-- No clear way to exit admin panel and return to main menu
-- Users had to manually navigate back without proper exit option
-
-#### ✅ Solution Implemented:
-
-1. **Removed unnecessary "Базовая структура" button**:
-   - Removed from main admin panel menu
-   - Cleaned up unused base structure handlers from bot.py
-   - Simplified admin panel interface
-
-2. **Added "Назад к главному меню" (Back to Main Menu) button**:
-   - Provides clear exit path from admin panel
-   - Uses existing `main_menu` callback handler
-   - Returns user to normal bot interface
-
-3. **Updated admin panel layout**:
-   ```
-   Before:
-   👥 Управление учениками
-   📚 Управление темами  
-   ❓ Управление вопросами
-   👨‍💼 Управление админами
-   📊 Статистика и отчеты
-   🏗️ Базовая структура        ← Removed
-   
-   After:
-   👥 Управление учениками
-   📚 Управление темами
-   ❓ Управление вопросами  
-   👨‍💼 Управление админами
-   📊 Статистика и отчеты
-   🔙 Назад к главному меню     ← Added
-   ```
-
-4. **Code cleanup**:
-   - Removed all base structure handlers from `src/bot.py`
-   - Kept base structure methods in `base.py` as stubs for future use
-   - Cleaner, more maintainable codebase
-
-#### 🎯 Benefits:
-- **Better UX**: Clear exit path from admin panel
-- **Cleaner Interface**: Removed unused functionality
-- **Easier Navigation**: Admins can easily return to main menu
-- **Code Quality**: Removed unused handlers and simplified structure
-
-**Status**: ✅ **ADMIN PANEL NAVIGATION IMPROVED** - Clean interface with proper exit functionality
-
----
+   - ✅ Complete method chain: `bot.py` → `__init__.py`
