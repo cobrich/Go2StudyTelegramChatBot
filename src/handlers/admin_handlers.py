@@ -12,6 +12,7 @@ from handlers.base_handler import BaseHandler
 from services.topic_manager import TopicManager
 from typing import Dict, List
 from datetime import datetime
+from services.ai_service import AIService
 
 class AdminHandlers(BaseHandler):
     def __init__(self, db: Database, question_service: QuestionService):
@@ -1451,14 +1452,17 @@ class AdminHandlers(BaseHandler):
                 await processing_msg.edit_text(no_questions_msg, reply_markup=reply_markup, parse_mode='HTML')
                 return
             
-            await processing_msg.edit_text(f"⏳ Найдено {len(questions)} вопросов. Сохраняю в базу данных...")
+            await processing_msg.edit_text(f"⏳ Найдено {len(questions)} вопросов. Генерирую объяснения с помощью ИИ...")
+            
+            # Инициализируем AI сервис для генерации объяснений
+            ai_service = AIService()
             
             # Сохраняем вопросы в базу данных
             saved_count = 0
             skipped_count = 0
             topic_stats = {}
             
-            for question in questions:
+            for idx, question in enumerate(questions, 1):
                 question_text = question['question'].strip()
                 topic = question.get('topic', 'Операции с дробями и остатками')
                 
@@ -1503,11 +1507,25 @@ class AdminHandlers(BaseHandler):
                     if i != correct_answer_index:
                         incorrect_options.append(option)
                 
+                # Генерируем подробное объяснение с помощью AI
+                try:
+                    if idx % 3 == 0:  # Обновляем сообщение каждые 3 вопроса
+                        await processing_msg.edit_text(f"⏳ Генерирую объяснение для вопроса {idx}/{len(questions)}...")
+                    detailed_explanation = ai_service.generate_detailed_explanation(
+                        question_text, 
+                        correct_answer_text, 
+                        topic
+                    )
+                    logging.info(f"[AI] Объяснение сгенерировано для вопроса {idx}: {detailed_explanation[:100]}...")
+                except Exception as e:
+                    logging.error(f"[AI] Ошибка генерации объяснения для вопроса {idx}: {e}")
+                    detailed_explanation = f"Правильный ответ: {correct_answer_letter}) {correct_answer_text}"
+                
                 db_question = {
                     'topic': topic,
                     'question': question_text,
                     'answer': correct_answer_text,
-                    'explanation': f"Правильный ответ: {correct_answer_letter}) {correct_answer_text}",
+                    'explanation': detailed_explanation,
                     'incorrect_options': '\n'.join(incorrect_options),
                     'question_type': 'standard',
                     'source': 'pdf'
@@ -1524,7 +1542,8 @@ class AdminHandlers(BaseHandler):
             result_text += f"📄 Файл: {update.message.document.file_name}\n"
             result_text += f"📊 Найдено вопросов: {len(questions)}\n"
             result_text += f"💾 Сохранено новых: {saved_count}\n"
-            result_text += f"⏭️ Пропущено (дубликаты): {skipped_count}\n\n"
+            result_text += f"⏭️ Пропущено (дубликаты): {skipped_count}\n"
+            result_text += f"🤖 ИИ объяснения: сгенерированы для всех новых вопросов\n\n"
             
             if topic_stats:
                 result_text += "<b>📚 Статистика по темам:</b>\n"
