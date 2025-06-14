@@ -256,16 +256,17 @@ class Database:
             cursor.execute('SELECT COUNT(*) FROM main_topics')
             if cursor.fetchone()[0] == 0:
                 try:
+                    # Инициализируем русские темы
                     from config.constants import TOPIC_HIERARCHY
-                    # Добавляем основные разделы
+                    # Добавляем русские основные разделы
                     for order_index, main_topic in enumerate(TOPIC_HIERARCHY.keys()):
                         cursor.execute('''
-                            INSERT INTO main_topics (name, order_index, is_active)
-                            VALUES (?, ?, 1)
+                            INSERT INTO main_topics (name, order_index, language, is_active)
+                            VALUES (?, ?, "ru", 1)
                         ''', (main_topic, order_index))
                     
-                    # Получаем ID основных тем и добавляем подтемы
-                    cursor.execute('SELECT id, name FROM main_topics')
+                    # Получаем ID русских основных тем и добавляем подтемы
+                    cursor.execute('SELECT id, name FROM main_topics WHERE language = "ru"')
                     main_topics_map = {name: id for id, name in cursor.fetchall()}
                     
                     for main_topic, subtopics in TOPIC_HIERARCHY.items():
@@ -276,7 +277,35 @@ class Database:
                                 VALUES (?, ?, ?, 1)
                             ''', (main_topic_id, subtopic, subtopic_order))
                     
-                    print(f"[LOG] Инициализированы темы из иерархической структуры: {len(TOPIC_HIERARCHY)} основных разделов")
+                    print(f"[LOG] Инициализированы русские темы: {len(TOPIC_HIERARCHY)} основных разделов")
+                    
+                    # Инициализируем казахские темы
+                    try:
+                        from config.constants_kk import TOPIC_HIERARCHY_KK
+                        # Добавляем казахские основные разделы
+                        for order_index, main_topic_kk in enumerate(TOPIC_HIERARCHY_KK.keys()):
+                            cursor.execute('''
+                                INSERT INTO main_topics (name, order_index, language, is_active)
+                                VALUES (?, ?, "kk", 1)
+                            ''', (main_topic_kk, order_index))
+                        
+                        # Получаем ID казахских основных тем и добавляем подтемы
+                        cursor.execute('SELECT id, name FROM main_topics WHERE language = "kk"')
+                        main_topics_kk_map = {name: id for id, name in cursor.fetchall()}
+                        
+                        for main_topic_kk, subtopics_kk in TOPIC_HIERARCHY_KK.items():
+                            main_topic_id = main_topics_kk_map[main_topic_kk]
+                            for subtopic_order, subtopic_kk in enumerate(subtopics_kk):
+                                cursor.execute('''
+                                    INSERT INTO subtopics (main_topic_id, name, order_index, is_active)
+                                    VALUES (?, ?, ?, 1)
+                                ''', (main_topic_id, subtopic_kk, subtopic_order))
+                        
+                        print(f"[LOG] Инициализированы казахские темы: {len(TOPIC_HIERARCHY_KK)} основных разделов")
+                        
+                    except ImportError:
+                        print("[LOG] config.constants_kk не найден, пропускаем инициализацию казахских тем")
+                    
                 except ImportError:
                     print("[LOG] config.constants не найден, пропускаем инициализацию тем")
             
@@ -2369,10 +2398,10 @@ class Database:
             return {}
 
     def create_kazakh_main_topics(self) -> bool:
-        """Создает казахские версии основных разделов."""
+        """Создает казахские версии основных разделов (если они еще не созданы)."""
         try:
             try:
-                from config.constants_kk import MAIN_TOPICS_KK, TOPIC_HIERARCHY_KK
+                from config.constants_kk import TOPIC_HIERARCHY_KK
             except ImportError:
                 print("[ERROR] config.constants_kk не найден")
                 return False
@@ -2380,45 +2409,33 @@ class Database:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Получаем существующие русские разделы
-                cursor.execute('SELECT id, name, order_index FROM main_topics WHERE language = "ru"')
-                russian_topics = cursor.fetchall()
+                # Проверяем, есть ли уже казахские темы
+                cursor.execute('SELECT COUNT(*) FROM main_topics WHERE language = "kk"')
+                existing_kk_count = cursor.fetchone()[0]
                 
+                if existing_kk_count > 0:
+                    print(f"[LOG] Казахские темы уже существуют ({existing_kk_count} разделов), пропускаем создание")
+                    return True
+                
+                # Создаем казахские основные разделы
                 created_count = 0
-                for topic_id, russian_name, order_index in russian_topics:
-                    # Проверяем, есть ли перевод для этого раздела
-                    if russian_name in MAIN_TOPICS_KK:
-                        kazakh_name = MAIN_TOPICS_KK[russian_name]
-                        
-                        # Проверяем, не существует ли уже казахская версия
-                        cursor.execute('SELECT id FROM main_topics WHERE name = ? AND language = "kk"', (kazakh_name,))
-                        if cursor.fetchone():
-                            continue  # Уже существует
-                        
-                        # Создаем казахскую версию основного раздела
-                        cursor.execute('''
-                            INSERT INTO main_topics (name, order_index, language, is_active)
-                            VALUES (?, ?, "kk", 1)
-                        ''', (kazakh_name, order_index))
-                        
-                        kazakh_main_topic_id = cursor.lastrowid
-                        created_count += 1
-                        
-                        # Создаем казахские подтемы для этого раздела
-                        if kazakh_name in TOPIC_HIERARCHY_KK:
-                            kazakh_subtopics = TOPIC_HIERARCHY_KK[kazakh_name]
-                            for subtopic_order, kazakh_subtopic in enumerate(kazakh_subtopics):
-                                # Проверяем, не существует ли уже эта подтема
-                                cursor.execute('''
-                                    SELECT id FROM subtopics 
-                                    WHERE main_topic_id = ? AND name = ?
-                                ''', (kazakh_main_topic_id, kazakh_subtopic))
-                                
-                                if not cursor.fetchone():
-                                    cursor.execute('''
-                                        INSERT INTO subtopics (main_topic_id, name, order_index, is_active)
-                                        VALUES (?, ?, ?, 1)
-                                    ''', (kazakh_main_topic_id, kazakh_subtopic, subtopic_order))
+                for order_index, main_topic_kk in enumerate(TOPIC_HIERARCHY_KK.keys()):
+                    cursor.execute('''
+                        INSERT INTO main_topics (name, order_index, language, is_active)
+                        VALUES (?, ?, "kk", 1)
+                    ''', (main_topic_kk, order_index))
+                    
+                    kazakh_main_topic_id = cursor.lastrowid
+                    created_count += 1
+                    
+                    # Создаем казахские подтемы для этого раздела
+                    if main_topic_kk in TOPIC_HIERARCHY_KK:
+                        kazakh_subtopics = TOPIC_HIERARCHY_KK[main_topic_kk]
+                        for subtopic_order, kazakh_subtopic in enumerate(kazakh_subtopics):
+                            cursor.execute('''
+                                INSERT INTO subtopics (main_topic_id, name, order_index, is_active)
+                                VALUES (?, ?, ?, 1)
+                            ''', (kazakh_main_topic_id, kazakh_subtopic, subtopic_order))
                 
                 conn.commit()
                 print(f"[LOG] Создано {created_count} казахских основных разделов")
