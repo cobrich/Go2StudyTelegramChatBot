@@ -46,14 +46,14 @@ class StatsHandler(AdminBaseHandler):
                 cursor.execute('SELECT COUNT(DISTINCT user_id) FROM test_results WHERE timestamp >= ?', (week_ago,))
                 active_users_week = cursor.fetchone()[0]
                 
-                # Средний балл
-                cursor.execute('SELECT AVG(score) FROM test_results')
+                # Средний балл (используем percentage вместо score)
+                cursor.execute('SELECT AVG(percentage) FROM test_results')
                 avg_score_result = cursor.fetchone()[0]
                 avg_score = round(avg_score_result, 1) if avg_score_result else 0
                 
                 # Топ-5 активных пользователей
                 cursor.execute('''
-                    SELECT u.full_name, u.username, COUNT(tr.id) as test_count, AVG(tr.score) as avg_score
+                    SELECT u.full_name, u.username, COUNT(tr.id) as test_count, AVG(tr.percentage) as avg_percentage
                     FROM users u
                     JOIN test_results tr ON u.user_id = tr.user_id
                     GROUP BY u.user_id, u.full_name, u.username
@@ -79,9 +79,9 @@ class StatsHandler(AdminBaseHandler):
                 
                 if top_users:
                     text += f"🏆 <b>Топ-5 активных учеников:</b>\n"
-                    for i, (full_name, username, test_count, user_avg_score) in enumerate(top_users, 1):
+                    for i, (full_name, username, test_count, user_avg_percentage) in enumerate(top_users, 1):
                         name = full_name or f"@{username}" if username else "Неизвестен"
-                        text += f"{i}. {name}: {test_count} тестов, {round(user_avg_score, 1)}%\n"
+                        text += f"{i}. {name}: {test_count} тестов, {round(user_avg_percentage, 1)}%\n"
                 
         except Exception as e:
             logging.error(f"Error getting general stats: {e}")
@@ -107,7 +107,7 @@ class StatsHandler(AdminBaseHandler):
                 
                 # Последние 20 тестов
                 cursor.execute('''
-                    SELECT tr.timestamp, u.full_name, u.username, tr.topic, tr.score, tr.total_questions
+                    SELECT tr.timestamp, u.full_name, u.username, tr.topic, tr.percentage
                     FROM test_results tr
                     LEFT JOIN users u ON tr.user_id = u.user_id
                     ORDER BY tr.timestamp DESC
@@ -121,14 +121,14 @@ class StatsHandler(AdminBaseHandler):
                     text = f"📋 <b>История активности</b>\n\n"
                     text += f"Последние 20 тестов:\n\n"
                     
-                    for i, (timestamp, full_name, username, topic, score, total_questions) in enumerate(recent_tests, 1):
+                    for i, (timestamp, full_name, username, topic, percentage) in enumerate(recent_tests, 1):
                         name = full_name or f"@{username}" if username else "Неизвестен"
                         date_str = timestamp[:16] if timestamp else "н/д"
                         
                         text += f"{i}. <b>{name}</b>\n"
                         text += f"   📅 {date_str}\n"
                         text += f"   📚 {topic}\n"
-                        text += f"   📊 {score}% ({score * total_questions // 100}/{total_questions})\n\n"
+                        text += f"   📊 {percentage}%\n\n"
                 
         except Exception as e:
             logging.error(f"Error getting user history: {e}")

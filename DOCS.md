@@ -198,52 +198,61 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 - The cleanup functionality existed in old code but was missing in the new modular admin system
 
 #### ✅ Solution:
-**Added message cleanup logic to admin panel**:
-- **File**: `src/handlers/admin/base.py`
-- **Method**: `admin_panel()` - enhanced with message deletion logic
-- **Functionality**:
-  - Deletes the `/admin` command message
-  - Attempts to delete 5 previous messages (usually topic selection)
-  - If deletion fails, removes inline keyboards from previous messages
-  - Provides clean interface when entering admin panel
 
-**Technical implementation**:
-```python
-# Delete previous messages for clean interface
-if update.message:
-    try:
-        # Delete the /admin command message
-        await update.message.delete()
-    except Exception:
-        pass  # Ignore deletion errors
-    
-    # Try to delete previous messages (usually topic selection)
-    chat_id = update.message.chat_id
-    message_id = update.message.message_id
-    
-    # Try to delete several previous messages
-    for i in range(1, 6):  # Check 5 previous messages
-        try:
-            await context.bot.delete_message(chat_id=chat_id, message_id=message_id - i)
-        except Exception:
-            # If deletion failed, try to remove keyboard
-            try:
-                await context.bot.edit_message_reply_markup(
-                    chat_id=chat_id, 
-                    message_id=message_id - i, 
-                    reply_markup=None
-                )
-            except Exception:
-                pass  # Ignore errors
+**Updated `src/handlers/admin/base.py`**:
+- Restored message deletion logic in `admin_panel()` method
+- Added cleanup of previous 5 messages when opening admin panel
+- Added fallback to remove keyboards if message deletion fails
+- Improved user experience with clean interface transitions
+
+**Technical changes**:
+- Delete `/admin` command message
+- Try to delete 5 previous messages (usually topic selection)
+- If deletion fails, remove keyboards from previous messages
+- Graceful error handling for all cleanup operations
+
+**Result**: Clean admin panel interface without leftover buttons and messages.
+
+---
+
+### 🔧 Bug Fix: Admin Statistics Database Errors (January 2025)
+
+**✅ FIXED: Corrected database field names in admin statistics module**
+
+#### 🐛 Problem:
+- Admin statistics module (`src/handlers/admin/stats.py`) was using incorrect database field names
+- Used `score` and `total_questions` fields that don't exist in `test_results` table
+- Caused SQL errors when trying to view statistics in admin panel
+- Statistics were not displaying correctly due to database schema mismatch
+
+#### ✅ Solution:
+
+**Updated `src/handlers/admin/stats.py`**:
+- **Fixed field names**: Changed `score` → `percentage` in all SQL queries
+- **Removed non-existent fields**: Removed references to `total_questions` field
+- **Corrected statistics calculations**: Updated average score calculation to use `percentage`
+- **Fixed top users query**: Updated to use `AVG(tr.percentage)` instead of `AVG(tr.score)`
+- **Simplified history display**: Removed complex score calculations, now shows direct percentage
+
+**Technical changes**:
+```sql
+-- Before (incorrect):
+SELECT AVG(score) FROM test_results
+SELECT tr.score, tr.total_questions FROM test_results
+
+-- After (correct):
+SELECT AVG(percentage) FROM test_results  
+SELECT tr.percentage FROM test_results
 ```
 
-#### 🎯 Result:
-- **Clean admin interface**: No leftover topic selection buttons when entering admin panel
-- **Better UX**: Users can't accidentally click on disabled topic buttons
-- **Consistent behavior**: Admin panel now works the same as in the original implementation
-- **Error handling**: Graceful handling of message deletion failures
+**What statistics now show correctly**:
+- ✅ **General statistics**: Active students, total questions, unique topics, total tests, admins count
+- ✅ **Weekly activity**: Tests and active users in last 7 days
+- ✅ **Average score**: Calculated from `percentage` field
+- ✅ **Top 5 active students**: With correct test count and average percentage
+- ✅ **User history**: Last 20 tests with date, student name, topic, and percentage
 
-**Status**: ✅ **ADMIN PANEL MESSAGE CLEANUP RESTORED** - Clean interface when entering admin mode
+**Result**: Admin statistics panel now works correctly and displays accurate data from the database.
 
 ---
 
