@@ -147,7 +147,7 @@ def main() -> None:
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.remove_student_confirm,
-        pattern="^remove_student_(username|id)_"
+        pattern="^remove_student_confirm_"
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.remove_student_execute,
@@ -163,7 +163,11 @@ def main() -> None:
     # Student editing handlers
     application.add_handler(CallbackQueryHandler(
         admin_handlers.edit_student_start,
-        pattern="^edit_student_[0-9]+$"
+        pattern="^edit_student_start$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_student_select,
+        pattern="^edit_student_select_"
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.edit_student_name_start,
