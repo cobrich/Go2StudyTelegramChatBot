@@ -14,7 +14,7 @@ from services.question_service import QuestionService
 from services.ai_service import AIService
 from handlers.command_handlers import CommandHandlers
 from handlers.callback_handlers import CallbackHandlers
-from handlers.admin_handlers import AdminHandlers
+from handlers.admin import AdminHandlers
 
 # Configure logging
 logging.basicConfig(
@@ -187,7 +187,13 @@ def main() -> None:
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.set_student_language,
-        pattern="^set_language_(ru|kz)_"
+        pattern="^set_language_(ru|kk)_"
+    ))
+    
+    # Student language selection handler for adding new students
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.handle_student_language_selection,
+        pattern="^student_lang_"
     ))
     
     # Topic management handlers

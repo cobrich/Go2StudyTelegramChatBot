@@ -116,6 +116,8 @@ class StudentsHandler(AdminBaseHandler):
 
     async def handle_student_grade(self, update: Update, context: ContextTypes.DEFAULT_TYPE, grade_text: str) -> None:
         """Обработка добавления ученика - этап 4 (класс) - переход к выбору языка."""
+        logging.info(f"[handle_student_grade] Called with grade_text: {grade_text}")
+        
         try:
             grade = int(grade_text)
             if grade < 1 or grade > 11:
@@ -128,6 +130,9 @@ class StudentsHandler(AdminBaseHandler):
         # Сохраняем класс и переходим к выбору языка
         context.user_data['new_student_grade'] = grade
         context.user_data['admin_action'] = 'student_language'
+        
+        logging.info(f"[handle_student_grade] Saved grade: {grade}, set admin_action to 'student_language'")
+        logging.info(f"[handle_student_grade] Current context data: {dict(context.user_data)}")
         
         # Показываем выбор языка
         text = f"🌐 <b>Выбор языка для ученика</b>\n\n"
@@ -143,6 +148,8 @@ class StudentsHandler(AdminBaseHandler):
 
     async def handle_student_by_id_grade(self, update: Update, context: ContextTypes.DEFAULT_TYPE, grade_text: str) -> None:
         """Обработка добавления ученика по ID - этап 4 (класс) - переход к выбору языка."""
+        logging.info(f"[handle_student_by_id_grade] Called with grade_text: {grade_text}")
+        
         try:
             grade = int(grade_text)
             if grade < 1 or grade > 11:
@@ -155,6 +162,9 @@ class StudentsHandler(AdminBaseHandler):
         # Сохраняем класс и переходим к выбору языка
         context.user_data['new_student_grade'] = grade
         context.user_data['admin_action'] = 'student_by_id_language'
+        
+        logging.info(f"[handle_student_by_id_grade] Saved grade: {grade}, set admin_action to 'student_by_id_language'")
+        logging.info(f"[handle_student_by_id_grade] Current context data: {dict(context.user_data)}")
         
         # Показываем выбор языка
         text = f"🌐 <b>Выбор языка для ученика</b>\n\n"
@@ -175,9 +185,12 @@ class StudentsHandler(AdminBaseHandler):
         query = update.callback_query
         await self.safe_answer_callback(query)
         
+        logging.info(f"[handle_student_language_selection] Called with callback_data: {query.data}")
+        
         # Извлекаем выбранный язык из callback_data
         # Формат: student_lang_ru или student_lang_kk
         language = query.data.split('_')[-1]  # ru или kk
+        logging.info(f"[handle_student_language_selection] Extracted language: {language}")
         
         # Получаем все сохраненные данные
         student_user_id = context.user_data.get('new_student_user_id')
@@ -187,24 +200,32 @@ class StudentsHandler(AdminBaseHandler):
         grade = context.user_data.get('new_student_grade')
         admin_id = update.effective_user.id
         
+        logging.info(f"[handle_student_language_selection] Context data: user_id={student_user_id}, username={username}, fullname={fullname}, grade={grade}")
+        
         if not all([fullname, grade]):
+            logging.error(f"[handle_student_language_selection] Missing required data: fullname={fullname}, grade={grade}")
             await query.edit_message_text("❌ Ошибка: не все данные ученика сохранены. Попробуйте заново.")
             return
         
         # Определяем тип добавления (по username или по ID)
         if student_user_id:
+            logging.info(f"[handle_student_language_selection] Adding student by ID: {student_user_id}")
             # Добавление по ID
             success = await self._add_student_by_id_with_language(
                 student_user_id, fullname, grade, admin_id, phone_number, language, context
             )
         elif username:
+            logging.info(f"[handle_student_language_selection] Adding student by username: {username}")
             # Добавление по username
             success = await self._add_student_by_username_with_language(
                 username, fullname, grade, admin_id, phone_number, language, context
             )
         else:
+            logging.error(f"[handle_student_language_selection] No user_id or username found")
             await query.edit_message_text("❌ Ошибка: не найден ни ID, ни username ученика.")
             return
+        
+        logging.info(f"[handle_student_language_selection] Student addition result: {success}")
         
         if success:
             # Показываем сообщение об успехе и возвращаемся в меню управления учениками
@@ -240,6 +261,8 @@ class StudentsHandler(AdminBaseHandler):
         context.user_data.pop('new_student_fullname', None)
         context.user_data.pop('new_student_phone', None)
         context.user_data.pop('new_student_grade', None)
+        
+        logging.info(f"[handle_student_language_selection] Completed successfully")
 
     # === ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===
 

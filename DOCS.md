@@ -586,3 +586,59 @@ src/handlers/admin/
 **Никакая функциональность не потеряна!** Все методы работают через делегирование, что обеспечивает полную обратную совместимость.
 
 ---
+
+## 🔧 Bug Fix: Language Selection Not Working (January 2025)
+
+**✅ FIXED: Language selection callback handler was missing in main bot.py**
+
+#### 🐛 Problem:
+- Language selection buttons (🇷🇺 Русский / 🇰🇿 Қазақша) were not responding when adding new students
+- No logs were generated when clicking language selection buttons
+- The `student_lang_` callback pattern was missing from the main bot handlers
+
+#### ✅ Solution Implemented:
+
+1. **Added missing callback handler in `src/bot.py`**:
+   ```python
+   # Student language selection handler for adding new students
+   application.add_handler(CallbackQueryHandler(
+       admin_handlers.handle_student_language_selection,
+       pattern="^student_lang_"
+   ))
+   ```
+
+2. **Fixed language code pattern mismatch**:
+   - Changed pattern from `^set_language_(ru|kz)_` to `^set_language_(ru|kk)_`
+   - Now matches the actual callback data format used in the code
+
+3. **Added comprehensive logging**:
+   - Added detailed logging in `handle_student_language_selection()` method
+   - Added logging in `handle_student_grade()` and `handle_student_by_id_grade()` methods
+   - Now tracks callback data, extracted language, context data, and operation results
+
+#### 🔧 Technical Details:
+
+**Files Modified:**
+- `src/bot.py` - Added missing callback handler and fixed pattern
+- `src/handlers/admin/students.py` - Added comprehensive logging for debugging
+
+**Handler Registration:**
+- The handler was present in `bot_universal.py` but missing in the main `bot.py`
+- Now both files have consistent handler registration
+
+**Callback Data Flow:**
+1. User clicks language button → `student_lang_ru` or `student_lang_kk`
+2. Handler `handle_student_language_selection()` processes the callback
+3. Language extracted from callback data (`ru` or `kk`)
+4. Student added to database with selected language
+5. Success message displayed with language confirmation
+
+#### ✅ Result:
+- ✅ Language selection buttons now work correctly
+- ✅ Students can be added with proper language selection
+- ✅ Comprehensive logging helps with future debugging
+- ✅ Both username and ID-based student addition support language selection
+
+**Status**: ✅ **LANGUAGE SELECTION FIXED** - Students can now be added with proper language choice
+
+---
