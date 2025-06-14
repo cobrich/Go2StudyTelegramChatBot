@@ -32,21 +32,62 @@ class TopicsHandler(AdminBaseHandler):
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def add_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Начало добавления темы."""
+        """Начало добавления темы - сразу показываем выбор разделов."""
         query = update.callback_query
         await self.safe_answer_callback(query)
         
         # Очищаем состояние при возврате в меню
         context.user_data.pop('admin_action', None)
         
-        keyboard = [
-            [InlineKeyboardButton("➕ Добавить новую тему", callback_data="add_custom_topic")],
-            [InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]
-        ]
+        # Получаем разделы для обоих языков (админ должен видеть все)
+        ru_sections = self.db.get_main_topics_by_language("ru", active_only=True)
+        kk_sections = self.db.get_main_topics_by_language("kk", active_only=True)
         
+        # Объединяем разделы с указанием языка (сначала казахские, потом русские)
+        all_sections = []
+        for section in kk_sections:
+            section['language'] = 'kk'
+            all_sections.append(section)
+        for section in ru_sections:
+            section['language'] = 'ru'
+            all_sections.append(section)
+        
+        if not all_sections:
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text("❌ Основные разделы не найдены. Сначала создайте базовую структуру.", 
+                                         reply_markup=reply_markup, parse_mode='HTML')
+            return
+        
+        context.user_data['admin_action'] = 'select_main_topic_for_new'
+        context.user_data['main_topics_list'] = all_sections
+        
+        text = "➕ <b>Добавление новой темы</b>\n\n"
+        text += "Выберите раздел для новой темы:"
+        
+        keyboard = []
+        
+        # Сначала казахские разделы
+        if kk_sections:
+            for i, section in enumerate(kk_sections):
+                keyboard.append([InlineKeyboardButton(
+                    f"📚 {section['name']} [kz]",
+                    callback_data=f"select_main_topic_{i}"
+                )])
+        
+        # Затем русские разделы
+        if ru_sections:
+            kk_count = len(kk_sections)
+            for i, section in enumerate(ru_sections):
+                keyboard.append([InlineKeyboardButton(
+                    f"📚 {section['name']} [ru]",
+                    callback_data=f"select_main_topic_{kk_count + i}"
+                )])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")])
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text("➕ <b>Добавление темы</b>\n\nВыберите способ добавления:", 
-                                     reply_markup=reply_markup, parse_mode='HTML')
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def list_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Список всех тем с количеством вопросов."""
@@ -88,48 +129,12 @@ class TopicsHandler(AdminBaseHandler):
                 text += "\n"
             
             keyboard = [
-                [InlineKeyboardButton("📊 Детальная статистика", callback_data="detailed_topics_stats")],
                 [InlineKeyboardButton("🔄 Обновить статистику", callback_data="refresh_topics_stats")],
                 [InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]
             ]
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
-
-    async def add_custom_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Начало добавления пользовательской темы."""
-        query = update.callback_query
-        await self.safe_answer_callback(query)
-        
-        # Получаем список основных разделов
-        user_id = update.effective_user.id
-        user_language = self.db.get_user_language(user_id)
-        
-        # Получаем разделы по языку пользователя
-        main_topics = self.db.get_main_topics_by_language(user_language, active_only=True)
-        
-        if not main_topics:
-            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text("❌ Основные разделы не найдены. Сначала создайте базовую структуру.", 
-                                         reply_markup=reply_markup, parse_mode='HTML')
-            return
-        
-        context.user_data['admin_action'] = 'select_main_topic_for_new'
-        context.user_data['main_topics_list'] = main_topics
-        
-        keyboard = []
-        for i, topic in enumerate(main_topics):
-            keyboard.append([InlineKeyboardButton(
-                f"📚 {topic['name']}",
-                callback_data=f"select_main_topic_{i}"
-            )])
-        
-        keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="admin_topics")])
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text("➕ <b>Добавление новой темы</b>\n\nВыберите основной раздел для новой темы:", 
-                                     reply_markup=reply_markup, parse_mode='HTML')
 
     async def select_main_topic_for_new(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выбор основного раздела для новой темы."""
@@ -174,7 +179,7 @@ class TopicsHandler(AdminBaseHandler):
             if existing_topics:
                 keyboard.append([InlineKeyboardButton("📋 Показать все темы раздела", callback_data=f"show_section_topics_{topic_index}")])
             
-            keyboard.append([InlineKeyboardButton("🔙 Выбрать другой раздел", callback_data="add_custom_topic")])
+            keyboard.append([InlineKeyboardButton("🔙 Выбрать другой раздел", callback_data="add_topic")])
             keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="admin_topics")])
             
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -579,7 +584,6 @@ class TopicsHandler(AdminBaseHandler):
                     [InlineKeyboardButton("📋 Список тем", callback_data="list_topics")],
                     [InlineKeyboardButton("✏️ Редактировать тему", callback_data="edit_topic_start")],
                     [InlineKeyboardButton("🗑️ Удалить тему", callback_data="remove_topic")],
-                    [InlineKeyboardButton("📊 Статистика тем", callback_data="detailed_topics_stats")],
                     [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
                 ]
             else:
@@ -596,81 +600,6 @@ class TopicsHandler(AdminBaseHandler):
             
         except (ValueError, IndexError):
             await query.edit_message_text("❌ Ошибка при удалении темы.")
-
-    async def detailed_topics_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Детальная статистика по темам."""
-        query = update.callback_query
-        await self.safe_answer_callback(query)
-        
-        try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Получаем статистику по темам
-                cursor.execute('''
-                    SELECT 
-                        s.name as topic_name,
-                        s.main_topic,
-                        s.is_active,
-                        COUNT(q.id) as question_count,
-                        COUNT(DISTINCT tr.user_id) as unique_users,
-                        COUNT(tr.id) as total_tests,
-                        ROUND(AVG(tr.score), 1) as avg_score
-                    FROM subtopics s
-                    LEFT JOIN questions q ON s.name = q.topic
-                    LEFT JOIN test_results tr ON s.name = tr.topic
-                    GROUP BY s.name, s.main_topic, s.is_active
-                    ORDER BY s.main_topic, s.name
-                ''')
-                
-                stats = cursor.fetchall()
-                
-                if not stats:
-                    text = "📊 <b>Детальная статистика тем</b>\n\nДанных нет."
-                else:
-                    text = "📊 <b>Детальная статистика тем</b>\n\n"
-                    
-                    # Группируем по разделам
-                    current_section = None
-                    total_questions = 0
-                    total_tests = 0
-                    
-                    for stat in stats:
-                        topic_name, main_topic, is_active, question_count, unique_users, total_tests_topic, avg_score = stat
-                        
-                        if main_topic != current_section:
-                            if current_section is not None:
-                                text += "\n"
-                            text += f"📚 <b>{main_topic or 'Без раздела'}</b>\n"
-                            current_section = main_topic
-                        
-                        status = "✅" if is_active else "❌"
-                        text += f"  {status} <b>{topic_name}</b>\n"
-                        text += f"    • Вопросов: {question_count}\n"
-                        text += f"    • Уникальных пользователей: {unique_users}\n"
-                        text += f"    • Всего тестов: {total_tests_topic}\n"
-                        if avg_score:
-                            text += f"    • Средний балл: {avg_score}%\n"
-                        text += "\n"
-                        
-                        total_questions += question_count
-                        total_tests += total_tests_topic
-                    
-                    text += f"📈 <b>Общая статистика:</b>\n"
-                    text += f"• Всего вопросов: {total_questions}\n"
-                    text += f"• Всего тестов: {total_tests}\n"
-                
-        except Exception as e:
-            logging.error(f"Error getting topics stats: {e}")
-            text = "❌ Ошибка при получении статистики."
-        
-        keyboard = [
-            [InlineKeyboardButton("🔄 Обновить", callback_data="detailed_topics_stats")],
-            [InlineKeyboardButton("🔙 Назад к списку", callback_data="list_topics")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def refresh_topics_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обновить статистику тем."""

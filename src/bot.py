@@ -209,8 +209,12 @@ def main() -> None:
         pattern="^add_topic$"
     ))
     application.add_handler(CallbackQueryHandler(
-        admin_handlers.add_custom_topic_start,
-        pattern="^add_custom_topic$"
+        admin_handlers.list_topics,
+        pattern="^list_topics$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.show_section_topics,
+        pattern="^show_section_topics_"
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.sections_menu,
@@ -415,9 +419,39 @@ def main() -> None:
         admin_handlers.refresh_topics_stats,
         pattern="^refresh_topics_stats$"
     ))
+    
+    # Topic management handlers
     application.add_handler(CallbackQueryHandler(
-        admin_handlers.detailed_topics_stats,
-        pattern="^detailed_topics_stats$"
+        admin_handlers.edit_topic_start,
+        pattern="^edit_topic_start$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_topic_select,
+        pattern="^edit_topic_select_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_topic_name_start,
+        pattern="^edit_topic_name_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_topic_desc_start,
+        pattern="^edit_topic_desc_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_topic_toggle_status,
+        pattern="^edit_topic_toggle_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_topic_start,
+        pattern="^remove_topic$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_topic_confirm,
+        pattern="^remove_topic_confirm_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.remove_topic_execute,
+        pattern="^remove_topic_execute_"
     ))
     
     # Start the Bot

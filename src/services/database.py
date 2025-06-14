@@ -989,9 +989,15 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             query = '''
-                SELECT st.id, st.name, mt.name as main_topic, st.is_active, st.created_at
+                SELECT st.id, st.name, mt.name as main_topic, st.is_active, st.created_at,
+                       COALESCE(q.question_count, 0) as question_count
                 FROM subtopics st
                 JOIN main_topics mt ON st.main_topic_id = mt.id
+                LEFT JOIN (
+                    SELECT topic, COUNT(*) as question_count
+                    FROM questions
+                    GROUP BY topic
+                ) q ON st.name = q.topic
             '''
             if active_only:
                 query += ' WHERE st.is_active = 1 AND mt.is_active = 1'
@@ -1006,7 +1012,8 @@ class Database:
                     'description': f"Подтема раздела '{row[2]}': {row[1]}",
                     'main_topic': row[2],
                     'is_active': bool(row[3]),
-                    'created_at': row[4]
+                    'created_at': row[4],
+                    'question_count': row[5]
                 }
                 for row in results
             ]
@@ -2777,33 +2784,70 @@ class Database:
             return False
 
     def add_main_topic_with_language(self, main_topic: str, language: str, subtopics: List[str] = None, created_by: int = None) -> bool:
-        """Add a new main topic section with language support."""
+        """Add a new main topic with language support."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Получаем следующий order_index для основной темы данного языка
+                # Получаем следующий order_index для основной темы
                 cursor.execute('SELECT MAX(order_index) FROM main_topics WHERE language = ?', (language,))
                 max_main_order = cursor.fetchone()[0] or 0
                 
                 # Добавляем основную тему с языком
                 cursor.execute('''
-                    INSERT INTO main_topics (name, language, order_index, is_active)
-                    VALUES (?, ?, ?, 1)
-                ''', (main_topic, language, max_main_order + 1))
+                    INSERT INTO main_topics (name, order_index, language, created_by)
+                    VALUES (?, ?, ?, ?)
+                ''', (main_topic, max_main_order + 1, language, created_by))
                 
                 main_topic_id = cursor.lastrowid
                 
-                # Добавляем подтемы если они есть
+                # Добавляем подтемы, если они есть
                 if subtopics:
                     for i, subtopic in enumerate(subtopics):
                         cursor.execute('''
-                            INSERT INTO subtopics (main_topic_id, name, order_index, is_active)
-                            VALUES (?, ?, ?, 1)
-                        ''', (main_topic_id, subtopic, i))
+                            INSERT INTO topics (name, main_topic_id, order_index, language, created_by)
+                            VALUES (?, ?, ?, ?, ?)
+                        ''', (subtopic, main_topic_id, i + 1, language, created_by))
                 
                 conn.commit()
                 return True
-        except sqlite3.IntegrityError as e:
-            print(f"[ERROR] Ошибка добавления раздела: {e}")
+                
+        except sqlite3.Error as e:
+            print(f"Database error in add_main_topic_with_language: {e}")
+            return False
+        except Exception as e:
+            print(f"Error in add_main_topic_with_language: {e}")
+            return False
+
+    def toggle_main_topic_status(self, main_topic_name: str) -> bool:
+        """Toggle the is_active status of a main topic by name."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Получаем текущий статус
+                cursor.execute('SELECT is_active FROM main_topics WHERE name = ?', (main_topic_name,))
+                result = cursor.fetchone()
+                
+                if not result:
+                    return False
+                
+                current_status = result[0]
+                new_status = not current_status
+                
+                # Обновляем статус
+                cursor.execute('''
+                    UPDATE main_topics 
+                    SET is_active = ? 
+                    WHERE name = ?
+                ''', (new_status, main_topic_name))
+                
+                conn.commit()
+                return cursor.rowcount > 0
+                
+        except sqlite3.Error as e:
+            print(f"Database error in toggle_main_topic_status: {e}")
+            return False
+        except Exception as e:
+            print(f"Error in toggle_main_topic_status: {e}")
             return False

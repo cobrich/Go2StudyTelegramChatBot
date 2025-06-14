@@ -275,18 +275,29 @@ class SectionsHandler(BaseHandler):
             return
         
         # Переключаем статус в базе данных
-        # Примечание: нужно будет добавить метод в database.py
-        new_status = not section_info['is_active']
+        success = self.db.toggle_main_topic_status(section_info['name'])
         
-        # Здесь должен быть вызов метода БД для изменения статуса раздела
-        # success = self.db.toggle_main_topic_status(section_info['name'], new_status)
-        
-        lang_flag = "🇷🇺" if section_info['language'] == 'ru' else "🇰🇿"
-        status_text = "активирован" if new_status else "деактивирован"
-        
-        text = f"✅ <b>Статус изменен</b>\n\n"
-        text += f"{lang_flag} Раздел <b>{section_info['name']}</b> {status_text}.\n\n"
-        text += "Возвращаемся в меню управления разделами..."
+        if success:
+            # Получаем обновленную информацию о разделе
+            sections = self.db.get_main_topics_by_language(section_info['language'], active_only=False)
+            updated_section = next((s for s in sections if s['name'] == section_info['name']), None)
+            
+            if updated_section:
+                new_status = updated_section['is_active']
+                lang_flag = "🇷🇺" if section_info['language'] == 'ru' else "🇰🇿"
+                status_text = "активирован" if new_status else "деактивирован"
+                
+                text = f"✅ <b>Статус изменен</b>\n\n"
+                text += f"{lang_flag} Раздел <b>{section_info['name']}</b> {status_text}.\n\n"
+                text += "Возвращаемся в меню управления разделами..."
+            else:
+                text = f"✅ <b>Статус изменен</b>\n\n"
+                text += f"Статус раздела <b>{section_info['name']}</b> успешно изменен.\n\n"
+                text += "Возвращаемся в меню управления разделами..."
+        else:
+            text = f"❌ <b>Ошибка</b>\n\n"
+            text += f"Не удалось изменить статус раздела <b>{section_info['name']}</b>.\n"
+            text += "Попробуйте еще раз или обратитесь к разработчику."
         
         keyboard = [
             [InlineKeyboardButton("🔙 В меню разделов", callback_data="sections_menu")]
