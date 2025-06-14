@@ -606,5 +606,58 @@ class TopicsHandler(AdminBaseHandler):
         query = update.callback_query
         await self.safe_answer_callback(query)
         
-        # Просто перенаправляем на список тем для обновления
-        await self.list_topics(update, context)
+        # Получаем новые данные
+        topics = self.db.get_all_topics(active_only=False)
+        
+        if not topics:
+            new_text = "📋 <b>Список тем</b>\n\nТемы не найдены."
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]]
+        else:
+            # Группируем темы по основным разделам
+            topics_by_section = {}
+            for topic in topics:
+                main_topic = topic.get('main_topic', 'Без раздела')
+                if main_topic not in topics_by_section:
+                    topics_by_section[main_topic] = []
+                topics_by_section[main_topic].append(topic)
+            
+            new_text = f"📋 <b>Список тем</b>\n\n"
+            new_text += f"Всего тем: {len(topics)}\n\n"
+            
+            for main_topic, section_topics in topics_by_section.items():
+                new_text += f"📚 <b>{main_topic}</b> ({len(section_topics)} тем)\n"
+                
+                # Сортируем темы: сначала активные, потом неактивные
+                active_topics = [t for t in section_topics if t['is_active']]
+                inactive_topics = [t for t in section_topics if not t['is_active']]
+                
+                for topic in active_topics:
+                    status = "✅"
+                    new_text += f"  {status} {topic['name']} ({topic['question_count']} вопросов)\n"
+                
+                for topic in inactive_topics:
+                    status = "❌"
+                    new_text += f"  {status} {topic['name']} ({topic['question_count']} вопросов)\n"
+                
+                new_text += "\n"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔄 Обновить статистику", callback_data="refresh_topics_stats")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]
+            ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # Проверяем, изменился ли текст
+        current_text = query.message.text
+        if current_text == new_text:
+            # Если текст не изменился, показываем alert
+            await query.answer("✅ Статистика обновлена (изменений нет)", show_alert=True)
+        else:
+            # Если текст изменился, обновляем сообщение
+            try:
+                await query.edit_message_text(new_text, reply_markup=reply_markup, parse_mode='HTML')
+                await query.answer("✅ Статистика обновлена")
+            except Exception as e:
+                # Если все же произошла ошибка, показываем alert
+                await query.answer("✅ Статистика обновлена", show_alert=True)

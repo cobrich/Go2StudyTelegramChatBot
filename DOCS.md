@@ -1419,3 +1419,39 @@ All topic management buttons now work correctly, providing admins with complete 
 - **Better UX**: Clear, uncluttered topic management interface
 
 ---
+
+### 🔧 Fix: Statistics Refresh Error Handling (January 2025)
+
+**✅ FIXED: Improved statistics refresh to handle unchanged data gracefully**
+
+#### 🐛 Problem:
+- When clicking "🔄 Обновить статистику" (Refresh Statistics), if data hadn't changed, Telegram API returned error:
+- `BadRequest: Message is not modified: specified new message content and reply markup are exactly the same as current content`
+- This caused the bot to crash when trying to update identical content
+
+#### ✅ Solution:
+- **Smart content comparison**: Compare current message text with new content before updating
+- **Alert for no changes**: Show popup alert "✅ Статистика обновлена (изменений нет)" when data is unchanged
+- **Update only when needed**: Only call `edit_message_text()` when content actually changed
+- **Error handling**: Graceful fallback to alert if update fails for any reason
+
+#### 🔧 Technical implementation:
+- **`src/handlers/admin/topics.py`**:
+  - **Modified `refresh_topics_stats()`**: Added content comparison logic
+  - **Before update check**: `if current_text == new_text:` → show alert
+  - **Conditional update**: Only update message when content differs
+  - **Exception handling**: Fallback to alert if edit fails
+
+#### 🎯 User experience improvement:
+- **Before**: Error crash when no changes to display
+- **After**: Smooth experience with informative alerts
+- **No changes**: Shows "✅ Статистика обновлена (изменений нет)" popup
+- **With changes**: Updates content and shows "✅ Статистика обновлена" popup
+
+#### ✅ Benefits:
+- **No more crashes**: Handles unchanged content gracefully
+- **Better feedback**: Users know when refresh was successful even without changes
+- **Improved UX**: Clear indication of refresh status
+- **Robust operation**: Handles edge cases and API limitations
+
+---
