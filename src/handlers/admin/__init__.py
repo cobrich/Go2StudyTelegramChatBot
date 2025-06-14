@@ -156,6 +156,12 @@ class AdminHandlers(AdminBaseHandler):
     async def edit_topic_desc_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.edit_topic_desc_start(update, context)
     
+    async def edit_topic_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.edit_topic_section_start(update, context)
+    
+    async def edit_topic_section_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.edit_topic_section_select(update, context)
+    
     async def edit_topic_toggle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.edit_topic_toggle_status(update, context)
     

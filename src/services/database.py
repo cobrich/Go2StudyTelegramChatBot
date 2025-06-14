@@ -2851,3 +2851,40 @@ class Database:
         except Exception as e:
             print(f"Error in toggle_main_topic_status: {e}")
             return False
+
+    def update_topic_section(self, topic_id: int, new_main_topic_name: str) -> bool:
+        """Обновить раздел темы."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Получаем ID нового основного раздела
+                cursor.execute('SELECT id FROM main_topics WHERE name = ?', (new_main_topic_name,))
+                result = cursor.fetchone()
+                
+                if not result:
+                    print(f"[ERROR] Основной раздел '{new_main_topic_name}' не найден")
+                    return False
+                
+                new_main_topic_id = result[0]
+                
+                # Получаем старое название темы для обновления вопросов
+                cursor.execute('SELECT name FROM subtopics WHERE id = ?', (topic_id,))
+                topic_result = cursor.fetchone()
+                
+                if not topic_result:
+                    print(f"[ERROR] Тема с ID {topic_id} не найдена")
+                    return False
+                
+                topic_name = topic_result[0]
+                
+                # Обновляем main_topic_id в subtopics
+                cursor.execute('UPDATE subtopics SET main_topic_id = ? WHERE id = ?', (new_main_topic_id, topic_id))
+                
+                conn.commit()
+                print(f"[LOG] Раздел темы '{topic_name}' (ID: {topic_id}) изменен на '{new_main_topic_name}'")
+                return True
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка обновления раздела темы: {e}")
+            return False

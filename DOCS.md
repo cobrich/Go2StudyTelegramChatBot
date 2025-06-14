@@ -1620,3 +1620,57 @@ def get_all_topics(self, active_only: bool = True) -> List[Dict]:
 - `TELEGRAM_BOT_TOKEN` - токен бота
 - `OPENAI_API_KEY` - ключ для AI сервиса
 - Настройки базы данных и логирования
+
+### 🔧 Fix: Missing Topic Section Change and Status Toggle (January 2025)
+
+**✅ FIXED: Added missing functionality for "Change Section" and "Deactivate" buttons in topic editing**
+
+#### 🐛 Problems identified:
+1. **"📚 Изменить раздел" button not working**: Button existed but no handler was implemented
+2. **"❌ Деактивировать" button errors**: Status toggle had callback data issues
+
+#### ✅ Solutions implemented:
+
+**1. Added Topic Section Change Functionality:**
+- **New method**: `edit_topic_section_start()` - Shows section selection interface
+- **New method**: `edit_topic_section_select()` - Processes section change
+- **Database method**: `update_topic_section()` - Updates topic's main_topic_id
+- **Full workflow**: Select topic → Change section → Choose new section → Confirmation
+
+**2. Fixed Status Toggle Issues:**
+- **Improved error handling**: Added detailed logging for debugging
+- **Fixed callback data**: Properly reconstructs callback_data for return navigation
+- **Better user feedback**: Clear error messages and status updates
+
+#### 🔧 Technical implementation:
+
+**Files modified:**
+- **`src/handlers/admin/topics.py`**: Added section change methods and improved toggle
+- **`src/services/database.py`**: Added `update_topic_section()` method
+- **`src/bot.py`**: Added callback handlers for section change
+- **`src/handlers/admin/__init__.py`**: Added delegation methods
+
+**New functionality:**
+```python
+# Topic section change workflow
+edit_topic_section_start() → edit_topic_section_select() → update_topic_section()
+
+# Database method
+def update_topic_section(topic_id: int, new_main_topic_name: str) -> bool
+```
+
+#### 🎯 User experience improvements:
+- **Section change**: Admins can now move topics between sections (e.g., from "Numbers" to "Geometry")
+- **Language support**: Shows all sections with language indicators `[ru]`/`[kz]`
+- **Status toggle**: Activate/deactivate topics works reliably
+- **Error handling**: Clear feedback when operations fail
+
+#### ✅ Result:
+All topic editing buttons now work correctly:
+- ✅ **Change name**: Working
+- ✅ **Change description**: Working  
+- ✅ **Change section**: **NOW WORKING** - can move topics between sections
+- ✅ **Toggle status**: **NOW WORKING** - activate/deactivate topics
+- ✅ **Navigation**: Proper return to topic editing after all operations
+
+### 2024-12-19: Улучшение управления темами - выбор раздела
