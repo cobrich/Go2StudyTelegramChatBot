@@ -117,6 +117,17 @@ class Database:
                 # Column already exists
                 pass
             
+            # Add language column to allowed_users
+            try:
+                cursor.execute('ALTER TABLE allowed_users ADD COLUMN language TEXT DEFAULT "ru"')
+                # Update existing records to have 'ru' as default language
+                cursor.execute('UPDATE allowed_users SET language = "ru" WHERE language IS NULL')
+                conn.commit()
+                print("[LOG] Добавлено поле language в таблицу allowed_users")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+            
             # Add unique constraint for user_id to prevent duplicates
             try:
                 cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_allowed_users_user_id ON allowed_users(user_id) WHERE user_id IS NOT NULL')
@@ -789,29 +800,29 @@ class Database:
         
         return False
     
-    def add_allowed_user(self, username: str, full_name: str, grade: int, added_by: int, phone_number: str = None) -> bool:
-        """Add user to whitelist."""
+    def add_allowed_user(self, username: str, full_name: str, grade: int, added_by: int, phone_number: str = None, user_id: int = None, language: str = "ru") -> bool:
+        """Add user to whitelist with language support."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO allowed_users (username, full_name, grade, phone_number, added_by)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (username, full_name, grade, phone_number, added_by))
+                    INSERT INTO allowed_users (username, full_name, grade, phone_number, user_id, added_by, language)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (username, full_name, grade, phone_number, user_id, added_by, language))
                 conn.commit()
                 return True
         except sqlite3.IntegrityError:
             return False
     
-    def add_allowed_user_by_id(self, user_id: int, full_name: str, grade: int, added_by: int, username: str = None, phone_number: str = None) -> bool:
-        """Add user to whitelist by user_id (for users without username)."""
+    def add_allowed_user_by_id(self, user_id: int, full_name: str, grade: int, added_by: int, username: str = None, phone_number: str = None, language: str = "ru") -> bool:
+        """Add user to whitelist by user_id (for users without username) with language support."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO allowed_users (user_id, username, full_name, grade, phone_number, added_by)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (user_id, username, full_name, grade, phone_number, added_by))
+                    INSERT INTO allowed_users (user_id, username, full_name, grade, phone_number, added_by, language)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (user_id, username, full_name, grade, phone_number, added_by, language))
                 conn.commit()
                 return True
         except sqlite3.IntegrityError:

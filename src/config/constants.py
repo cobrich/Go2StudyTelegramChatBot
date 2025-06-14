@@ -101,6 +101,7 @@ def get_active_topics():
 # Menu Configuration
 MAIN_MENU_KEYBOARD = [
     ["📚 Выбрать тему и начать"],
+    ["🎯 Начать тест (30 вопросов)"],
     ["📊 Мой прогресс"],
     ["❓ Помощь"]
 ]

@@ -11,7 +11,7 @@ from services.question_service import QuestionService
 from services.ai_service import AIService
 from handlers.command_handlers import CommandHandlers
 from handlers.callback_handlers import CallbackHandlers
-from handlers.admin_handlers import AdminHandlers
+from handlers.admin import AdminHandlers
 
 # Import telegram handlers
 from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, filters
@@ -33,7 +33,7 @@ def setup_handlers(application):
     # Initialize handlers
     command_handlers = CommandHandlers(db, question_service)
     callback_handlers = CallbackHandlers(db, question_service)
-    admin_handlers = AdminHandlers()
+    admin_handlers = AdminHandlers(db, question_service)
     
     # Add command handlers
     application.add_handler(CommandHandler("start", command_handlers.start))
@@ -105,6 +105,12 @@ def setup_handlers(application):
     application.add_handler(CallbackQueryHandler(
         admin_handlers.list_students,
         pattern="^list_students$"
+    ))
+    
+    # Student language selection handler
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.handle_student_language_selection,
+        pattern="^student_lang_"
     ))
     
     # Topic management handlers

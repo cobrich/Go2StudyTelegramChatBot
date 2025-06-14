@@ -5,6 +5,7 @@ from handlers.base_handler import BaseHandler
 from utils.keyboards import get_main_menu_markup, build_topic_selection_keyboard
 from utils.translations import get_message, get_language_change_warning
 from config.constants import HELP_TEXT, TOPICS
+from services.random_test_service import RandomTestService
 import sqlite3
 
 class CommandHandlers(BaseHandler):
