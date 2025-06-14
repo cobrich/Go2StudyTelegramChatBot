@@ -674,6 +674,11 @@ class CallbackHandlers(BaseHandler):
         # Показываем подтемы выбранного раздела
         info_text = f"📚 **{main_topic}**\n\nВыберите конкретную тему:"
         
+        # Добавляем объяснение индикаторов только для админов
+        is_admin = user_id and self.db.is_admin(user_id)
+        if is_admin:
+            info_text += "\n\n🟢 - есть вопросы в базе данных\n🟡 - ИИ сгенерирует вопросы для вас"
+        
         try:
             await query.message.edit_text(
                 info_text,

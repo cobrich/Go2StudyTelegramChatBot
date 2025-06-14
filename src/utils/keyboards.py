@@ -44,8 +44,13 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, us
         
         # Создаем текст кнопки в зависимости от роли пользователя
         if is_admin:
-            # Для админов: показываем количество вопросов и язык (пока только ru)
-            button_text = f"{subtopic_name} ({question_count}) [ru]"
+            # Для админов: показываем кружочки, количество вопросов и язык
+            if has_questions:
+                # 🟢 = есть вопросы в БД
+                button_text = f"🟢 {subtopic_name} ({question_count}) [ru]"
+            else:
+                # 🟡 = ИИ генерация доступна
+                button_text = f"🟡 {subtopic_name} (ИИ) [ru]"
         else:
             # Для учеников: только название темы без индикаторов
             button_text = subtopic_name
