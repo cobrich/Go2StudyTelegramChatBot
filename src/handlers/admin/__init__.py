@@ -328,6 +328,8 @@ class AdminHandlers(AdminBaseHandler):
             await self.topics.handle_edit_topic_name(update, context, text)
             return True
         elif action == 'edit_topic_description':
+            print(f"[DEBUG] Обработчик edit_topic_description вызван с текстом: '{text}'")
+            print(f"[DEBUG] user_data: {context.user_data}")
             await self.topics.handle_edit_topic_description(update, context, text)
             return True
         

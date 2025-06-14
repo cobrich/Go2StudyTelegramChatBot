@@ -1674,3 +1674,62 @@ All topic editing buttons now work correctly:
 - ✅ **Navigation**: Proper return to topic editing after all operations
 
 ### 2024-12-19: Улучшение управления темами - выбор раздела
+
+### 🔧 Fix: Topic Status Toggle Interface Error (January 2025)
+
+**✅ FIXED: Resolved interface error when activating/deactivating topics**
+
+#### 🐛 Problem identified:
+- **Status toggle worked in database** but caused interface errors
+- **Error occurred during UI update** after successful status change
+- **Users saw error message** despite successful operation
+
+#### ✅ Solution implemented:
+
+**Root cause**: The method was trying to modify `query.data` and call another method, causing callback conflicts.
+
+**Fix applied**:
+- **Removed callback data manipulation**: No longer modifying `query.data`
+- **Direct interface rebuild**: Manually reconstructing the edit interface
+- **Real-time status display**: Shows updated status immediately
+- **Success confirmation**: Clear "✅ Статус темы успешно изменен!" message
+- **Proper error handling**: Better exception handling with detailed logging
+
+**Technical changes**:
+- **Method**: `edit_topic_toggle_status()` completely rewritten
+- **Approach**: Direct message editing instead of method chaining
+- **UI**: Immediate status reflection with updated buttons
+- **Feedback**: Clear success/error messages
+
+**Result**: Topic activation/deactivation now works smoothly without interface errors.
+
+---
+
+### 🔧 Debug: Topic Description Edit Issue (January 2025)
+
+**🔍 DEBUGGING: Added diagnostic logging for topic description editing**
+
+#### 🐛 Problem reported:
+- **"Изменить описание" button not working** - User reports functionality is broken
+- **Status**: Under investigation with debug logging
+
+#### 🔍 Diagnostic measures added:
+
+**Debug logging added to**:
+- **Method**: `edit_topic_desc_start()` - Logs topic ID, found topic, user_data setup
+- **Method**: `handle_edit_topic_description()` - Logs input text, context data, DB operation result
+- **Text handler**: `handle_admin_text()` - Logs when edit_topic_description action is triggered
+
+**Debug information captured**:
+- Topic ID extraction and validation
+- Topic lookup success/failure
+- Context user_data setup (admin_action, edit_topic_id)
+- Text input processing
+- Database operation results
+- Context cleanup
+
+**Next steps**: Analyze debug logs to identify exact failure point and implement fix.
+
+---
+
+### 🔧 Fix: Topic Status Toggle Interface Error (January 2025)

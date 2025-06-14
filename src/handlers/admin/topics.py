@@ -447,15 +447,22 @@ class TopicsHandler(AdminBaseHandler):
         
         try:
             topic_id = int(query.data.replace('edit_topic_desc_', ''))
+            print(f"[DEBUG] edit_topic_desc_start: topic_id = {topic_id}")
+            
             topics = self.db.get_all_topics(active_only=False)
             topic = next((t for t in topics if t['id'] == topic_id), None)
             
             if not topic:
+                print(f"[ERROR] Тема с ID {topic_id} не найдена")
                 await query.edit_message_text("❌ Тема не найдена.")
                 return
             
+            print(f"[DEBUG] Найдена тема: {topic['name']}")
+            
             context.user_data['admin_action'] = 'edit_topic_description'
             context.user_data['edit_topic_id'] = topic_id
+            
+            print(f"[DEBUG] Установлены user_data: admin_action = edit_topic_description, edit_topic_id = {topic_id}")
             
             text = f"📄 <b>Изменение описания темы</b>\n\n"
             text += f"Тема: <b>{topic['name']}</b>\n"
@@ -466,8 +473,10 @@ class TopicsHandler(AdminBaseHandler):
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            print(f"[DEBUG] Сообщение отправлено, ожидаем ввод описания")
             
-        except (ValueError, IndexError):
+        except (ValueError, IndexError) as e:
+            print(f"[ERROR] Ошибка в edit_topic_desc_start: {e}")
             await query.edit_message_text("❌ Ошибка при редактировании темы.")
 
     async def edit_topic_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -586,18 +595,47 @@ class TopicsHandler(AdminBaseHandler):
         try:
             topic_id = int(query.data.replace('edit_topic_toggle_', ''))
             
+            # Получаем текущую информацию о теме
+            topics = self.db.get_all_topics(active_only=False)
+            topic = next((t for t in topics if t['id'] == topic_id), None)
+            
+            if not topic:
+                await query.edit_message_text("❌ Тема не найдена.")
+                return
+            
             # Переключаем статус
             success = self.db.toggle_topic_status(topic_id)
             
             if success:
-                # Создаем новый callback_data для возврата к редактированию темы
-                new_callback_data = f"edit_topic_select_{topic_id}"
+                # Получаем обновленную информацию о теме
+                updated_topics = self.db.get_all_topics(active_only=False)
+                updated_topic = next((t for t in updated_topics if t['id'] == topic_id), None)
                 
-                # Создаем новый Update объект с правильным callback_data
-                query.data = new_callback_data
-                
-                # Возвращаемся к редактированию темы
-                await self.edit_topic_select(update, context)
+                if updated_topic:
+                    # Формируем обновленное сообщение для редактирования темы
+                    status = "✅ Активна" if updated_topic['is_active'] else "❌ Неактивна"
+                    status_action = "❌ Деактивировать" if updated_topic['is_active'] else "✅ Активировать"
+                    
+                    text = f"✏️ <b>Редактирование темы</b>\n\n"
+                    text += f"📝 <b>Название:</b> {updated_topic['name']}\n"
+                    text += f"📚 <b>Раздел:</b> {updated_topic.get('main_topic', 'Не указан')}\n"
+                    text += f"📄 <b>Описание:</b> {updated_topic.get('description', 'Не указано')}\n"
+                    text += f"📊 <b>Статус:</b> {status}\n"
+                    text += f"❓ <b>Вопросов:</b> {updated_topic.get('question_count', 0)}\n\n"
+                    text += f"✅ <b>Статус темы успешно изменен!</b>"
+                    
+                    keyboard = [
+                        [InlineKeyboardButton("📝 Изменить название", callback_data=f"edit_topic_name_{topic_id}")],
+                        [InlineKeyboardButton("📄 Изменить описание", callback_data=f"edit_topic_desc_{topic_id}")],
+                        [InlineKeyboardButton("📚 Изменить раздел", callback_data=f"edit_topic_section_{topic_id}")],
+                        [InlineKeyboardButton(status_action, callback_data=f"edit_topic_toggle_{topic_id}")],
+                        [InlineKeyboardButton("🔙 К списку тем", callback_data="edit_topic_start")]
+                    ]
+                    
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+                else:
+                    await query.edit_message_text("❌ Ошибка при получении обновленной информации о теме.")
             else:
                 await query.edit_message_text("❌ Ошибка при изменении статуса темы.")
                 
@@ -634,13 +672,22 @@ class TopicsHandler(AdminBaseHandler):
 
     async def handle_edit_topic_description(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_description: str) -> None:
         """Обработка изменения описания темы."""
+        print(f"[DEBUG] handle_edit_topic_description вызван с описанием: '{new_description}'")
+        
         topic_id = context.user_data.get('edit_topic_id')
+        admin_action = context.user_data.get('admin_action')
+        
+        print(f"[DEBUG] topic_id из context: {topic_id}")
+        print(f"[DEBUG] admin_action из context: {admin_action}")
         
         if not topic_id:
+            print(f"[ERROR] topic_id не найден в context.user_data")
             await update.message.reply_text("❌ Ошибка: тема не выбрана.")
             return
         
+        print(f"[DEBUG] Вызываем db.update_topic_description({topic_id}, '{new_description}')")
         success = self.db.update_topic_description(topic_id, new_description)
+        print(f"[DEBUG] Результат update_topic_description: {success}")
         
         if success:
             text = f"✅ Описание темы успешно изменено!"
@@ -655,6 +702,7 @@ class TopicsHandler(AdminBaseHandler):
         # Очищаем данные
         context.user_data.pop('admin_action', None)
         context.user_data.pop('edit_topic_id', None)
+        print(f"[DEBUG] Очищены user_data")
 
     async def remove_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало удаления темы - выбор раздела."""
