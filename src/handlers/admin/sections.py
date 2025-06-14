@@ -126,6 +126,7 @@ class SectionsHandler(BaseHandler):
         
         # Устанавливаем состояние ожидания названия раздела
         context.user_data['awaiting_section_name'] = True
+        context.user_data['admin_action'] = 'add_section_name'
     
     async def edit_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начать редактирование раздела."""
@@ -261,6 +262,7 @@ class SectionsHandler(BaseHandler):
         
         # Устанавливаем состояние ожидания нового названия
         context.user_data['awaiting_section_new_name'] = True
+        context.user_data['admin_action'] = 'edit_section_name'
     
     async def edit_section_toggle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Переключить статус раздела."""
@@ -451,6 +453,11 @@ class SectionsHandler(BaseHandler):
             
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        
+        finally:
+            # Очищаем состояние
+            context.user_data.pop('deleting_section', None)
+            context.user_data.pop('admin_action', None)
     
     # Обработчики текстовых сообщений
     async def handle_section_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -502,6 +509,7 @@ class SectionsHandler(BaseHandler):
             # Очищаем состояние
             context.user_data.pop('awaiting_section_name', None)
             context.user_data.pop('adding_section_language', None)
+            context.user_data.pop('admin_action', None)
         
         return True
     
@@ -560,5 +568,6 @@ class SectionsHandler(BaseHandler):
             # Очищаем состояние
             context.user_data.pop('awaiting_section_new_name', None)
             context.user_data.pop('editing_section', None)
+            context.user_data.pop('admin_action', None)
         
         return True 

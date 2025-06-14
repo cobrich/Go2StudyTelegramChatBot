@@ -382,6 +382,12 @@ class AdminHandlers(AdminBaseHandler):
         elif context.user_data.get('awaiting_section_new_name'):
             await self.sections.handle_section_new_name(update, context)
             return True
+        elif action == 'add_section_name':
+            await self.sections.handle_section_name(update, context)
+            return True
+        elif action == 'edit_section_name':
+            await self.sections.handle_section_new_name(update, context)
+            return True
         
         # Обработка действий для базовой структуры
         elif action == 'add_base_section_name':
