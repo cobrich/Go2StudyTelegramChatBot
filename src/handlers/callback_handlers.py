@@ -72,26 +72,17 @@ class CallbackHandlers(BaseHandler):
             # Создаем клавиатуру с кнопкой "В главное меню"
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]])
             
-            if has_questions_in_db:
-                await query.message.edit_text("🔍 Формируются вопросы из базы данных...", reply_markup=keyboard)
-            else:
-                await query.message.edit_text("🤖 ИИ генерирует вопросы для вас, это может занять некоторое время...", reply_markup=keyboard)
+            await query.message.edit_text("🔍 Подготавливаем вопросы...", reply_markup=keyboard)
         except Exception:
             # Если не удалось отредактировать, отправляем новое сообщение
             try:
-                topic_counts = self.db.get_topic_question_counts()
-                has_questions_in_db = topic_counts.get(topic, 0) > 0
-                
                 # Создаем клавиатуру с кнопкой "В главное меню"
                 keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]])
                 
-                if has_questions_in_db:
-                    await query.message.reply_text("🔍 Формируются вопросы из базы данных...", reply_markup=keyboard)
-                else:
-                    await query.message.reply_text("🤖 ИИ генерирует вопросы для вас, это может занять некоторое время...", reply_markup=keyboard)
+                await query.message.reply_text("🔍 Подготавливаем вопросы...", reply_markup=keyboard)
             except Exception:
                 keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]])
-                await query.message.reply_text("🔍 Формируются вопросы, подождите...", reply_markup=keyboard)
+                await query.message.reply_text("🔍 Подготавливаем вопросы, подождите...", reply_markup=keyboard)
         
         chat_id = query.message.chat_id
         
@@ -134,10 +125,9 @@ class CallbackHandlers(BaseHandler):
         # Display first question
         question = questions[0]
         source = question[4] if len(question) > 4 else 'db'
-        # PDF вопросы считаются как из базы данных
-        source_text = '🟢 (из базы)' if source in ['db', 'pdf'] else '🤖 (ИИ)'
+        # Убираем индикаторы источника вопросов
         logging.info(f"[DEBUG] question tuple: {question}")
-        logging.info(f"[DEBUG] source: {source}, source_text: {source_text}")
+        logging.info(f"[DEBUG] source: {source}")
         keyboard = build_question_keyboard(question[3], 0, 0, len(questions))
         
         try:
@@ -146,13 +136,13 @@ class CallbackHandlers(BaseHandler):
                 await context.bot.send_photo(
                     chat_id=query.message.chat_id,
                     photo=open(question[5], 'rb'),
-                    caption=f"Тема: {topic}\nВопрос 1 из {len(questions)} {source_text}:\n\n{question[0]}",
+                    caption=f"Тема: {topic}\nВопрос 1 из {len(questions)}:\n\n{question[0]}",
                     reply_markup=keyboard
                 )
                 return
             else:
                 await query.message.edit_text(
-                    f"Тема: {topic}\nВопрос 1 из {len(questions)} {source_text}:\n\n{question[0]}",
+                    f"Тема: {topic}\nВопрос 1 из {len(questions)}:\n\n{question[0]}",
                     reply_markup=keyboard
                 )
         except Exception as e:
@@ -193,8 +183,6 @@ class CallbackHandlers(BaseHandler):
             return
         question = questions[current_index]
         source = question[4] if len(question) > 4 else 'db'
-        # PDF вопросы считаются как из базы данных
-        source_text = '🟢 (из базы)' if source in ['db', 'pdf'] else '🤖 (ИИ)'
         try:
             selected_index = int(query.data.replace('answer_', '').split('_')[0])
         except Exception:
@@ -227,7 +215,7 @@ class CallbackHandlers(BaseHandler):
             'user_answer': selected_answer,
             'correct_answer': correct_answer,
             'explanation': question[2],
-            'source': source_text
+            'source': source
         })
         if not is_correct:
             logging.info(f"[DEBUG] add_user_error: user_id={user_id}, topic={self.get_user_data(context).get('current_topic')}, question_text={question[0]}, user_answer_text={selected_answer}, correct_answer_text={correct_answer}, explanation_text={question[2]}, is_correct={is_correct}")
@@ -324,13 +312,11 @@ class CallbackHandlers(BaseHandler):
             return
         question = questions[current_index]
         source = question[4] if len(question) > 4 else 'db'
-        # PDF вопросы считаются как из базы данных
-        source_text = '🟢 (из базы)' if source in ['db', 'pdf'] else '🤖 (ИИ)'
         keyboard = build_question_keyboard(question[3], current_index, current_index, len(questions))
         topic = self.get_user_data(context).get('current_topic', '')
         try:
             await query.message.edit_text(
-                f"Тема: {topic}\nВопрос {current_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}",
+                f"Тема: {topic}\nВопрос {current_index + 1} из {len(questions)}:\n\n{question[0]}",
                 reply_markup=keyboard
             )
         except Exception as e:
@@ -422,13 +408,12 @@ class CallbackHandlers(BaseHandler):
                 explanation = r
                 break
         if explanation:
-            source_text = explanation['source']
+            source = explanation['source']
             text = f"💡 <b>Объяснение к вопросу {q_num+1}</b>\n\n"
             text += f"<b>Вопрос:</b> {explanation['question']}\n\n"
             text += f"❌ <b>Ваш ответ:</b> {explanation['user_answer']}\n"
             text += f"✅ <b>Правильный ответ:</b> {explanation['correct_answer']}\n\n"
-            text += f"📝 <b>Объяснение:</b>\n{explanation['explanation']}\n\n"
-            text += f"📚 <b>Источник:</b> {source_text}"
+            text += f"📝 <b>Объяснение:</b>\n{explanation['explanation']}"
         else:
             text = "❌ Вопрос не найден."
         # Кнопка назад к результатам
@@ -543,8 +528,6 @@ class CallbackHandlers(BaseHandler):
         self.set_user_data(context, 'current_question_index', prev_index)
         question = questions[prev_index]
         source = question[4] if len(question) > 4 else 'db'
-        # PDF вопросы считаются как из базы данных
-        source_text = '🟢 (из базы)' if source in ['db', 'pdf'] else '🤖 (ИИ)'
         user_results = context.user_data.get('user_results', [])
         user_answer = None
         correct_answer = question[1]
@@ -554,7 +537,7 @@ class CallbackHandlers(BaseHandler):
                 user_answer = result['user_answer']
                 explanation = result['explanation']
                 break
-        question_text = f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {prev_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}"
+        question_text = f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {prev_index + 1} из {len(questions)}:\n\n{question[0]}"
         if user_answer is not None:
             question_text += f"\n\nВаш ответ: {user_answer}\nПравильный ответ: {correct_answer}"
             if explanation:
@@ -590,8 +573,6 @@ class CallbackHandlers(BaseHandler):
         self.set_user_data(context, 'current_question_index', next_index)
         question = questions[next_index]
         source = question[4] if len(question) > 4 else 'db'
-        # PDF вопросы считаются как из базы данных
-        source_text = '🟢 (из базы)' if source in ['db', 'pdf'] else '🤖 (ИИ)'
         user_results = context.user_data.get('user_results', [])
         user_answer = None
         correct_answer = question[1]
@@ -601,7 +582,7 @@ class CallbackHandlers(BaseHandler):
                 user_answer = result['user_answer']
                 explanation = result['explanation']
                 break
-        question_text = f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {next_index + 1} из {len(questions)} {source_text}:\n\n{question[0]}"
+        question_text = f"Тема: {self.get_user_data(context).get('current_topic', '')}\nВопрос {next_index + 1} из {len(questions)}:\n\n{question[0]}"
         if user_answer is not None:
             question_text += f"\n\nВаш ответ: {user_answer}\nПравильный ответ: {correct_answer}"
             if explanation:
@@ -669,6 +650,8 @@ class CallbackHandlers(BaseHandler):
         except Exception as e:
             logging.error(f"Error in query.answer() (main_topic): {e}")
         
+        user_id = query.from_user.id
+        
         # Извлекаем индекс основной темы
         try:
             main_topic_index = int(query.data.replace('main_topic_', ''))
@@ -688,18 +671,13 @@ class CallbackHandlers(BaseHandler):
                 pass
             return
         
-        # Показываем подтемы выбранного раздела с информацией об индикаторах
-        info_text = (
-            f"📚 **{main_topic}**\n\n"
-            f"Выберите конкретную тему:\n\n"
-            f"🟢 - есть вопросы в базе данных\n"
-            f"🟡 - ИИ сгенерирует вопросы для вас"
-        )
+        # Показываем подтемы выбранного раздела
+        info_text = f"📚 **{main_topic}**\n\nВыберите конкретную тему:"
         
         try:
             await query.message.edit_text(
                 info_text,
-                reply_markup=build_subtopic_selection_keyboard(main_topic, main_topic_index),
+                reply_markup=build_subtopic_selection_keyboard(main_topic, main_topic_index, user_id),
                 parse_mode='Markdown'
             )
         except Exception as e:

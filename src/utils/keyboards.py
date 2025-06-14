@@ -19,8 +19,8 @@ def build_topic_selection_keyboard() -> InlineKeyboardMarkup:
     keyboard.append([InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")])
     return InlineKeyboardMarkup(keyboard)
 
-def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int) -> InlineKeyboardMarkup:
-    """Create InlineKeyboardMarkup for subtopic selection within a main topic with availability indicators."""
+def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, user_id: int = None) -> InlineKeyboardMarkup:
+    """Create InlineKeyboardMarkup for subtopic selection within a main topic."""
     # Получаем подтемы с количеством вопросов
     topics_with_counts = _db.get_topics_with_question_counts(active_only=True)
     
@@ -33,19 +33,22 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int) ->
     # Получаем активные темы из БД для получения индексов
     all_active_topics = _db.get_topic_names(active_only=True)
     
+    # Проверяем, является ли пользователь админом
+    is_admin = user_id and _db.is_admin(user_id)
+    
     keyboard = []
     for topic_info in subtopics_for_main:
         subtopic_name = topic_info['name']
         question_count = topic_info['question_count']
         has_questions = topic_info['has_questions']
         
-        # Создаем текст кнопки с индикатором
-        if has_questions:
-            # 🟢 = есть вопросы в БД
-            button_text = f"🟢 {subtopic_name} ({question_count})"
+        # Создаем текст кнопки в зависимости от роли пользователя
+        if is_admin:
+            # Для админов: показываем количество вопросов и язык (пока только ru)
+            button_text = f"{subtopic_name} ({question_count}) [ru]"
         else:
-            # 🟡 = ИИ генерация доступна
-            button_text = f"🟡 {subtopic_name} (ИИ)"
+            # Для учеников: только название темы без индикаторов
+            button_text = subtopic_name
         
         # Находим индекс подтемы в общем списке активных тем
         try:
