@@ -77,74 +77,181 @@ class StudentsHandler(AdminBaseHandler):
             context.user_data.pop('admin_action', None)
             return
         
+        # Пытаемся автоматически получить информацию о пользователе
+        await update.message.reply_text("🔍 Получаю информацию о пользователе через Telegram API...")
+        
+        auto_info = {
+            'username': None,
+            'first_name': None,
+            'last_name': None,
+            'found_via_api': False
+        }
+        
+        try:
+            user_info = await context.bot.get_chat(student_user_id)
+            if user_info:
+                auto_info.update({
+                    'username': user_info.username,
+                    'first_name': user_info.first_name,
+                    'last_name': user_info.last_name,
+                    'found_via_api': True
+                })
+                
+                # Формируем автоматически предложенное ФИО
+                suggested_name = f"{user_info.first_name or ''} {user_info.last_name or ''}".strip()
+                if suggested_name:
+                    context.user_data['suggested_full_name'] = suggested_name
+                    
+        except Exception as e:
+            logging.warning(f"Не удалось получить информацию о пользователе {student_user_id}: {e}")
+        
+        # Сохраняем полученную информацию
         context.user_data['new_student_user_id'] = student_user_id
+        context.user_data['auto_detected_info'] = auto_info
         context.user_data['admin_action'] = 'student_by_id_fullname'
+        
+        # Формируем сообщение с результатами автоопределения
+        info_text = f"🆔 <b>Добавление ученика</b>\n\n<b>ID:</b> {student_user_id}\n\n"
+        
+        if auto_info['found_via_api']:
+            info_text += f"✅ <b>Информация найдена через Telegram API:</b>\n"
+            if auto_info['username']:
+                info_text += f"👤 Username: @{auto_info['username']}\n"
+            if auto_info['first_name'] or auto_info['last_name']:
+                telegram_name = f"{auto_info['first_name'] or ''} {auto_info['last_name'] or ''}".strip()
+                info_text += f"📝 Имя в Telegram: {telegram_name}\n"
+            info_text += f"\n"
+        else:
+            info_text += f"⚠️ <b>Информация не найдена через API</b>\n"
+            info_text += f"Возможные причины:\n"
+            info_text += f"• Пользователь еще не писал боту\n"
+            info_text += f"• Скрытый профиль\n"
+            info_text += f"• Неверный ID\n\n"
+        
+        # Предлагаем ввести ФИО
+        if context.user_data.get('suggested_full_name'):
+            info_text += f"💡 <b>Предлагаемое ФИО:</b> {context.user_data['suggested_full_name']}\n\n"
+            info_text += f"Введите ФИО ученика или отправьте '+' чтобы использовать предлагаемое:"
+        else:
+            info_text += f"Введите ФИО ученика:"
         
         keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(
-            f"👤 Введите ФИО ученика с ID {student_user_id}:",
-            reply_markup=reply_markup
-        )
+        await update.message.reply_text(info_text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def handle_student_by_id_fullname(self, update: Update, context: ContextTypes.DEFAULT_TYPE, fullname: str) -> None:
         """Обработка добавления ученика по ID - этап 2 (ФИО)."""
+        # Проверяем, хочет ли админ использовать предложенное ФИО
+        if fullname.strip() == '+' and context.user_data.get('suggested_full_name'):
+            fullname = context.user_data['suggested_full_name']
+            await update.message.reply_text(f"✅ Использую предложенное ФИО: {fullname}")
+        
         if not fullname.strip():
-            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(
-                "❌ ФИО не может быть пустым. Попробуйте еще раз:",
-                reply_markup=reply_markup
-            )
+            await update.message.reply_text("❌ ФИО не может быть пустым. Попробуйте еще раз:")
             return
-            
+        
         context.user_data['new_student_fullname'] = fullname.strip()
         context.user_data['admin_action'] = 'student_by_id_grade'
         
+        student_user_id = context.user_data.get('new_student_user_id')
+        auto_info = context.user_data.get('auto_detected_info', {})
+        
+        # Формируем сводку информации
+        summary_text = f"🆔 <b>Добавление ученика</b>\n\n"
+        summary_text += f"<b>ID:</b> {student_user_id}\n"
+        summary_text += f"<b>ФИО:</b> {fullname}\n"
+        
+        if auto_info.get('username'):
+            summary_text += f"<b>Username:</b> @{auto_info['username']} (автоопределен)\n"
+        
+        summary_text += f"\nВведите класс ученика (1-11):"
+        
         keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(
-            "🎓 Введите класс ученика (от 1 до 11):",
-            reply_markup=reply_markup
-        )
+        await update.message.reply_text(summary_text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def handle_student_by_id_grade(self, update: Update, context: ContextTypes.DEFAULT_TYPE, grade_text: str) -> None:
-        """Обработка добавления ученика по ID - этап 3 (класс) - переход к выбору языка."""
+        """Обработка добавления ученика по ID - этап 3 (класс)."""
         try:
             grade = int(grade_text)
             if grade < 1 or grade > 11:
-                keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.message.reply_text(
-                    "❌ Класс должен быть от 1 до 11. Попробуйте еще раз:",
-                    reply_markup=reply_markup
-                )
+                await update.message.reply_text("❌ Класс должен быть от 1 до 11. Попробуйте еще раз:")
                 return
         except ValueError:
-            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(
-                "❌ Введите корректный номер класса (число). Попробуйте еще раз:",
-                reply_markup=reply_markup
-            )
+            await update.message.reply_text("❌ Введите корректный номер класса (число). Попробуйте еще раз:")
             return
         
-        # Сохраняем класс и переходим к выбору языка
-        context.user_data['new_student_grade'] = grade
-        context.user_data['admin_action'] = 'student_by_id_language'
+        student_user_id = context.user_data.get('new_student_user_id')
+        fullname = context.user_data.get('new_student_fullname')
+        auto_info = context.user_data.get('auto_detected_info', {})
+        admin_id = update.effective_user.id
         
-        # Показываем выбор языка
-        text = f"🌐 <b>Выбор языка для ученика</b>\n\n"
-        text += f"Выберите язык интерфейса для нового ученика:"
+        # Используем автоматически определенный username если есть
+        username = auto_info.get('username')
         
-        keyboard = [
-            [InlineKeyboardButton("🇷🇺 Русский", callback_data="student_lang_ru")],
-            [InlineKeyboardButton("🇰🇿 Қазақша", callback_data="student_lang_kk")],
-            [InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        # Добавляем ученика в базу данных
+        success = self.db.add_allowed_user_by_id(
+            user_id=student_user_id,
+            full_name=fullname,
+            grade=grade,
+            added_by=admin_id,
+            username=username
+        )
         
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        if success:
+            # Синхронизируем данные в таблице users
+            try:
+                with sqlite3.connect(self.db.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO users (user_id, username, full_name, grade, last_activity)
+                        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ''', (student_user_id, username, fullname, grade))
+                    conn.commit()
+                    logging.info(f"Synced user data for user_id {student_user_id}")
+            except Exception as e:
+                logging.error(f"Error syncing user data: {e}")
+            
+            # Формируем сообщение об успехе
+            success_text = f"✅ <b>Ученик успешно добавлен!</b>\n\n"
+            success_text += f"🆔 <b>ID:</b> {student_user_id}\n"
+            success_text += f"👤 <b>ФИО:</b> {fullname}\n"
+            success_text += f"🎓 <b>Класс:</b> {grade}\n"
+            
+            if username:
+                success_text += f"📱 <b>Username:</b> @{username} (автоопределен)\n"
+                success_text += f"✅ Данные синхронизированы автоматически\n"
+            else:
+                success_text += f"⚠️ Username не найден\n"
+                success_text += f"💡 Будет добавлен при первом входе в бот\n"
+            
+            if auto_info.get('found_via_api'):
+                success_text += f"🔄 Информация получена через Telegram API\n"
+            
+            success_text += f"\n📊 Ученик может начать пользоваться ботом"
+            
+            keyboard = [
+                [InlineKeyboardButton("➕ Добавить еще", callback_data="add_student_by_id")],
+                [InlineKeyboardButton("📋 Список учеников", callback_data="list_students")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(success_text, reply_markup=reply_markup, parse_mode='HTML')
+        else:
+            error_text = f"❌ Ошибка при добавлении ученика.\n"
+            error_text += f"Возможно, пользователь с ID {student_user_id} уже существует."
+            
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(error_text, reply_markup=reply_markup, parse_mode='HTML')
+        
+        # Очищаем временные данные
+        context.user_data.pop('admin_action', None)
+        context.user_data.pop('new_student_user_id', None)
+        context.user_data.pop('new_student_fullname', None)
+        context.user_data.pop('auto_detected_info', None)
+        context.user_data.pop('suggested_full_name', None)
 
     # === ОБРАБОТЧИКИ CALLBACK ДЛЯ ВЫБОРА ЯЗЫКА ===
 

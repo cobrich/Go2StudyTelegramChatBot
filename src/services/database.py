@@ -1334,9 +1334,9 @@ class Database:
                 # Обновляем данные в users
                 cursor.execute('''
                     INSERT OR REPLACE INTO users 
-                    (user_id, username, full_name, grade, phone_number, last_activity)
-                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ''', (user_id, username, full_name, grade, phone_number))
+                    (user_id, username, full_name, grade, last_activity)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (user_id, username, full_name, grade))
                 
                 # Обновляем данные в users
                 cursor.execute('''
@@ -2528,8 +2528,100 @@ class Database:
             print(f"[ERROR] Ошибка проверки структуры subtopics: {e}")
             return False
 
-    # Удаляем устаревший метод update_subtopic_language
-    # def update_subtopic_language(self, subtopic_id: int, language: str) -> bool:
-    #     """Метод удален - язык наследуется от main_topics."""
-    #     print("[WARNING] update_subtopic_language удален - язык наследуется от main_topics")
-    #     return False
+    def auto_update_username_from_telegram(self, user_id: int, username: str) -> bool:
+        """
+        Автоматически обновляет username пользователя при каждом взаимодействии с ботом.
+        Это гарантирует актуальность данных без участия админа.
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Обновляем username в таблице users
+                cursor.execute('''
+                    UPDATE users 
+                    SET username = ?, last_activity = CURRENT_TIMESTAMP
+                    WHERE user_id = ?
+                ''', (username, user_id))
+                
+                # Обновляем username в allowed_users если запись существует
+                cursor.execute('''
+                    UPDATE allowed_users 
+                    SET username = ?
+                    WHERE user_id = ? AND (username IS NULL OR username != ?)
+                ''', (username, user_id, username))
+                
+                conn.commit()
+                
+                # Логируем только если произошло обновление
+                if cursor.rowcount > 0:
+                    print(f"[LOG] Автоматически обновлен username для user_id {user_id}: @{username}")
+                
+                return True
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка автоматического обновления username для {user_id}: {e}")
+            return False
+
+    def get_user_display_info(self, user_id: int) -> Dict[str, Any]:
+        """
+        Получает отображаемую информацию о пользователе из всех источников.
+        Приоритет: текущие данные users -> whitelist -> базовые данные Telegram.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Получаем данные из users
+            cursor.execute('''
+                SELECT username, full_name, grade, phone_number, language
+                FROM users WHERE user_id = ?
+            ''', (user_id,))
+            user_data = cursor.fetchone()
+            
+            # Получаем данные из allowed_users
+            cursor.execute('''
+                SELECT username, full_name, grade, phone_number
+                FROM allowed_users WHERE user_id = ?
+            ''', (user_id,))
+            whitelist_data = cursor.fetchone()
+            
+            # Формируем итоговую информацию с приоритетами
+            result = {
+                'user_id': user_id,
+                'username': None,
+                'full_name': None,
+                'grade': None,
+                'phone_number': None,
+                'language': 'ru',
+                'has_complete_info': False
+            }
+            
+            # Заполняем данными из users (высший приоритет)
+            if user_data:
+                result.update({
+                    'username': user_data[0],
+                    'full_name': user_data[1],
+                    'grade': user_data[2],
+                    'phone_number': user_data[3],
+                    'language': user_data[4] or 'ru'
+                })
+            
+            # Дополняем данными из whitelist если чего-то не хватает
+            if whitelist_data:
+                if not result['username'] and whitelist_data[0]:
+                    result['username'] = whitelist_data[0]
+                if not result['full_name'] and whitelist_data[1]:
+                    result['full_name'] = whitelist_data[1]
+                if not result['grade'] and whitelist_data[2]:
+                    result['grade'] = whitelist_data[2]
+                if not result['phone_number'] and whitelist_data[3]:
+                    result['phone_number'] = whitelist_data[3]
+            
+            # Проверяем полноту информации
+            result['has_complete_info'] = bool(
+                result['full_name'] and 
+                result['grade'] and 
+                result['username']
+            )
+            
+            return result

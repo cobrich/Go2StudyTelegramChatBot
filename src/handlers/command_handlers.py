@@ -15,6 +15,10 @@ class CommandHandlers(BaseHandler):
         chat_id = update.effective_chat.id
         user_language = self.db.get_user_language(user.id)
 
+        # Автоматически обновляем username если он есть
+        if user.username:
+            self.db.auto_update_username_from_telegram(user.id, user.username)
+
         # Проверяем доступ пользователя (админ, whitelist по username или user_id)
         if not self.db.check_user_access(user.id, user.username):
             await update.message.reply_text(
