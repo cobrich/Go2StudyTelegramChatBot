@@ -204,7 +204,17 @@ class StudentsHandler(AdminBaseHandler):
         
         if not all([fullname, grade]):
             logging.error(f"[handle_student_language_selection] Missing required data: fullname={fullname}, grade={grade}")
-            await query.edit_message_text("❌ Ошибка: не все данные ученика сохранены. Попробуйте заново.")
+            
+            text = "❌ <b>Ошибка: не все данные ученика сохранены</b>\n\n"
+            text += "Что вы хотите сделать?"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать заново", callback_data="add_student" if not student_user_id else "add_student_by_id")],
+                [InlineKeyboardButton("🔙 Назад к управлению учениками", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
             return
         
         # Определяем тип добавления (по username или по ID)
@@ -222,7 +232,18 @@ class StudentsHandler(AdminBaseHandler):
             )
         else:
             logging.error(f"[handle_student_language_selection] No user_id or username found")
-            await query.edit_message_text("❌ Ошибка: не найден ни ID, ни username ученика.")
+            
+            text = "❌ <b>Ошибка: не найден ни ID, ни username ученика</b>\n\n"
+            text += "Что вы хотите сделать?"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать заново", callback_data="add_student")],
+                [InlineKeyboardButton("🆔 Добавить по ID", callback_data="add_student_by_id")],
+                [InlineKeyboardButton("🔙 Назад к управлению учениками", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
             return
         
         logging.info(f"[handle_student_language_selection] Student addition result: {success}")
@@ -251,6 +272,23 @@ class StudentsHandler(AdminBaseHandler):
                 text += f"👤 Username: @{username}\n"
             
             text += f"\n👥 <b>Управление учениками</b>\n\nВыберите действие:"
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        else:
+            # Обработка неудачного добавления
+            text = "❌ <b>Ошибка при добавлении ученика</b>\n\n"
+            text += "Не удалось добавить ученика в систему. Возможные причины:\n"
+            text += "• Ученик уже существует в системе\n"
+            text += "• Ошибка подключения к базе данных\n"
+            text += "• Неверные данные пользователя\n\n"
+            text += "Что вы хотите сделать?"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать заново", callback_data="add_student" if username else "add_student_by_id")],
+                [InlineKeyboardButton("📋 Список учеников", callback_data="list_students")],
+                [InlineKeyboardButton("🔙 Назад к управлению учениками", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
             
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
         
@@ -880,7 +918,18 @@ class StudentsHandler(AdminBaseHandler):
             
         except Exception as e:
             logging.error(f"Error setting student language: {e}")
-            await query.edit_message_text("❌ Ошибка при изменении языка.")
+            
+            text = "❌ <b>Ошибка при изменении языка</b>\n\n"
+            text += "Не удалось изменить язык ученика. Что вы хотите сделать?"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_language_{user_id}")],
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def edit_student_status_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Переключение статуса ученика (активен/неактивен)."""
@@ -898,7 +947,16 @@ class StudentsHandler(AdminBaseHandler):
                 result = cursor.fetchone()
                 
                 if not result:
-                    await query.edit_message_text("❌ Ученик не найден.")
+                    text = "❌ <b>Ученик не найден</b>\n\n"
+                    text += "Возможно, ученик был удален из системы. Что вы хотите сделать?"
+                    
+                    keyboard = [
+                        [InlineKeyboardButton("📋 К списку учеников", callback_data="list_students")],
+                        [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
                     return
                 
                 current_status, full_name = result
@@ -925,7 +983,18 @@ class StudentsHandler(AdminBaseHandler):
                 
         except Exception as e:
             logging.error(f"Error toggling student status: {e}")
-            await query.edit_message_text("❌ Ошибка при изменении статуса.")
+            
+            text = "❌ <b>Ошибка при изменении статуса</b>\n\n"
+            text += "Не удалось изменить статус ученика. Что вы хотите сделать?"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_status_{user_id}")],
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     # === ОБРАБОТЧИКИ РЕДАКТИРОВАНИЯ ===
 
@@ -933,7 +1002,17 @@ class StudentsHandler(AdminBaseHandler):
         """Обработка изменения ФИО ученика."""
         user_id = context.user_data.get('edit_student_id')
         if not user_id:
-            await update.message.reply_text("❌ Ошибка: ID ученика не найден.")
+            text = "❌ <b>Ошибка: ID ученика не найден</b>\n\n"
+            text += "Возможно, сессия истекла. Что вы хотите сделать?"
+            
+            keyboard = [
+                [InlineKeyboardButton("✏️ Выбрать ученика для редактирования", callback_data="edit_student_start")],
+                [InlineKeyboardButton("📋 К списку учеников", callback_data="list_students")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
             return
         
         try:
@@ -955,7 +1034,18 @@ class StudentsHandler(AdminBaseHandler):
                 
         except Exception as e:
             logging.error(f"Error updating student name: {e}")
-            await update.message.reply_text("❌ Ошибка при изменении ФИО.")
+            
+            text = "❌ <b>Ошибка при изменении ФИО</b>\n\n"
+            text += "Не удалось обновить ФИО ученика в базе данных. Что вы хотите сделать?"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_name_{user_id}")],
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         
         # Очищаем состояние
         context.user_data.pop('edit_student_id', None)
@@ -965,16 +1055,46 @@ class StudentsHandler(AdminBaseHandler):
         """Обработка изменения класса ученика."""
         user_id = context.user_data.get('edit_student_id')
         if not user_id:
-            await update.message.reply_text("❌ Ошибка: ID ученика не найден.")
+            text = "❌ <b>Ошибка: ID ученика не найден</b>\n\n"
+            text += "Возможно, сессия истекла. Что вы хотите сделать?"
+            
+            keyboard = [
+                [InlineKeyboardButton("✏️ Выбрать ученика для редактирования", callback_data="edit_student_start")],
+                [InlineKeyboardButton("📋 К списку учеников", callback_data="list_students")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
             return
         
         try:
             grade = int(grade_text)
             if grade < 1 or grade > 11:
-                await update.message.reply_text("❌ Класс должен быть от 1 до 11. Попробуйте еще раз:")
+                text = "❌ <b>Неверный класс</b>\n\n"
+                text += "Класс должен быть от 1 до 11. Что вы хотите сделать?"
+                
+                keyboard = [
+                    [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_grade_{user_id}")],
+                    [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
+                    [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
                 return
         except ValueError:
-            await update.message.reply_text("❌ Введите корректный номер класса (число). Попробуйте еще раз:")
+            text = "❌ <b>Неверный формат</b>\n\n"
+            text += "Введите корректный номер класса (число от 1 до 11). Что вы хотите сделать?"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_grade_{user_id}")],
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
             return
         
         try:
@@ -996,7 +1116,18 @@ class StudentsHandler(AdminBaseHandler):
                 
         except Exception as e:
             logging.error(f"Error updating student grade: {e}")
-            await update.message.reply_text("❌ Ошибка при изменении класса.")
+            
+            text = "❌ <b>Ошибка при изменении класса</b>\n\n"
+            text += "Не удалось обновить класс ученика в базе данных. Что вы хотите сделать?"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_grade_{user_id}")],
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         
         # Очищаем состояние
         context.user_data.pop('edit_student_id', None)
@@ -1006,7 +1137,17 @@ class StudentsHandler(AdminBaseHandler):
         """Обработка изменения телефона ученика."""
         user_id = context.user_data.get('edit_student_id')
         if not user_id:
-            await update.message.reply_text("❌ Ошибка: ID ученика не найден.")
+            text = "❌ <b>Ошибка: ID ученика не найден</b>\n\n"
+            text += "Возможно, сессия истекла. Что вы хотите сделать?"
+            
+            keyboard = [
+                [InlineKeyboardButton("✏️ Выбрать ученика для редактирования", callback_data="edit_student_start")],
+                [InlineKeyboardButton("📋 К списку учеников", callback_data="list_students")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
             return
         
         phone_number = "" if phone_text.lower() == 'удалить' else phone_text.strip()
@@ -1033,7 +1174,18 @@ class StudentsHandler(AdminBaseHandler):
                 
         except Exception as e:
             logging.error(f"Error updating student phone: {e}")
-            await update.message.reply_text("❌ Ошибка при изменении телефона.")
+            
+            text = "❌ <b>Ошибка при изменении телефона</b>\n\n"
+            text += "Не удалось обновить телефон ученика в базе данных. Что вы хотите сделать?"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать еще раз", callback_data=f"edit_student_phone_{user_id}")],
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
+                [InlineKeyboardButton("🔙 Назад", callback_data="admin_students")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         
         # Очищаем состояние
         context.user_data.pop('edit_student_id', None)
