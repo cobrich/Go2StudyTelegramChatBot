@@ -57,32 +57,46 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, us
     all_active_topics = _db.get_topic_names(active_only=True)
     
     keyboard = []
-    for topic_info in subtopics_for_main:
-        subtopic_name = topic_info['name']
-        question_count = topic_info['question_count']
+    
+    # Добавляем кнопки для подтем
+    for subtopic_info in subtopics_for_main:
+        subtopic_name = subtopic_info['name']
+        question_count = subtopic_info.get('question_count', 0)
+        has_questions = subtopic_info.get('has_questions', False)
         
-        # Формируем отображаемое название в зависимости от роли
+        # Определяем язык подтемы через main_topic
+        # Для этого нужно найти язык основного раздела
+        subtopic_language = 'ru'  # По умолчанию
+        
+        # Определяем язык по основному разделу
+        if main_topic in ru_structure:
+            subtopic_language = 'ru'
+        elif main_topic in kk_structure:
+            subtopic_language = 'kk'
+        
+        # Находим индекс темы в общем списке
+        try:
+            topic_index = all_active_topics.index(subtopic_name)
+        except ValueError:
+            continue  # Тема не найдена в активных
+        
+        # Формируем текст кнопки в зависимости от роли
         if is_admin:
-            # Для админов: показываем количество вопросов и индикатор наличия
-            if question_count > 0:
-                display_name = f"🟢 {subtopic_name} ({question_count})"
+            # Для админов: показываем количество вопросов и язык
+            if has_questions:
+                button_text = f"🟢 {subtopic_name} ({question_count}) [{subtopic_language}]"
             else:
-                display_name = f"🟡 {subtopic_name} (ИИ)"
+                button_text = f"🟡 {subtopic_name} (ИИ) [{subtopic_language}]"
         else:
             # Для учеников: только название темы
-            display_name = subtopic_name
+            button_text = subtopic_name
         
-        # Находим индекс подтемы в общем списке активных тем
-        try:
-            subtopic_index = all_active_topics.index(subtopic_name)
-            keyboard.append([InlineKeyboardButton(display_name, callback_data=f"topic_{subtopic_index}")])
-        except ValueError:
-            continue
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"topic_{topic_index}")])
     
-    # Add navigation buttons with translations
-    back_to_sections = "🔙 Назад к разделам" if user_language == 'ru' else "🔙 Бөлімдерге қайту"
-    keyboard.append([InlineKeyboardButton(back_to_sections, callback_data="back_to_main_topics")])
-    keyboard.append([InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")])
+    # Добавляем кнопку "Назад к разделам"
+    back_text = "⬅️ Назад к разделам" if user_language == 'ru' else "⬅️ Бөлімдерге қайту"
+    keyboard.append([InlineKeyboardButton(back_text, callback_data="back_to_main_topics")])
+    
     return InlineKeyboardMarkup(keyboard)
 
 def get_main_menu_markup(user_id: int = None) -> ReplyKeyboardMarkup:

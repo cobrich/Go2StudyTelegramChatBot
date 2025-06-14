@@ -1,8 +1,13 @@
 import sqlite3
 import logging
 import os
+import sys
 from typing import List, Dict, Any, Optional, Tuple
-from config.constants import TOPICS, TOPIC_HIERARCHY
+
+# Добавляем корневую директорию проекта в sys.path для импортов
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 class Database:
     def __init__(self, db_path: str = None):
@@ -46,17 +51,6 @@ class Database:
                 # Column already exists
                 pass
             
-            # Add language column to subtopics if it doesn't exist
-            try:
-                cursor.execute('ALTER TABLE subtopics ADD COLUMN language TEXT DEFAULT "ru"')
-                # Update existing records to have 'ru' as default language
-                cursor.execute('UPDATE subtopics SET language = "ru" WHERE language IS NULL')
-                conn.commit()
-                print("[LOG] Добавлено поле language в таблицу subtopics")
-            except sqlite3.OperationalError:
-                # Column already exists
-                pass
-            
             # Add language column to main_topics if it doesn't exist
             try:
                 cursor.execute('ALTER TABLE main_topics ADD COLUMN language TEXT DEFAULT "ru"')
@@ -66,6 +60,18 @@ class Database:
                 print("[LOG] Добавлено поле language в таблицу main_topics")
             except sqlite3.OperationalError:
                 # Column already exists
+                pass
+            
+            # Update main_topics UNIQUE constraint to support (name, language)
+            try:
+                cursor.execute('''
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_main_topics_name_language 
+                    ON main_topics(name, language)
+                ''')
+                conn.commit()
+                print("[LOG] Обновлен UNIQUE constraint для main_topics")
+            except sqlite3.OperationalError:
+                # Index already exists
                 pass
             
             # Admins table - для управления администраторами
@@ -215,27 +221,30 @@ class Database:
             # Инициализация нормализованной структуры из constants.py если таблицы пустые
             cursor.execute('SELECT COUNT(*) FROM main_topics')
             if cursor.fetchone()[0] == 0:
-                from config.constants import TOPIC_HIERARCHY
-                # Добавляем основные разделы
-                for order_index, main_topic in enumerate(TOPIC_HIERARCHY.keys()):
-                    cursor.execute('''
-                        INSERT INTO main_topics (name, order_index, is_active)
-                        VALUES (?, ?, 1)
-                    ''', (main_topic, order_index))
-                
-                # Получаем ID основных тем и добавляем подтемы
-                cursor.execute('SELECT id, name FROM main_topics')
-                main_topics_map = {name: id for id, name in cursor.fetchall()}
-                
-                for main_topic, subtopics in TOPIC_HIERARCHY.items():
-                    main_topic_id = main_topics_map[main_topic]
-                    for subtopic_order, subtopic in enumerate(subtopics):
+                try:
+                    from config.constants import TOPIC_HIERARCHY
+                    # Добавляем основные разделы
+                    for order_index, main_topic in enumerate(TOPIC_HIERARCHY.keys()):
                         cursor.execute('''
-                            INSERT INTO subtopics (main_topic_id, name, order_index, is_active)
-                            VALUES (?, ?, ?, 1)
-                        ''', (main_topic_id, subtopic, subtopic_order))
-                
-                print(f"[LOG] Инициализированы темы из иерархической структуры: {len(TOPIC_HIERARCHY)} основных разделов")
+                            INSERT INTO main_topics (name, order_index, is_active)
+                            VALUES (?, ?, 1)
+                        ''', (main_topic, order_index))
+                    
+                    # Получаем ID основных тем и добавляем подтемы
+                    cursor.execute('SELECT id, name FROM main_topics')
+                    main_topics_map = {name: id for id, name in cursor.fetchall()}
+                    
+                    for main_topic, subtopics in TOPIC_HIERARCHY.items():
+                        main_topic_id = main_topics_map[main_topic]
+                        for subtopic_order, subtopic in enumerate(subtopics):
+                            cursor.execute('''
+                                INSERT INTO subtopics (main_topic_id, name, order_index, is_active)
+                                VALUES (?, ?, ?, 1)
+                            ''', (main_topic_id, subtopic, subtopic_order))
+                    
+                    print(f"[LOG] Инициализированы темы из иерархической структуры: {len(TOPIC_HIERARCHY)} основных разделов")
+                except ImportError:
+                    print("[LOG] config.constants не найден, пропускаем инициализацию тем")
             
             conn.commit()
 
@@ -2183,16 +2192,16 @@ class Database:
             print(f"[ERROR] Ошибка очистки данных пользователя {user_id}: {e}")
     
     def get_topics_by_language(self, language: str, active_only: bool = True) -> List[Dict]:
-        """Получает темы для конкретного языка."""
+        """Получает темы для конкретного языка через main_topics."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
                 query = '''
-                    SELECT mt.name as main_topic, st.name as subtopic, st.id, st.language
+                    SELECT mt.name as main_topic, st.name as subtopic, st.id
                     FROM main_topics mt
                     JOIN subtopics st ON mt.id = st.main_topic_id
-                    WHERE st.language = ?
+                    WHERE mt.language = ?
                 '''
                 params = [language]
                 
@@ -2206,13 +2215,13 @@ class Database:
                 
                 # Группируем по основным темам
                 topics_dict = {}
-                for main_topic, subtopic, subtopic_id, lang in rows:
+                for main_topic, subtopic, subtopic_id in rows:
                     if main_topic not in topics_dict:
                         topics_dict[main_topic] = []
                     topics_dict[main_topic].append({
                         'id': subtopic_id,
                         'name': subtopic,
-                        'language': lang
+                        'language': language  # Наследуется от main_topic
                     })
                 
                 return topics_dict
@@ -2222,20 +2231,21 @@ class Database:
             return {}
     
     def get_questions_by_user_language(self, user_id: int, topic: str = None) -> List[Dict]:
-        """Получает вопросы на языке пользователя через связь с темами."""
+        """Получает вопросы на языке пользователя через связь с main_topics."""
         try:
             user_language = self.get_user_language(user_id)
             
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Получаем вопросы через связь с темами по языку
+                # Получаем вопросы через связь с темами по языку main_topics
                 query = '''
                     SELECT DISTINCT q.id, q.topic, q.question, q.answer, q.explanation, 
                            q.incorrect_options, q.question_type, q.source, q.image_path
                     FROM questions q
                     JOIN subtopics st ON q.topic = st.name
-                    WHERE st.language = ?
+                    JOIN main_topics mt ON st.main_topic_id = mt.id
+                    WHERE mt.language = ?
                 '''
                 params = [user_language]
                 
@@ -2266,36 +2276,36 @@ class Database:
             return []
     
     def add_topic_with_language(self, name: str, language: str, main_topic_name: str, created_by: int = None) -> bool:
-        """Добавляет новую тему с указанием языка."""
+        """Добавляет новую тему. Язык наследуется от main_topic."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Находим ID основной темы
-                cursor.execute('SELECT id FROM main_topics WHERE name = ?', (main_topic_name,))
+                # Находим ID основной темы с нужным языком
+                cursor.execute('SELECT id FROM main_topics WHERE name = ? AND language = ?', (main_topic_name, language))
                 main_topic_result = cursor.fetchone()
                 
                 if not main_topic_result:
-                    print(f"[ERROR] Основная тема '{main_topic_name}' не найдена")
+                    print(f"[ERROR] Основная тема '{main_topic_name}' с языком '{language}' не найдена")
                     return False
                 
                 main_topic_id = main_topic_result[0]
                 
-                # Добавляем подтему с языком
+                # Добавляем подтему (язык наследуется от main_topic)
                 cursor.execute('''
-                    INSERT INTO subtopics (main_topic_id, name, language, is_active)
-                    VALUES (?, ?, ?, 1)
-                ''', (main_topic_id, name, language))
+                    INSERT INTO subtopics (main_topic_id, name, is_active)
+                    VALUES (?, ?, 1)
+                ''', (main_topic_id, name))
                 
                 conn.commit()
-                print(f"[LOG] Добавлена тема '{name}' на языке '{language}' в раздел '{main_topic_name}'")
+                print(f"[LOG] Добавлена тема '{name}' в раздел '{main_topic_name}' ({language})")
                 return True
                 
         except sqlite3.IntegrityError:
             print(f"[ERROR] Тема '{name}' уже существует в разделе '{main_topic_name}'")
             return False
         except Exception as e:
-            print(f"[ERROR] Ошибка добавления темы с языком: {e}")
+            print(f"[ERROR] Ошибка добавления темы: {e}")
             return False
     
     def get_topics_with_language_info(self, active_only: bool = True, for_admin: bool = False) -> List[Dict[str, Any]]:
@@ -2305,7 +2315,7 @@ class Database:
                 cursor = conn.cursor()
                 
                 query = '''
-                    SELECT mt.name as main_topic, st.name as subtopic, st.language, 
+                    SELECT mt.name as main_topic, st.name as subtopic, mt.language, 
                            COUNT(q.id) as question_count, st.id
                     FROM main_topics mt
                     JOIN subtopics st ON mt.id = st.main_topic_id
@@ -2316,7 +2326,7 @@ class Database:
                     query += ' WHERE mt.is_active = 1 AND st.is_active = 1'
                 
                 query += '''
-                    GROUP BY mt.name, st.name, st.language, st.id
+                    GROUP BY mt.name, st.name, mt.language, st.id
                     ORDER BY mt.order_index, st.order_index
                 '''
                 
@@ -2349,29 +2359,15 @@ class Database:
         except Exception as e:
             print(f"[ERROR] Ошибка получения тем с информацией о языке: {e}")
             return {}
-    
-    def update_subtopic_language(self, subtopic_id: int, language: str) -> bool:
-        """Обновляет язык подтемы."""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE subtopics 
-                    SET language = ?
-                    WHERE id = ?
-                ''', (language, subtopic_id))
-                
-                conn.commit()
-                return cursor.rowcount > 0
-                
-        except Exception as e:
-            print(f"[ERROR] Ошибка обновления языка подтемы {subtopic_id}: {e}")
-            return False
 
     def create_kazakh_main_topics(self) -> bool:
         """Создает казахские версии основных разделов."""
         try:
-            from config.constants_kk import MAIN_TOPICS_KK, TOPIC_HIERARCHY_KK
+            try:
+                from config.constants_kk import MAIN_TOPICS_KK, TOPIC_HIERARCHY_KK
+            except ImportError:
+                print("[ERROR] config.constants_kk не найден")
+                return False
             
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
@@ -2412,8 +2408,8 @@ class Database:
                                 
                                 if not cursor.fetchone():
                                     cursor.execute('''
-                                        INSERT INTO subtopics (main_topic_id, name, order_index, language, is_active)
-                                        VALUES (?, ?, ?, "kk", 1)
+                                        INSERT INTO subtopics (main_topic_id, name, order_index, is_active)
+                                        VALUES (?, ?, ?, 1)
                                     ''', (kazakh_main_topic_id, kazakh_subtopic, subtopic_order))
                 
                 conn.commit()
@@ -2471,11 +2467,11 @@ class Database:
                            st.name as subtopic, st.id as subtopic_id, st.order_index,
                            COUNT(q.id) as question_count
                     FROM main_topics mt
-                    LEFT JOIN subtopics st ON mt.id = st.main_topic_id AND st.language = ?
+                    LEFT JOIN subtopics st ON mt.id = st.main_topic_id
                     LEFT JOIN questions q ON st.name = q.topic
                     WHERE mt.language = ?
                 '''
-                params = [language, language]
+                params = [language]
                 
                 if active_only:
                     query += ' AND mt.is_active = 1 AND (st.is_active = 1 OR st.is_active IS NULL)'
@@ -2509,32 +2505,29 @@ class Database:
             return {}
 
     def sync_subtopic_languages_with_main_topics(self) -> bool:
-        """Синхронизирует языки подтем с языками их основных разделов."""
+        """Синхронизирует подтемы с основными разделами (удаляет поле language из subtopics)."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Обновляем языки подтем в соответствии с языками основных разделов
-                cursor.execute('''
-                    UPDATE subtopics 
-                    SET language = (
-                        SELECT mt.language 
-                        FROM main_topics mt 
-                        WHERE mt.id = subtopics.main_topic_id
-                    )
-                    WHERE EXISTS (
-                        SELECT 1 FROM main_topics mt 
-                        WHERE mt.id = subtopics.main_topic_id 
-                        AND mt.language != subtopics.language
-                    )
-                ''')
+                # Проверяем, есть ли поле language в subtopics
+                cursor.execute("PRAGMA table_info(subtopics)")
+                columns = [column[1] for column in cursor.fetchall()]
                 
-                updated_count = cursor.rowcount
-                conn.commit()
-                
-                print(f"[LOG] Синхронизировано {updated_count} подтем с языками основных разделов")
-                return True
+                if 'language' in columns:
+                    print("[LOG] Найдено поле language в subtopics, требуется миграция")
+                    print("[LOG] Запустите скрипт remove_subtopic_language.py для удаления поля")
+                    return False
+                else:
+                    print("[LOG] Поле language отсутствует в subtopics - структура корректна")
+                    return True
                 
         except Exception as e:
-            print(f"[ERROR] Ошибка синхронизации языков подтем: {e}")
+            print(f"[ERROR] Ошибка проверки структуры subtopics: {e}")
             return False
+
+    # Удаляем устаревший метод update_subtopic_language
+    # def update_subtopic_language(self, subtopic_id: int, language: str) -> bool:
+    #     """Метод удален - язык наследуется от main_topics."""
+    #     print("[WARNING] update_subtopic_language удален - язык наследуется от main_topics")
+    #     return False
