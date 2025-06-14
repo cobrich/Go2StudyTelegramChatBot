@@ -190,7 +190,7 @@ def main() -> None:
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.set_student_language,
-        pattern="^set_language_(ru|kk)_"
+        pattern="^set_student_lang_(ru|kk)_"
     ))
     
     # Student language selection handler for adding new students

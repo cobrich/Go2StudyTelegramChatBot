@@ -696,10 +696,16 @@ class Database:
             result = cursor.fetchone()
             current_language = result[0] if result else 'ru'
             
-            # Обновляем язык
+            # Обновляем язык в таблице users
             cursor.execute('''
                 UPDATE users SET language = ? WHERE user_id = ?
             ''', (language, user_id))
+            
+            # Обновляем язык в таблице allowed_users
+            cursor.execute('''
+                UPDATE allowed_users SET language = ? WHERE user_id = ?
+            ''', (language, user_id))
+            
             conn.commit()
             
             # Если язык изменился, очищаем данные пользователя

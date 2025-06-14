@@ -711,6 +711,8 @@ class StudentsHandler(AdminBaseHandler):
         language = parts[3]  # ru или kk
         user_id = int(parts[4])
         
+        logging.info(f"[set_student_language] Changing language for user {user_id} to {language}")
+        
         try:
             # Обновляем язык в базе данных
             self.db.update_user_language(user_id, language)
@@ -723,6 +725,8 @@ class StudentsHandler(AdminBaseHandler):
             text = f"✅ <b>Язык изменен</b>\n\n"
             text += f"Язык ученика успешно изменен на: {language_name}\n\n"
             text += f"ℹ️ Данные пользователя (активные тесты, прогресс) были сброшены."
+            
+            logging.info(f"[set_student_language] Successfully changed language for user {user_id} to {language}")
             
             keyboard = [
                 [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_student_select_{user_id}")],
