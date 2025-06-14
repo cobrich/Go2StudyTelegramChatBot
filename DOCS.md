@@ -1917,3 +1917,73 @@ edit_topic_section_start     pattern="^edit_topic_section_"        # ✅ General
 ---
 
 ### 2024-12-19: Исправление функциональности добавления тем - убран запрос описания
+
+### 🔧 Fix: Admin Statistics User Names Display (January 2025)
+
+**✅ FIXED: Improved user name display in admin statistics - no more "Неизвестен"**
+
+#### 🐛 Problem:
+- Admin statistics showed "Неизвестен" (Unknown) for all users in top active students
+- History also showed "Неизвестен" instead of proper user identification
+- Poor user experience for administrators trying to identify students
+- Logic error in name determination: `name = full_name or f"@{username}" if username else "Неизвестен"`
+
+#### 🔍 Root cause analysis:
+- **Data mismatch**: Users who took tests (IDs: 1354242060, 508360123, 836210604) had `NULL` names in database
+- **Table inconsistency**: `allowed_users` table had proper names, but `users` table had `NULL` values
+- **No data overlap**: Users with tests ≠ users with names in database
+- **Incorrect SQL joins**: Statistics queries didn't properly combine data from both tables
+
+#### ✅ Solution implemented:
+
+**1. Fixed SQL queries with proper JOINs:**
+```sql
+-- Before (incomplete):
+SELECT u.full_name, u.username, COUNT(tr.id)
+FROM users u JOIN test_results tr ON u.user_id = tr.user_id
+
+-- After (complete):
+SELECT 
+    COALESCE(au.full_name, u.full_name) as full_name,
+    COALESCE(au.username, u.username) as username,
+    tr.user_id,
+    COUNT(tr.id) as test_count
+FROM test_results tr
+LEFT JOIN users u ON tr.user_id = u.user_id
+LEFT JOIN allowed_users au ON tr.user_id = au.user_id
+```
+
+**2. Improved name display logic:**
+```python
+# Before (broken):
+name = full_name or f"@{username}" if username else "Неизвестен"
+
+# After (working):
+if full_name:
+    name = full_name
+elif username:
+    name = f"@{username}"
+else:
+    name = f"Пользователь {user_id}"  # Much more informative
+```
+
+**3. Enhanced both statistics sections:**
+- **Top 5 active students**: Now shows proper identification
+- **User activity history**: Now shows proper user names or IDs
+
+#### 📊 Results:
+- **Before**: "1. Неизвестен: 2 тестов, 27.5%"
+- **After**: "1. Пользователь 508360123: 2 тестов, 27.5%"
+
+#### 🎯 Benefits:
+- **No more "Unknown"**: All users now have meaningful identification
+- **Better admin experience**: Administrators can identify students by user ID
+- **Proper data joining**: Statistics now combine data from all relevant tables
+- **Fallback system**: Graceful degradation when names are not available
+
+**Files modified:**
+- `src/handlers/admin/stats.py` - Fixed SQL queries and name display logic
+
+**Status**: ✅ **USER NAMES DISPLAY FIXED** - Admin statistics now show proper user identification
+
+---
