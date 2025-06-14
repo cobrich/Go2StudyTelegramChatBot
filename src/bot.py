@@ -438,39 +438,7 @@ def main() -> None:
         pattern="^back_to_results$"
     ))
     
-    # Base structure management handlers
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.manage_base_structure_menu,
-        pattern="^manage_base_structure$"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.view_base_structure,
-        pattern="^view_base_structure$"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.add_base_section_start,
-        pattern="^add_base_section$"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.edit_base_section_start,
-        pattern="^edit_base_section$"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.delete_base_section_start,
-        pattern="^delete_base_section$"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.edit_base_section_select,
-        pattern="^edit_base_section_select_"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.delete_base_section_confirm,
-        pattern="^delete_base_section_confirm_"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.delete_base_section_execute,
-        pattern="^delete_base_section_execute_"
-    ))
+    # Additional topic handlers
     application.add_handler(CallbackQueryHandler(
         admin_handlers.list_topics,
         pattern="^list_topics_page_"

@@ -85,7 +85,7 @@ class AdminBaseHandler(BaseHandler):
             [InlineKeyboardButton("❓ Управление вопросами", callback_data="admin_questions")],
             [InlineKeyboardButton("👨‍💼 Управление админами", callback_data="admin_admins")],
             [InlineKeyboardButton("📊 Статистика и отчеты", callback_data="admin_stats")],
-            [InlineKeyboardButton("🏗️ Базовая структура", callback_data="manage_base_structure")]
+            [InlineKeyboardButton("🔙 Назад к главному меню", callback_data="main_menu")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
