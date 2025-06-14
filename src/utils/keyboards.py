@@ -39,6 +39,9 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, us
     is_admin = user_id and _db.is_admin(user_id)
     
     # Получаем полную структуру тем по языку
+    ru_structure = {}
+    kk_structure = {}
+    
     if is_admin:
         # Для админов получаем структуру для обоих языков
         ru_structure = _db.get_full_topic_structure_by_language('ru', active_only=True)
@@ -49,6 +52,12 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, us
     else:
         # Для учеников только их язык
         full_structure = _db.get_full_topic_structure_by_language(user_language, active_only=True)
+        
+        # Заполняем структуры для определения языка
+        if user_language == 'ru':
+            ru_structure = full_structure
+        else:
+            kk_structure = full_structure
     
     # Получаем подтемы для выбранного основного раздела
     subtopics_for_main = full_structure.get(main_topic, [])
@@ -65,7 +74,6 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, us
         has_questions = subtopic_info.get('has_questions', False)
         
         # Определяем язык подтемы через main_topic
-        # Для этого нужно найти язык основного раздела
         subtopic_language = 'ru'  # По умолчанию
         
         # Определяем язык по основному разделу
