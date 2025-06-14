@@ -1,6 +1,7 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from config.constants import MAIN_MENU_KEYBOARD
 from services.database import Database
+from utils.translations import get_message, get_main_menu_keyboard
 
 # Инициализируем БД для получения тем
 _db = Database()
@@ -32,7 +33,7 @@ def build_topic_selection_keyboard(user_id: int = None) -> InlineKeyboardMarkup:
         for i, main_topic in enumerate(main_topics)
     ]
     # Add "Back to main menu" button at the end
-    keyboard.append([InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")])
+    keyboard.append([InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")])
     return InlineKeyboardMarkup(keyboard)
 
 def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, user_id: int = None) -> InlineKeyboardMarkup:
@@ -66,21 +67,26 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, us
         except ValueError:
             continue
     
-    # Add navigation buttons
-    keyboard.append([InlineKeyboardButton("🔙 Назад к разделам", callback_data="back_to_main_topics")])
-    keyboard.append([InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")])
+    # Add navigation buttons with translations
+    back_to_sections = "🔙 Назад к разделам" if user_language == 'ru' else "🔙 Бөлімдерге қайту"
+    keyboard.append([InlineKeyboardButton(back_to_sections, callback_data="back_to_main_topics")])
+    keyboard.append([InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")])
     return InlineKeyboardMarkup(keyboard)
 
-def get_main_menu_markup() -> ReplyKeyboardMarkup:
-    """Get the main menu keyboard markup."""
+def get_main_menu_markup(user_id: int = None) -> ReplyKeyboardMarkup:
+    """Get the main menu keyboard markup with language support."""
+    user_language = _db.get_user_language(user_id) if user_id else 'ru'
+    menu_keyboard = get_main_menu_keyboard(user_language)
     return ReplyKeyboardMarkup(
-        MAIN_MENU_KEYBOARD,
+        menu_keyboard,
         resize_keyboard=True,
         one_time_keyboard=False
     )
 
-def build_question_keyboard(options: list, q_num: int, max_reached: int, total_questions: int) -> InlineKeyboardMarkup:
+def build_question_keyboard(options: list, q_num: int, max_reached: int, total_questions: int, user_id: int = None) -> InlineKeyboardMarkup:
     """Build keyboard for question display with navigation buttons."""
+    user_language = _db.get_user_language(user_id) if user_id else 'ru'
+    
     keyboard = [
         [InlineKeyboardButton(ans, callback_data=f"answer_{i}_{q_num}")]
         for i, ans in enumerate(options)
@@ -88,32 +94,35 @@ def build_question_keyboard(options: list, q_num: int, max_reached: int, total_q
     
     navigation_buttons = []
     if q_num > 0:
-        navigation_buttons.append(InlineKeyboardButton("⬅️ Предыдущий", callback_data="prev_question"))
+        navigation_buttons.append(InlineKeyboardButton(get_message('previous', user_language), callback_data="prev_question"))
     
     if q_num < max_reached and q_num < total_questions - 1:
-        navigation_buttons.append(InlineKeyboardButton("➡️ Следующий", callback_data="next_question"))
+        navigation_buttons.append(InlineKeyboardButton(get_message('next', user_language), callback_data="next_question"))
 
     if navigation_buttons:
         keyboard.append(navigation_buttons)
     
     if q_num == 0:
-        keyboard.append([InlineKeyboardButton("⬅️ Назад к темам", callback_data="back_to_topics")])
+        back_to_topics_text = get_message('back_to_topics', user_language)
+        keyboard.append([InlineKeyboardButton(f"⬅️ {back_to_topics_text}", callback_data="back_to_topics")])
     
     return InlineKeyboardMarkup(keyboard)
 
 def build_results_keyboard(errors_list: list, current_topic: str, user_id: int = None) -> InlineKeyboardMarkup:
     """Build keyboard for test results display."""
-    buttons = [[InlineKeyboardButton("🏠 В главное меню", callback_data="main_menu")]]
+    user_language = _db.get_user_language(user_id) if user_id else 'ru'
+    
+    buttons = [[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]]
     
     if errors_list:
         for err in errors_list:
+            explanation_text = get_message('explanation_btn', user_language, num=err['q_num']+1)
             buttons.append([InlineKeyboardButton(
-                f"Показать объяснение к вопросу {err['q_num']+1}",
+                explanation_text,
                 callback_data=f"show_expl_{err['q_num']}"
             )])
     else:
         # Получаем темы на языке пользователя
-        user_language = _db.get_user_language(user_id) if user_id else 'ru'
         topics_dict = _db.get_topics_by_language(user_language, active_only=True)
         
         # Создаем плоский список тем для поиска индекса
@@ -126,12 +135,16 @@ def build_results_keyboard(errors_list: list, current_topic: str, user_id: int =
             all_active_topics = _db.get_topic_names(active_only=True)
             if current_topic in all_active_topics:
                 topic_index = all_active_topics.index(current_topic)
-                buttons.append([InlineKeyboardButton("🔄 Пройти еще раз эту тему", 
+                retake_text = get_message('retake_topic', user_language)
+                buttons.append([InlineKeyboardButton(retake_text, 
                                                    callback_data=f"topic_retake_{topic_index}")])
     
-    buttons.append([InlineKeyboardButton("📚 Выбрать другую тему", callback_data="back_to_topics")])
+    back_to_topics_text = get_message('back_to_topics', user_language)
+    buttons.append([InlineKeyboardButton(back_to_topics_text, callback_data="back_to_topics")])
     return InlineKeyboardMarkup(buttons)
 
-def build_continue_keyboard() -> InlineKeyboardMarkup:
+def build_continue_keyboard(user_id: int = None) -> InlineKeyboardMarkup:
     """Build keyboard with continue button."""
-    return InlineKeyboardMarkup([[InlineKeyboardButton("➡️ Продолжить", callback_data="continue_test")]]) 
+    user_language = _db.get_user_language(user_id) if user_id else 'ru'
+    continue_text = get_message('continue_btn', user_language)
+    return InlineKeyboardMarkup([[InlineKeyboardButton(f"➡️ {continue_text}", callback_data="continue_test")]]) 

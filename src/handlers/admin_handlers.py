@@ -214,7 +214,8 @@ class AdminHandlers(BaseHandler):
             text += f"• Username: @{user_info['username'] or 'не указан'}\n"
             text += f"• ФИО: {user_info['full_name'] or 'не указано'}\n"
             text += f"• Класс: {user_info['grade'] or 'не указан'}\n"
-            text += f"• Язык: {user_info['language']}\n"
+            language_display = 'Русский' if user_info['language'] == 'ru' else ('Қазақша' if user_info['language'] == 'kk' else user_info['language'])
+            text += f"• Язык: {language_display}\n"
             
             if user_info['last_activity']:
                 text += f"• Последняя активность: {user_info['last_activity'][:16]}\n"
@@ -3697,6 +3698,7 @@ class AdminHandlers(BaseHandler):
                 [InlineKeyboardButton("📝 Изменить ФИО", callback_data=f"edit_student_name_{user_id}")],
                 [InlineKeyboardButton("🎓 Изменить класс", callback_data=f"edit_student_grade_{user_id}")],
                 [InlineKeyboardButton("📱 Изменить телефон", callback_data=f"edit_student_phone_{user_id}")],
+                [InlineKeyboardButton("🌐 Изменить язык", callback_data=f"edit_student_language_{user_id}")],
                 [InlineKeyboardButton("🔄 Изменить статус", callback_data=f"edit_student_status_{user_id}")],
                 [InlineKeyboardButton("🔙 Назад к деталям", callback_data=f"student_details_{user_id}")]
             ]
@@ -4277,3 +4279,55 @@ class AdminHandlers(BaseHandler):
         context.user_data['admin_action'] = 'edit_question_explanation'
         
         await query.edit_message_text(text, parse_mode='HTML')
+
+    async def edit_student_language_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало изменения языка студента."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        user_id = int(query.data.split('_')[-1])
+        
+        # Получаем текущий язык пользователя
+        current_language = self.db.get_user_language(user_id)
+        
+        text = f"🌐 <b>Изменение языка</b>\n\n"
+        text += f"Текущий язык: {'Русский' if current_language == 'ru' else 'Қазақша'}\n\n"
+        text += "Выберите новый язык:"
+        
+        keyboard = [
+            [InlineKeyboardButton("🇷🇺 Русский", callback_data=f"set_language_ru_{user_id}")],
+            [InlineKeyboardButton("🇰🇿 Қазақша", callback_data=f"set_language_kz_{user_id}")],
+            [InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_{user_id}")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def set_student_language(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Установка языка студента."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        # Извлекаем язык и user_id из callback_data
+        # Формат: set_language_ru_123456 или set_language_kz_123456
+        parts = query.data.split('_')
+        language = parts[2]  # ru или kz
+        user_id = int(parts[3])
+        
+        # Преобразуем kz в правильный код языка
+        if language == 'kz':
+            language = 'kk'  # Используем правильный код для казахского языка
+        
+        # Обновляем язык пользователя
+        self.db.update_user_language(user_id, language)
+        
+        language_name = 'Русский' if language == 'ru' else 'Қазақша'
+        
+        text = f"✅ <b>Язык изменен</b>\n\n"
+        text += f"Язык пользователя изменен на: {language_name}\n\n"
+        text += "⚠️ <b>Внимание:</b> При смене языка все результаты тестов и ошибки пользователя были очищены, так как теперь он будет видеть темы на другом языке."
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад к редактированию", callback_data=f"edit_student_{user_id}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')

@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes
 import logging
 from handlers.base_handler import BaseHandler
 from utils.keyboards import get_main_menu_markup, build_topic_selection_keyboard
+from utils.translations import get_message, get_language_change_warning
 from config.constants import HELP_TEXT, TOPICS
 import sqlite3
 
@@ -11,14 +12,14 @@ class CommandHandlers(BaseHandler):
         """Handle /start command."""
         user = update.effective_user
         chat_id = update.effective_chat.id
+        user_language = self.db.get_user_language(user.id)
 
         # Проверяем доступ пользователя (админ, whitelist по username или user_id)
         if not self.db.check_user_access(user.id, user.username):
             await update.message.reply_text(
-                f"❌ Извините, у вас нет доступа к этому боту.\n\n"
-                f"Ваш ID: {user.id}\n"
-                f"Username: @{user.username or 'не указан'}\n\n"
-                f"Для получения доступа обратитесь к администратору."
+                get_message('no_access', user_language, 
+                          user_id=user.id, 
+                          username=user.username or 'не указан')
             )
             return
 
@@ -54,39 +55,47 @@ class CommandHandlers(BaseHandler):
             if not phone_number:
                 # Если номер телефона не указан, предлагаем его ввести
                 context.user_data['awaiting_phone_number'] = True
-                await update.message.reply_text(
-                    "📱 Для лучшей связи, пожалуйста, введите ваш номер телефона (например: +77771234567).\n\n"
-                    "Или нажмите /skip чтобы пропустить этот шаг."
-                )
+                phone_request_text = "📱 Для лучшей связи, пожалуйста, введите ваш номер телефона (например: +77771234567).\n\nИли нажмите /skip чтобы пропустить этот шаг." if user_language == 'ru' else "📱 Жақсы байланыс үшін телефон нөіріңізді енгізіңіз (мысалы: +77771234567).\n\nНемесе бұл қадамды өткізу үшін /skip басыңыз."
+                await update.message.reply_text(phone_request_text)
                 return
             
             # Для обычных пользователей - проверяем ФИО и класс (на случай если автонастройка не сработала)
             if not user_info or not user_info[0]:  # Нет ФИО
                 context.user_data['awaiting_full_name'] = True
-                await update.message.reply_text("Пожалуйста, введите ваше ФИО:")
+                fullname_request = "Пожалуйста, введите ваше ФИО:" if user_language == 'ru' else "Толық атыңызды енгізіңіз:"
+                await update.message.reply_text(fullname_request)
                 return
             elif not user_info[1]:  # Нет класса
                 context.user_data['awaiting_grade'] = True
                 context.user_data['full_name'] = user_info[0]
-                await update.message.reply_text("Пожалуйста, введите ваш класс (4, 5 или 6):")
+                grade_request = "Пожалуйста, введите ваш класс (4, 5 или 6):" if user_language == 'ru' else "Сыныбыңызды енгізіңіз (4, 5 немесе 6):"
+                await update.message.reply_text(grade_request)
                 return
             
             # Если все данные есть - показываем приветствие
             welcome_name = user_info[0] if user_info and user_info[0] else user.first_name or "пользователь"
             grade_text = f", {user_info[1]} класс" if user_info and user_info[1] else ""
-            welcome_text = f"👋 Привет, {welcome_name}{grade_text}!\n\n📚 Я бот для изучения математики. Выбери действие:"
+            if user_language == 'kk':
+                grade_text = f", {user_info[1]} сынып" if user_info and user_info[1] else ""
+                welcome_text = get_message('welcome', user_language, name=welcome_name, grade=user_info[1] if user_info and user_info[1] else '') + "\n\n" + get_message('bot_description', user_language)
+            else:
+                welcome_text = f"👋 Привет, {welcome_name}{grade_text}!\n\n📚 Я бот для изучения математики. Выбери действие:"
         else:
             # Для админов - проверяем ФИО из таблицы admins
             admin_info = self.db.get_admin_info(user.id)
             
             if not admin_info or not admin_info['full_name']:  # Нет ФИО в таблице admins
                 context.user_data['awaiting_admin_full_name'] = True
-                await update.message.reply_text("👨‍💼 Добро пожаловать, администратор! Пожалуйста, введите ваше ФИО:")
+                admin_fullname_request = "👨‍💼 Добро пожаловать, администратор! Пожалуйста, введите ваше ФИО:" if user_language == 'ru' else "👨‍💼 Қош келдіңіз, әкімші! Толық атыңызды енгізіңіз:"
+                await update.message.reply_text(admin_fullname_request)
                 return
             
             # Если ФИО есть в admins - показываем приветствие
             welcome_name = admin_info['full_name']
-            welcome_text = f"👋 Добро пожаловать, {welcome_name}!\n\n🔧 Вы вошли как <b>администратор</b>.\n\nВыберите действие:"
+            if user_language == 'kk':
+                welcome_text = f"👋 Қош келдіңіз, {welcome_name}!\n\n🔧 Сіз <b>әкімші</b> ретінде кірдіңіз.\n\nӘрекетті таңдаңыз:"
+            else:
+                welcome_text = f"👋 Добро пожаловать, {welcome_name}!\n\n🔧 Вы вошли как <b>администратор</b>.\n\nВыберите действие:"
 
         # Clear previous session data
         self.clear_user_data(context)
@@ -107,20 +116,20 @@ class CommandHandlers(BaseHandler):
         try:
             await update.message.reply_html(
                 text=welcome_text,
-                reply_markup=self.main_menu_markup
+                reply_markup=get_main_menu_markup(user.id)
             )
         except Exception as e:
             logging.error(f"Error sending welcome message with main_menu_markup during /start for chat {chat_id}: {e}")
             try:
-                await update.message.reply_text(
-                    "Произошла ошибка при загрузке меню. Пожалуйста, попробуйте еще раз немного позже или введите /start снова."
-                )
+                error_text = "Произошла ошибка при загрузке меню. Пожалуйста, попробуйте еще раз немного позже или введите /start снова." if user_language == 'ru' else "Мәзірді жүктеуде қате орын алды. Сәл кейін қайталап көріңіз немесе /start енгізіңіз."
+                await update.message.reply_text(error_text)
             except Exception as e_fallback:
                 logging.error(f"Error sending fallback error message during /start for chat {chat_id}: {e_fallback}")
 
     async def stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Stop the bot and clear user data."""
         user_id = update.effective_user.id
+        user_language = self.db.get_user_language(user_id)
         username = update.effective_user.username or "unknown"
         
         # Clear user activity
@@ -129,22 +138,23 @@ class CommandHandlers(BaseHandler):
         # Clear context data
         context.user_data.clear()
         
+        stop_text = "🛑 Бот остановлен. Все данные очищены.\n\nДля нового старта используйте /start" if user_language == 'ru' else "🛑 Бот тоқтатылды. Барлық деректер тазаланды.\n\nЖаңа бастау үшін /start пайдаланыңыз"
         await update.message.reply_text(
-            "🛑 Бот остановлен. Все данные очищены.\n\nДля нового старта используйте /start",
+            stop_text,
             reply_markup=ReplyKeyboardRemove()
         )
 
     async def reset(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Reset user state if stuck in a test."""
         user_id = update.effective_user.id
+        user_language = self.db.get_user_language(user_id)
         
         # Проверяем доступ пользователя
         if not self.db.check_user_access(user_id, update.effective_user.username):
             await update.message.reply_text(
-                f"❌ Извините, у вас нет доступа к этому боту.\n\n"
-                f"Ваш ID: {user_id}\n"
-                f"Username: @{update.effective_user.username or 'не указан'}\n\n"
-                f"Для получения доступа обратитесь к администратору."
+                get_message('no_access', user_language, 
+                          user_id=user_id, 
+                          username=update.effective_user.username or 'не указан')
             )
             return
         
@@ -154,300 +164,279 @@ class CommandHandlers(BaseHandler):
         # Clear context data
         context.user_data.clear()
         
+        reset_text = "🔄 Состояние сброшено. Можете начать заново." if user_language == 'ru' else "🔄 Күй қалпына келтірілді. Қайта бастай аласыз."
         await update.message.reply_text(
-            "🔄 Состояние сброшено. Можете начать заново.",
-            reply_markup=self.main_menu_markup
+            reset_text,
+            reply_markup=get_main_menu_markup(user_id)
         )
     
     async def get_my_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать user_id пользователя (временная команда для настройки админа)."""
         user_id = update.effective_user.id
+        user_language = self.db.get_user_language(user_id)
         username = update.effective_user.username or "не указан"
         first_name = update.effective_user.first_name or "не указано"
         last_name = update.effective_user.last_name or ""
         
         full_name = f"{first_name} {last_name}".strip()
         
-        await update.message.reply_text(
-            f"🆔 **Ваши данные:**\n\n"
-            f"**User ID:** `{user_id}`\n"
-            f"**Username:** @{username}\n"
-            f"**Имя:** {full_name}\n\n"
-            f"Используйте User ID `{user_id}` для добавления в качестве админа.",
-            parse_mode='Markdown'
-        )
+        if user_language == 'kk':
+            id_text = f"🆔 **Сіздің деректеріңіз:**\n\n**User ID:** `{user_id}`\n**Username:** @{username}\n**Аты:** {full_name}\n\nӘкімші ретінде қосу үшін User ID `{user_id}` пайдаланыңыз."
+        else:
+            id_text = f"🆔 **Ваши данные:**\n\n**User ID:** `{user_id}`\n**Username:** @{username}\n**Имя:** {full_name}\n\nИспользуйте User ID `{user_id}` для добавления в качестве админа."
+        
+        await update.message.reply_text(id_text, parse_mode='Markdown')
 
     async def skip_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Пропустить ввод номера телефона."""
+        user_id = update.effective_user.id
+        user_language = self.db.get_user_language(user_id)
+        
         if context.user_data.get('awaiting_phone_number'):
             context.user_data['awaiting_phone_number'] = False
+            skip_text = "✅ Ввод номера телефона пропущен.\n\n📚 Теперь вы можете пользоваться ботом!" if user_language == 'ru' else "✅ Телефон нөмірін енгізу өткізілді.\n\n📚 Енді ботты пайдалана аласыз!"
             await update.message.reply_text(
-                "✅ Ввод номера телефона пропущен.\n\n📚 Теперь вы можете пользоваться ботом!",
-                reply_markup=self.main_menu_markup
+                skip_text,
+                reply_markup=get_main_menu_markup(user_id)
             )
         else:
+            skip_error_text = "Эта команда используется только при запросе номера телефона." if user_language == 'ru' else "Бұл команда тек телефон нөмірі сұралған кезде пайдаланылады."
             await update.message.reply_text(
-                "Эта команда используется только при запросе номера телефона.",
-                reply_markup=self.main_menu_markup
+                skip_error_text,
+                reply_markup=get_main_menu_markup(user_id)
             )
 
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         text = update.message.text.strip()
         user_id = update.effective_user.id
+        user_language = self.db.get_user_language(user_id)
         
         # Проверяем доступ пользователя перед обработкой любых сообщений
         if not self.db.check_user_access(user_id, update.effective_user.username):
             await update.message.reply_text(
-                f"❌ Извините, у вас нет доступа к этому боту.\n\n"
-                f"Ваш ID: {user_id}\n"
-                f"Username: @{update.effective_user.username or 'не указан'}\n\n"
-                f"Для получения доступа обратитесь к администратору."
+                get_message('no_access', user_language, 
+                          user_id=user_id, 
+                          username=update.effective_user.username or 'не указан')
             )
             return
-        
-        # Проверка на ввод номера телефона
+
+        # Handle language change confirmation
+        if context.user_data.get('awaiting_language_confirmation'):
+            if text.lower() in ['да', 'yes', 'ия', 'иә']:
+                new_language = context.user_data.get('new_language', 'ru')
+                
+                # Clear user data when changing language
+                self.db.clear_user_data_on_language_change(user_id)
+                
+                # Update user language
+                self.db.update_user_language(user_id, new_language)
+                
+                # Clear context
+                context.user_data.clear()
+                
+                success_text = "✅ Язык изменен на русский. Все данные очищены." if new_language == 'ru' else "✅ Тіл қазақшаға өзгертілді. Барлық деректер тазаланды."
+                await update.message.reply_text(
+                    success_text,
+                    reply_markup=get_main_menu_markup(user_id)
+                )
+                return
+            else:
+                # Cancel language change
+                context.user_data.clear()
+                cancel_text = "❌ Смена языка отменена." if user_language == 'ru' else "❌ Тіл ауыстыру болдырылмады."
+                await update.message.reply_text(
+                    cancel_text,
+                    reply_markup=get_main_menu_markup(user_id)
+                )
+                return
+
+        # Handle phone number input
         if context.user_data.get('awaiting_phone_number'):
-            phone_number = text.strip()
-            
-            # Простая валидация номера телефона
-            if phone_number and (phone_number.startswith('+') or phone_number.startswith('8') or phone_number.startswith('7')):
-                # Сохраняем номер телефона
-                success = self.db.update_user_phone(user_id, phone_number)
-                if success:
-                    context.user_data['awaiting_phone_number'] = False
-                    await update.message.reply_text(
-                        f"✅ Спасибо! Ваш номер телефона {phone_number} сохранен.\n\n📚 Теперь вы можете пользоваться ботом!",
-                        reply_markup=self.main_menu_markup
-                    )
-                    return
-                else:
-                    await update.message.reply_text("❌ Ошибка при сохранении номера. Попробуйте еще раз:")
-                    return
+            if self._is_valid_phone(text):
+                self.db.update_user_phone(user_id, text)
+                context.user_data['awaiting_phone_number'] = False
+                phone_success_text = f"✅ Номер телефона {text} сохранен!\n\n📚 Теперь вы можете пользоваться ботом!" if user_language == 'ru' else f"✅ {text} телефон нөмірі сақталды!\n\n📚 Енді ботты пайдалана аласыз!"
+                await update.message.reply_text(
+                    phone_success_text,
+                    reply_markup=get_main_menu_markup(user_id)
+                )
+                return
             else:
-                await update.message.reply_text(
-                    "❌ Неверный формат номера. Пожалуйста, введите номер в формате +77771234567 или нажмите /skip:"
-                )
+                phone_error_text = "❌ Неверный формат номера телефона. Пожалуйста, введите номер в формате +77771234567 или 87771234567" if user_language == 'ru' else "❌ Телефон нөмірінің форматы дұрыс емес. +77771234567 немесе 87771234567 форматында енгізіңіз"
+                await update.message.reply_text(phone_error_text)
                 return
-        
-        # Проверка на ввод ФИО для админа
-        if context.user_data.get('awaiting_admin_full_name'):
-            full_name = text.strip()
-            
-            if not full_name:
-                await update.message.reply_text("❌ ФИО не может быть пустым. Пожалуйста, введите ваше ФИО:")
-                return
-            
-            # Обновляем ФИО в таблице admins
-            try:
-                with sqlite3.connect(self.db.db_path) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        UPDATE admins 
-                        SET full_name = ?
-                        WHERE user_id = ?
-                    ''', (full_name, user_id))
-                    conn.commit()
-                
-                context.user_data['awaiting_admin_full_name'] = False
-                
-                await update.message.reply_text(
-                    f"✅ Спасибо, {full_name}! Ваши данные обновлены.\n\n🔧 Вы администратор системы. Теперь вы можете пользоваться ботом.",
-                    reply_markup=self.main_menu_markup
-                )
-                return
-                
-            except Exception as e:
-                logging.error(f"Error updating admin full_name: {e}")
-                await update.message.reply_text(
-                    "❌ Произошла ошибка при сохранении данных. Попробуйте еще раз.",
-                    reply_markup=self.main_menu_markup
-                )
-                return
-        
-        # Проверка на ввод ФИО для обычных пользователей
+
+        # Handle full name input
         if context.user_data.get('awaiting_full_name'):
-            full_name = text
-            db_info = self.db.get_user_info(user_id)
-            grade = db_info[1] if db_info else None
-            language = db_info[2] if db_info else 'ru'
-            
-            # Проверяем, является ли пользователь админом
-            is_admin = self.db.is_admin(user_id)
-            
-            self.db.set_user_info_with_language(user_id, full_name, grade, language)
-            context.user_data['awaiting_full_name'] = False
-            
-            if is_admin:
-                # Для админов сразу разрешаем пользоваться ботом
-                await update.message.reply_text(
-                    f"Спасибо, {full_name}! Вы администратор системы. Теперь вы можете пользоваться ботом.",
-                    reply_markup=self.main_menu_markup
-                )
-            elif grade:
-                # Для обычных пользователей с уже указанным классом
-                await update.message.reply_text(
-                    f"Спасибо! Ваше новое ФИО: {full_name}. Ваш класс: {grade}.",
-                    reply_markup=self.main_menu_markup
-                )
-            else:
-                # Для обычных пользователей без класса - запрашиваем класс
+            if len(text) >= 2:
+                context.user_data['full_name'] = text
+                context.user_data['awaiting_full_name'] = False
                 context.user_data['awaiting_grade'] = True
-                context.user_data['full_name'] = full_name
-                await update.message.reply_text("Спасибо! Теперь введите ваш класс (4, 5 или 6):")
-            return
-        # Проверка на ввод класса
+                grade_request = "Пожалуйста, введите ваш класс (4, 5 или 6):" if user_language == 'ru' else "Сыныбыңызды енгізіңіз (4, 5 немесе 6):"
+                await update.message.reply_text(grade_request)
+                return
+            else:
+                fullname_error_text = "❌ ФИО должно содержать минимум 2 символа. Попробуйте еще раз:" if user_language == 'ru' else "❌ Толық аты кемінде 2 таңбадан тұруы керек. Қайталап көріңіз:"
+                await update.message.reply_text(fullname_error_text)
+                return
+
+        # Handle grade input
         if context.user_data.get('awaiting_grade'):
             try:
                 grade = int(text)
-                if grade not in [4, 5, 6]:
-                    raise ValueError
+                if grade in [4, 5, 6]:
+                    full_name = context.user_data.get('full_name', '')
+                    self.db.update_user_info(user_id, full_name, grade)
+                    context.user_data.clear()
+                    grade_success_text = f"✅ Данные сохранены!\n\n👤 ФИО: {full_name}\n🎓 Класс: {grade}\n\n📚 Теперь вы можете пользоваться ботом!" if user_language == 'ru' else f"✅ Деректер сақталды!\n\n👤 Толық аты: {full_name}\n🎓 Сынып: {grade}\n\n📚 Енді ботты пайдалана аласыз!"
+                    await update.message.reply_text(
+                        grade_success_text,
+                        reply_markup=get_main_menu_markup(user_id)
+                    )
+                    return
+                else:
+                    grade_error_text = "❌ Пожалуйста, введите класс: 4, 5 или 6" if user_language == 'ru' else "❌ Сыныпты енгізіңіз: 4, 5 немесе 6"
+                    await update.message.reply_text(grade_error_text)
+                    return
             except ValueError:
-                await update.message.reply_text("Пожалуйста, введите корректный класс: 4, 5 или 6.")
+                grade_format_error = "❌ Пожалуйста, введите число (4, 5 или 6)" if user_language == 'ru' else "❌ Санды енгізіңіз (4, 5 немесе 6)"
+                await update.message.reply_text(grade_format_error)
                 return
-            context.user_data['grade'] = grade
-            context.user_data['awaiting_grade'] = False
-            context.user_data['awaiting_language'] = True
-            await update.message.reply_text("Спасибо! Теперь выберите язык для вопросов:\n\n1 - Русский\n2 - Қазақша")
-            return
-        # Проверка на ввод языка
-        if context.user_data.get('awaiting_language'):
-            if text == "1":
-                language = "ru"
-                language_name = "Русский"
-            elif text == "2":
-                language = "kk"
-                language_name = "Қазақша"
+
+        # Handle admin full name input
+        if context.user_data.get('awaiting_admin_full_name'):
+            if len(text) >= 2:
+                self.db.update_admin_info(user_id, text)
+                context.user_data.clear()
+                admin_success_text = f"✅ Добро пожаловать, {text}!\n\n🔧 Вы вошли как <b>администратор</b>.\n\nВыберите действие:" if user_language == 'ru' else f"✅ Қош келдіңіз, {text}!\n\n🔧 Сіз <b>әкімші</b> ретінде кірдіңіз.\n\nӘрекетті таңдаңыз:"
+                await update.message.reply_html(
+                    admin_success_text,
+                    reply_markup=get_main_menu_markup(user_id)
+                )
+                return
             else:
-                await update.message.reply_text("Пожалуйста, выберите 1 для русского или 2 для казахского языка.")
+                admin_fullname_error = "❌ ФИО должно содержать минимум 2 символа. Попробуйте еще раз:" if user_language == 'ru' else "❌ Толық аты кемінде 2 таңбадан тұруы керек. Қайталап көріңіз:"
+                await update.message.reply_text(admin_fullname_error)
                 return
-            full_name = context.user_data.get('full_name')
-            grade = context.user_data.get('grade')
-            self.db.set_user_info_with_language(user_id, full_name, grade, language)
-            context.user_data['awaiting_language'] = False
-            await update.message.reply_text(f"Спасибо, {full_name}! Ваш класс: {grade}, язык: {language_name}. Теперь вы можете пользоваться ботом.", reply_markup=self.main_menu_markup)
-            return
-        # CRUD команды для изменения ФИО и класса
-        if text.lower() == "/change_fio":
-            context.user_data['awaiting_full_name'] = True
-            await update.message.reply_text("Введите новое ФИО:")
-            return
-        if text.lower() == "/change_grade":
-            context.user_data['awaiting_grade_only'] = True
-            await update.message.reply_text("Введите новый класс (4, 5 или 6):")
-            return
-        if text.lower() == "/change_language":
-            context.user_data['awaiting_language_only'] = True
-            await update.message.reply_text("Выберите язык для вопросов:\n\n1 - Русский\n2 - Қазақша")
-            return
-        # Проверка на изменение только класса
-        if context.user_data.get('awaiting_grade_only'):
-            try:
-                grade = int(text)
-                if grade not in [4, 5, 6]:
-                    raise ValueError
-            except ValueError:
-                await update.message.reply_text("Пожалуйста, введите корректный класс: 4, 5 или 6.")
-                return
-            # Получаем ФИО и язык: из базы
-            db_info = self.db.get_user_info(user_id)
-            full_name = db_info[0] if db_info else None
-            language = db_info[2] if db_info else 'ru'
-            self.db.set_user_info_with_language(user_id, full_name, grade, language)
-            context.user_data['awaiting_grade_only'] = False
-            await update.message.reply_text(f"Спасибо, {full_name}! Ваш класс: {grade}. Теперь вы можете пользоваться ботом.", reply_markup=self.main_menu_markup)
-            return
-        # Проверка на изменение только языка
-        if context.user_data.get('awaiting_language_only'):
-            if text == "1":
-                language = "ru"
-                language_name = "Русский"
-            elif text == "2":
-                language = "kk"
-                language_name = "Қазақша"
-            else:
-                await update.message.reply_text("Пожалуйста, выберите 1 для русского или 2 для казахского языка.")
-                return
-            # Получаем ФИО и класс из базы
-            db_info = self.db.get_user_info(user_id)
-            full_name = db_info[0] if db_info else None
-            grade = db_info[1] if db_info else None
-            
-            # Обновляем язык пользователя (это автоматически очистит его данные при смене языка)
-            self.db.update_user_language(user_id, language)
-            self.db.set_user_info_with_language(user_id, full_name, grade, language)
-            
-            context.user_data['awaiting_language_only'] = False
-            await update.message.reply_text(f"Спасибо, {full_name}! Язык изменен на: {language_name}.\n\n⚠️ При смене языка ваша история ошибок и результатов была очищена.", reply_markup=self.main_menu_markup)
-            return
-        # If user is in a test, block main menu actions
-        if self.db.is_user_active(user_id):
-            await update.message.reply_text(
-                "Вы проходите тест. Для выбора других опций завершите тест или вернитесь к темам через кнопку 'Назад к темам' в тесте.",
-                reply_markup=None
-            )
-            return
-            
-        # Проверяем, находится ли пользователь в режиме выбора темы
-        if context.user_data.get('in_topic_selection'):
-            # Если пользователь в режиме выбора темы, возвращаем к списку тем
-            await update.message.reply_text(
-                "📚 **Выберите раздел математики:**",
-                reply_markup=build_topic_selection_keyboard(user_id),
-                parse_mode='Markdown'
-            )
-            return
-            
-        if text == "📚 Выбрать тему и начать":
-            # Устанавливаем флаг выбора темы
-            context.user_data['in_topic_selection'] = True
-            # Сначала убираем обычную клавиатуру
-            await update.message.reply_text(
-                "💬",
-                reply_markup=ReplyKeyboardRemove()
-            )
-            # Затем отправляем сообщение с inline-кнопками
-            await update.message.reply_text(
-                "📚 **Выберите раздел математики:**",
-                reply_markup=build_topic_selection_keyboard(user_id),
-                parse_mode='Markdown'
-            )
-        elif text == "📊 Мой прогресс":
-            total_tests, avg_percentage = self.db.get_user_progress(user_id)
-            if avg_percentage is None:
-                avg_percentage = 0.0
-            recent_topics = self.db.get_recent_unique_topics(user_id, unique_limit=5, history_limit=20)
-            error_topics = self.db.get_error_topics(user_id)
 
-            progress_text = f"📊 Ваш прогресс:\n\n"
-            progress_text += f"Всего тестов: {total_tests}\n"
-            progress_text += f"Средний результат: {avg_percentage:.1f}%\n\n"
-
-            if recent_topics:
-                progress_text += "Недавние темы: " + ", ".join([f"{topic} ({count})" for topic, count in recent_topics]) + "\n"
-            if error_topics:
-                progress_text += "Темы с ошибками: " + ", ".join([f"{t[0]} ({t[1]})" for t in error_topics]) + "\n"
-
-            await update.message.reply_text(progress_text)
-        elif text == "❓ Помощь":
-            await update.message.reply_text(HELP_TEXT)
+        # Handle main menu buttons
+        select_topic_text_ru = "📚 Выбрать тему и начать"
+        select_topic_text_kk = "📚 Тақырыпты таңдап, бастау"
+        my_progress_text_ru = "📊 Мой прогресс"
+        my_progress_text_kk = "📊 Менің прогресім"
+        help_text_ru = "❓ Помощь"
+        help_text_kk = "❓ Көмек"
+        
+        if text in [select_topic_text_ru, select_topic_text_kk]:
+            await self.handle_topic_selection(update, context)
+        elif text in [my_progress_text_ru, my_progress_text_kk]:
+            await self.handle_progress(update, context)
+        elif text in [help_text_ru, help_text_kk]:
+            await self.handle_help(update, context)
+        elif text in ["🇷🇺 Русский", "🇰🇿 Қазақша"]:
+            await self.handle_language_change(update, context, text)
         else:
-            await update.message.reply_text("Пожалуйста, выберите действие из меню.", reply_markup=self.main_menu_markup)
+            # Unknown command
+            unknown_text = get_message('topic_not_selected', user_language)
+            await update.message.reply_text(
+                unknown_text,
+                reply_markup=get_main_menu_markup(user_id)
+            )
+
+    async def handle_language_change(self, update: Update, context: ContextTypes.DEFAULT_TYPE, language_text: str) -> None:
+        """Handle language change request."""
+        user_id = update.effective_user.id
+        current_language = self.db.get_user_language(user_id)
+        
+        # Determine new language
+        new_language = 'ru' if language_text == "🇷🇺 Русский" else 'kk'
+        
+        if current_language == new_language:
+            # Same language selected
+            same_lang_text = "Вы уже используете русский язык." if new_language == 'ru' else "Сіз қазірдің өзінде қазақ тілін пайдаланып жатырсыз."
+            await update.message.reply_text(
+                same_lang_text,
+                reply_markup=get_main_menu_markup(user_id)
+            )
+            return
+        
+        # Show warning and ask for confirmation
+        warning_text = get_language_change_warning(current_language)
+        context.user_data['awaiting_language_confirmation'] = True
+        context.user_data['new_language'] = new_language
+        
+        confirm_text = "\n\nОтветьте 'да' для подтверждения или любое другое сообщение для отмены." if current_language == 'ru' else "\n\nРастау үшін 'иә' деп жауап беріңіз немесе болдырмау үшін басқа хабарлама жіберіңіз."
+        await update.message.reply_text(warning_text + confirm_text)
 
     async def handle_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        query = update.callback_query
-        topic_index = query.data.replace('topic_', '')
-        try:
-            topic_index = int(topic_index)
-            topic = TOPICS[topic_index]
-        except (ValueError, IndexError):
-            logging.error(f"Invalid topic selected: {topic_index}")
-            await query.message.edit_text(
-                "Произошла ошибка при выборе темы. Пожалуйста, попробуйте еще раз.",
-                reply_markup=build_topic_selection_keyboard()
+        """Handle topic selection from main menu."""
+        user_id = update.effective_user.id
+        user_language = self.db.get_user_language(user_id)
+        
+        # Check if user is already taking a test
+        if await self.check_user_active(update, context):
+            return
+        
+        # Clear any previous data
+        self.clear_user_data(context)
+        # Set flag that user is in topic selection
+        context.user_data['in_topic_selection'] = True
+        
+        await update.message.reply_text(
+            get_message('select_topic', user_language),
+            reply_markup=build_topic_selection_keyboard(user_id),
+            parse_mode='Markdown'
+        )
+
+    async def handle_progress(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle progress request from main menu."""
+        user_id = update.effective_user.id
+        user_language = self.db.get_user_language(user_id)
+        
+        # Get user's test results
+        results = self.db.get_user_test_results(user_id)
+        
+        if not results:
+            await update.message.reply_text(
+                get_message('no_test_results', user_language),
+                reply_markup=get_main_menu_markup(user_id)
             )
             return
+        
+        # Format results
+        progress_text = get_message('progress_title', user_language)
+        
+        for result in results[-10:]:  # Show last 10 results
+            topic = result['topic']
+            percentage = result['percentage']
+            date = result['date']
+            progress_text += f"📝 {topic}: {percentage:.1f}% ({date})\n"
+        
+        await update.message.reply_text(
+            progress_text,
+            reply_markup=get_main_menu_markup(user_id)
+        )
 
-        # Handle topic selection
-        # ... (rest of the method remains unchanged)
+    async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle help request from main menu."""
+        user_id = update.effective_user.id
+        user_language = self.db.get_user_language(user_id)
+        
+        await update.message.reply_text(
+            get_message('help_text', user_language),
+            reply_markup=get_main_menu_markup(user_id),
+            parse_mode='Markdown'
+        )
 
-        # ... (rest of the method remains unchanged) 
+    def _is_valid_phone(self, phone: str) -> bool:
+        """Validate phone number format."""
+        # Remove all non-digit characters
+        digits_only = ''.join(filter(str.isdigit, phone))
+        
+        # Check if it starts with valid prefixes and has correct length
+        if len(digits_only) == 11:
+            return digits_only.startswith('7') or digits_only.startswith('8')
+        elif len(digits_only) == 10:
+            return True
+        
+        return False 

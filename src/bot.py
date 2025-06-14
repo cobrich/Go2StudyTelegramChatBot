@@ -181,6 +181,14 @@ def main() -> None:
         admin_handlers.edit_student_status_toggle,
         pattern="^edit_student_status_"
     ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_student_language_start,
+        pattern="^edit_student_language_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.set_student_language,
+        pattern="^set_language_(ru|kz)_"
+    ))
     
     # Topic management handlers
     application.add_handler(CallbackQueryHandler(
