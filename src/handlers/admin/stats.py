@@ -97,10 +97,10 @@ class StatsHandler(AdminBaseHandler):
         except Exception as e:
             logging.error(f"Error getting general stats: {e}")
             text = "❌ Ошибка при получении статистики."
+            
         
         keyboard = [
             [InlineKeyboardButton("📋 История пользователей", callback_data="admin_user_history")],
-            [InlineKeyboardButton("🔄 Обновить", callback_data="admin_stats")],
             [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -160,7 +160,6 @@ class StatsHandler(AdminBaseHandler):
         
         keyboard = [
             [InlineKeyboardButton("📊 Общая статистика", callback_data="admin_stats")],
-            [InlineKeyboardButton("🔄 Обновить", callback_data="admin_user_history")],
             [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)

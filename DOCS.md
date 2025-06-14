@@ -1987,3 +1987,7 @@ else:
 **Status**: ✅ **USER NAMES DISPLAY FIXED** - Admin statistics now show proper user identification
 
 ---
+
+### 🗑️ UX Improvement: Removed Refresh Buttons from Statistics (January 2025)
+
+**✅ REMOVED: "🔄 Обновить" buttons from admin statistics to prevent API errors**
