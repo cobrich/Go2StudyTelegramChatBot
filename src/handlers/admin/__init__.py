@@ -22,7 +22,7 @@ class AdminHandlers(AdminBaseHandler):
         
         # Инициализируем все модули
         self.topics = TopicsHandler(db, question_service)
-        self.sections = SectionsHandler(db)
+        self.sections = SectionsHandler(db, question_service)
         self.students = StudentsHandler(db, question_service)
         self.admins = AdminsHandler(db, question_service)
         self.questions = QuestionsHandler(db, question_service)

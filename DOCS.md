@@ -942,7 +942,7 @@ This function was designed to automatically import all topics from `constants.py
 📁 Topics Management Functions:
 ├── 🎯 Core Workflows (6 functions)
 │   ├── add_custom_topic_start() → select_main_topic_for_new() → handle_add_topic() → handle_topic_description()
-│   ├── edit_topic_start() → edit_topic_select() → edit_topic_*_start() → handle_edit_topic_*()
+│   ├── edit_topic_start() → edit_topic_select() → edit_topic_*_start → handle_edit_topic_*
 │   └── remove_topic_start() → remove_topic_confirm() → remove_topic_execute()
 ├── 📊 Display Functions (3 functions)
 │   ├── list_topics() - Beautiful grouped display
@@ -1178,3 +1178,28 @@ This function was designed to automatically import all topics from `constants.py
 3. **Управление учениками** - добавление, редактирование, удаление учеников
 4. **Управление вопросами** - загрузка PDF, создание, редактирование вопросов
 5. **Статистика** - детальная аналитика по темам и ученикам
+
+## Последние изменения
+
+### Исправление обработки текстовых сообщений в управлении разделами (2024-12-15)
+
+**Проблема:** При добавлении нового раздела через админ-панель появлялось сообщение "Тема не выбрана. Пожалуйста, выберите действие из меню." вместо обработки названия раздела.
+
+**Причина:** Методы `handle_section_name()` и `handle_section_new_name()` в `sections.py` возвращали `None` вместо `True` после обработки текста, из-за чего система считала сообщение необработанным.
+
+**Исправления:**
+1. **Обновлен метод `add_main_topic_with_language()` в `database.py`:**
+   - Добавлена поддержка языков при создании разделов
+   - Правильная работа с полем `language` в таблице `main_topics`
+
+2. **Исправлены методы в `sections.py`:**
+   - `handle_section_name()` теперь возвращает `bool`
+   - `handle_section_new_name()` теперь возвращает `bool`
+   - Все ранние выходы (`return`) теперь возвращают `True` для обработанных сообщений
+   - Метод использует новый `add_main_topic_with_language()` вместо старого `add_base_topic_section()`
+
+3. **Удалены устаревшие ссылки в `bot.py`:**
+   - Удалены обработчики для `add_base_topics`, `add_base_topic_execute`, `add_all_missing_topics_execute`
+   - Добавлены все необходимые обработчики для управления разделами
+
+**Результат:** Теперь создание разделов работает корректно с языковой поддержкой, и текстовые сообщения правильно обрабатываются в админ-панели.

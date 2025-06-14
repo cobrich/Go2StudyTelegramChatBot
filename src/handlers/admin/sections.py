@@ -6,15 +6,15 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from typing import Dict, List, Any, Optional
-from ..base_handler import BaseHandler
-from ...services.database import Database
+from handlers.base_handler import BaseHandler
+from services.database import Database
 
 
 class SectionsHandler(BaseHandler):
     """Обработчик управления разделами."""
     
-    def __init__(self, db: Database):
-        super().__init__(db)
+    def __init__(self, db: Database, question_service):
+        super().__init__(db, question_service)
         self.sections_mapping = {}  # Для хранения mapping разделов
     
     async def sections_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -453,28 +453,28 @@ class SectionsHandler(BaseHandler):
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     # Обработчики текстовых сообщений
-    async def handle_section_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def handle_section_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
         """Обработка введенного названия нового раздела."""
         if not context.user_data.get('awaiting_section_name'):
-            return
+            return False
         
         section_name = update.message.text.strip()
         language = context.user_data.get('adding_section_language', 'ru')
         
         if not section_name:
             await update.message.reply_text("❌ Название раздела не может быть пустым. Попробуйте еще раз.")
-            return
+            return True
         
         # Проверяем, не существует ли уже такой раздел
         existing_sections = self.db.get_main_topics_by_language(language, active_only=False)
         if any(section['name'].lower() == section_name.lower() for section in existing_sections):
             await update.message.reply_text(f"❌ Раздел с названием '{section_name}' уже существует. Выберите другое название.")
-            return
+            return True
         
         try:
             # Добавляем раздел в базу данных
             user_id = update.effective_user.id
-            success = self.db.add_base_topic_section(section_name, [], created_by=user_id)
+            success = self.db.add_main_topic_with_language(section_name, language, [], created_by=user_id)
             
             lang_flag = "🇷🇺" if language == 'ru' else "🇰🇿"
             
@@ -502,29 +502,31 @@ class SectionsHandler(BaseHandler):
             # Очищаем состояние
             context.user_data.pop('awaiting_section_name', None)
             context.user_data.pop('adding_section_language', None)
+        
+        return True
     
-    async def handle_section_new_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def handle_section_new_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
         """Обработка нового названия раздела при редактировании."""
         if not context.user_data.get('awaiting_section_new_name'):
-            return
+            return False
         
         new_name = update.message.text.strip()
         section_info = context.user_data.get('editing_section')
         
         if not section_info:
             await update.message.reply_text("❌ Информация о разделе потеряна.")
-            return
+            return True
         
         if not new_name:
             await update.message.reply_text("❌ Название раздела не может быть пустым. Попробуйте еще раз.")
-            return
+            return True
         
         # Проверяем, не существует ли уже такой раздел
         existing_sections = self.db.get_main_topics_by_language(section_info['language'], active_only=False)
         if any(section['name'].lower() == new_name.lower() and section['name'] != section_info['name'] 
                for section in existing_sections):
             await update.message.reply_text(f"❌ Раздел с названием '{new_name}' уже существует. Выберите другое название.")
-            return
+            return True
         
         try:
             # Обновляем название раздела в базе данных
@@ -557,4 +559,6 @@ class SectionsHandler(BaseHandler):
         finally:
             # Очищаем состояние
             context.user_data.pop('awaiting_section_new_name', None)
-            context.user_data.pop('editing_section', None) 
+            context.user_data.pop('editing_section', None)
+        
+        return True 

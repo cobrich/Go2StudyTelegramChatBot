@@ -2775,3 +2775,35 @@ class Database:
         except Exception as e:
             print(f"[ERROR] Ошибка полного удаления темы: {e}")
             return False
+
+    def add_main_topic_with_language(self, main_topic: str, language: str, subtopics: List[str] = None, created_by: int = None) -> bool:
+        """Add a new main topic section with language support."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Получаем следующий order_index для основной темы данного языка
+                cursor.execute('SELECT MAX(order_index) FROM main_topics WHERE language = ?', (language,))
+                max_main_order = cursor.fetchone()[0] or 0
+                
+                # Добавляем основную тему с языком
+                cursor.execute('''
+                    INSERT INTO main_topics (name, language, order_index, is_active)
+                    VALUES (?, ?, ?, 1)
+                ''', (main_topic, language, max_main_order + 1))
+                
+                main_topic_id = cursor.lastrowid
+                
+                # Добавляем подтемы если они есть
+                if subtopics:
+                    for i, subtopic in enumerate(subtopics):
+                        cursor.execute('''
+                            INSERT INTO subtopics (main_topic_id, name, order_index, is_active)
+                            VALUES (?, ?, ?, 1)
+                        ''', (main_topic_id, subtopic, i))
+                
+                conn.commit()
+                return True
+        except sqlite3.IntegrityError as e:
+            print(f"[ERROR] Ошибка добавления раздела: {e}")
+            return False
