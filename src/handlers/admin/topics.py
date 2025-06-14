@@ -267,43 +267,108 @@ class TopicsHandler(AdminBaseHandler):
         context.user_data.pop('selected_main_topic_language', None)
 
     async def edit_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Начало редактирования темы."""
+        """Начало редактирования темы - выбор раздела."""
         query = update.callback_query
         await self.safe_answer_callback(query)
         
-        topics = self.db.get_all_topics(active_only=False)
+        # Получаем разделы для обоих языков (админ должен видеть все)
+        ru_sections = self.db.get_main_topics_by_language("ru", active_only=True)
+        kk_sections = self.db.get_main_topics_by_language("kk", active_only=True)
         
-        if not topics:
-            text = "❌ <b>Редактирование тем</b>\n\nТемы не найдены."
+        # Объединяем разделы с указанием языка (сначала казахские, потом русские)
+        all_sections = []
+        for section in kk_sections:
+            section['language'] = 'kk'
+            all_sections.append(section)
+        for section in ru_sections:
+            section['language'] = 'ru'
+            all_sections.append(section)
+        
+        if not all_sections:
+            text = "❌ <b>Редактирование тем</b>\n\nРазделы не найдены."
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]]
         else:
-            text = f"✏️ <b>Редактирование тем</b>\n\nВыберите тему для редактирования:\n\n"
+            text = f"✏️ <b>Редактирование тем</b>\n\n"
+            text += "Выберите раздел для редактирования тем:"
             
-            # Группируем по разделам
-            topics_by_section = {}
-            for topic in topics:
-                main_topic = topic.get('main_topic', 'Без раздела')
-                if main_topic not in topics_by_section:
-                    topics_by_section[main_topic] = []
-                topics_by_section[main_topic].append(topic)
+            # Сохраняем список разделов в контексте
+            context.user_data['edit_sections_list'] = all_sections
             
             keyboard = []
-            for main_topic, section_topics in topics_by_section.items():
-                # Добавляем заголовок раздела (неактивная кнопка)
-                keyboard.append([InlineKeyboardButton(f"📚 {main_topic}", callback_data="noop")])
-                
-                for topic in section_topics:
-                    status = "✅" if topic['is_active'] else "❌"
-                    button_text = f"  {status} {topic['name']} ({topic['question_count']})"
+            
+            # Сначала казахские разделы
+            if kk_sections:
+                for i, section in enumerate(kk_sections):
+                    # Получаем количество тем в разделе
+                    topics_count = len(self.db.get_subtopics_by_main_topic(section['name']))
                     keyboard.append([InlineKeyboardButton(
-                        button_text,
-                        callback_data=f"edit_topic_select_{topic['id']}"
+                        f"📚 {section['name']} [kz] ({topics_count} тем)",
+                        callback_data=f"edit_section_topics_{i}"
+                    )])
+            
+            # Затем русские разделы
+            if ru_sections:
+                kk_count = len(kk_sections)
+                for i, section in enumerate(ru_sections):
+                    # Получаем количество тем в разделе
+                    topics_count = len(self.db.get_subtopics_by_main_topic(section['name']))
+                    keyboard.append([InlineKeyboardButton(
+                        f"📚 {section['name']} [ru] ({topics_count} тем)",
+                        callback_data=f"edit_section_topics_{kk_count + i}"
                     )])
             
             keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def edit_section_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Показать темы выбранного раздела для редактирования."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        try:
+            section_index = int(query.data.replace('edit_section_topics_', ''))
+            sections_list = context.user_data.get('edit_sections_list', [])
+            
+            if section_index >= len(sections_list):
+                await query.edit_message_text("❌ Неверный выбор раздела.")
+                return
+            
+            selected_section = sections_list[section_index]
+            section_name = selected_section['name']
+            section_language = selected_section['language']
+            
+            # Получаем все темы этого раздела
+            topics = self.db.get_all_topics(active_only=False)
+            section_topics = [t for t in topics if t.get('main_topic') == section_name]
+            
+            if not section_topics:
+                text = f"✏️ <b>Редактирование тем</b>\n\n"
+                text += f"📚 <b>Раздел:</b> {section_name} [{'kz' if section_language == 'kk' else 'ru'}]\n\n"
+                text += "В этом разделе нет тем."
+                keyboard = [[InlineKeyboardButton("🔙 К выбору раздела", callback_data="edit_topic_start")]]
+            else:
+                text = f"✏️ <b>Редактирование тем</b>\n\n"
+                text += f"📚 <b>Раздел:</b> {section_name} [{'kz' if section_language == 'kk' else 'ru'}]\n\n"
+                text += f"Выберите тему для редактирования ({len(section_topics)} тем):\n\n"
+                
+                keyboard = []
+                for topic in section_topics:
+                    status = "✅" if topic['is_active'] else "❌"
+                    button_text = f"{status} {topic['name']} ({topic['question_count']} вопр.)"
+                    keyboard.append([InlineKeyboardButton(
+                        button_text,
+                        callback_data=f"edit_topic_select_{topic['id']}"
+                    )])
+                
+                keyboard.append([InlineKeyboardButton("🔙 К выбору раздела", callback_data="edit_topic_start")])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except (ValueError, IndexError):
+            await query.edit_message_text("❌ Ошибка при выборе раздела.")
 
     async def edit_topic_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выбор темы для редактирования."""
@@ -474,47 +539,112 @@ class TopicsHandler(AdminBaseHandler):
         context.user_data.pop('edit_topic_id', None)
 
     async def remove_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Начало удаления темы."""
+        """Начало удаления темы - выбор раздела."""
         query = update.callback_query
         await self.safe_answer_callback(query)
         
-        topics = self.db.get_all_topics(active_only=False)
+        # Получаем разделы для обоих языков (админ должен видеть все)
+        ru_sections = self.db.get_main_topics_by_language("ru", active_only=True)
+        kk_sections = self.db.get_main_topics_by_language("kk", active_only=True)
         
-        if not topics:
-            text = "❌ <b>Удаление тем</b>\n\nТемы не найдены."
+        # Объединяем разделы с указанием языка (сначала казахские, потом русские)
+        all_sections = []
+        for section in kk_sections:
+            section['language'] = 'kk'
+            all_sections.append(section)
+        for section in ru_sections:
+            section['language'] = 'ru'
+            all_sections.append(section)
+        
+        if not all_sections:
+            text = "❌ <b>Удаление тем</b>\n\nРазделы не найдены."
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")]]
         else:
-            text = f"🗑️ <b>Удаление тем</b>\n\nВыберите тему для удаления:\n\n"
+            text = f"🗑️ <b>Удаление тем</b>\n\n"
             text += "⚠️ <b>Внимание!</b> При удалении темы будут удалены:\n"
             text += "• Все вопросы в этой теме\n"
             text += "• Все результаты тестов по этой теме\n"
             text += "• Все ссылки на эти вопросы\n\n"
+            text += "Выберите раздел для удаления тем:"
             
-            # Группируем по разделам
-            topics_by_section = {}
-            for topic in topics:
-                main_topic = topic.get('main_topic', 'Без раздела')
-                if main_topic not in topics_by_section:
-                    topics_by_section[main_topic] = []
-                topics_by_section[main_topic].append(topic)
+            # Сохраняем список разделов в контексте
+            context.user_data['remove_sections_list'] = all_sections
             
             keyboard = []
-            for main_topic, section_topics in topics_by_section.items():
-                # Добавляем заголовок раздела (неактивная кнопка)
-                keyboard.append([InlineKeyboardButton(f"📚 {main_topic}", callback_data="noop")])
-                
-                for topic in section_topics:
-                    status = "✅" if topic['is_active'] else "❌"
-                    button_text = f"  {status} {topic['name']} ({topic['question_count']} вопр.)"
+            
+            # Сначала казахские разделы
+            if kk_sections:
+                for i, section in enumerate(kk_sections):
+                    # Получаем количество тем в разделе
+                    topics_count = len(self.db.get_subtopics_by_main_topic(section['name']))
                     keyboard.append([InlineKeyboardButton(
-                        button_text,
-                        callback_data=f"remove_topic_confirm_{topic['id']}"
+                        f"📚 {section['name']} [kz] ({topics_count} тем)",
+                        callback_data=f"remove_section_topics_{i}"
+                    )])
+            
+            # Затем русские разделы
+            if ru_sections:
+                kk_count = len(kk_sections)
+                for i, section in enumerate(ru_sections):
+                    # Получаем количество тем в разделе
+                    topics_count = len(self.db.get_subtopics_by_main_topic(section['name']))
+                    keyboard.append([InlineKeyboardButton(
+                        f"📚 {section['name']} [ru] ({topics_count} тем)",
+                        callback_data=f"remove_section_topics_{kk_count + i}"
                     )])
             
             keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="admin_topics")])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def remove_section_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Показать темы выбранного раздела для удаления."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        try:
+            section_index = int(query.data.replace('remove_section_topics_', ''))
+            sections_list = context.user_data.get('remove_sections_list', [])
+            
+            if section_index >= len(sections_list):
+                await query.edit_message_text("❌ Неверный выбор раздела.")
+                return
+            
+            selected_section = sections_list[section_index]
+            section_name = selected_section['name']
+            section_language = selected_section['language']
+            
+            # Получаем все темы этого раздела
+            topics = self.db.get_all_topics(active_only=False)
+            section_topics = [t for t in topics if t.get('main_topic') == section_name]
+            
+            if not section_topics:
+                text = f"🗑️ <b>Удаление тем</b>\n\n"
+                text += f"📚 <b>Раздел:</b> {section_name} [{'kz' if section_language == 'kk' else 'ru'}]\n\n"
+                text += "В этом разделе нет тем."
+                keyboard = [[InlineKeyboardButton("🔙 К выбору раздела", callback_data="remove_topic_start")]]
+            else:
+                text = f"🗑️ <b>Удаление тем</b>\n\n"
+                text += f"📚 <b>Раздел:</b> {section_name} [{'kz' if section_language == 'kk' else 'ru'}]\n\n"
+                text += f"Выберите тему для удаления ({len(section_topics)} тем):\n\n"
+                
+                keyboard = []
+                for topic in section_topics:
+                    status = "✅" if topic['is_active'] else "❌"
+                    button_text = f"{status} {topic['name']} ({topic['question_count']} вопр.)"
+                    keyboard.append([InlineKeyboardButton(
+                        button_text,
+                        callback_data=f"remove_topic_confirm_{topic['id']}"
+                    )])
+                
+                keyboard.append([InlineKeyboardButton("🔙 К выбору раздела", callback_data="remove_topic_start")])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except (ValueError, IndexError):
+            await query.edit_message_text("❌ Ошибка при выборе раздела.")
 
     async def remove_topic_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Подтверждение удаления темы."""
@@ -604,10 +734,12 @@ class TopicsHandler(AdminBaseHandler):
     async def refresh_topics_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Обновить статистику тем."""
         query = update.callback_query
-        await self.safe_answer_callback(query)
+        
+        print(f"[DEBUG] refresh_topics_stats called by user {update.effective_user.id}")
         
         # Получаем новые данные
         topics = self.db.get_all_topics(active_only=False)
+        print(f"[DEBUG] Found {len(topics)} topics")
         
         if not topics:
             new_text = "📋 <b>Список тем</b>\n\nТемы не найдены."
@@ -650,14 +782,15 @@ class TopicsHandler(AdminBaseHandler):
         
         # Проверяем, изменился ли текст
         current_text = query.message.text
-        if current_text == new_text:
-            # Если текст не изменился, показываем alert
-            await query.answer("✅ Статистика обновлена (изменений нет)", show_alert=True)
-        else:
-            # Если текст изменился, обновляем сообщение
-            try:
-                await query.edit_message_text(new_text, reply_markup=reply_markup, parse_mode='HTML')
-                await query.answer("✅ Статистика обновлена")
-            except Exception as e:
-                # Если все же произошла ошибка, показываем alert
-                await query.answer("✅ Статистика обновлена", show_alert=True)
+        print(f"[DEBUG] Current text length: {len(current_text) if current_text else 0}")
+        print(f"[DEBUG] New text length: {len(new_text)}")
+        
+        # Пытаемся обновить сообщение
+        try:
+            await query.edit_message_text(new_text, reply_markup=reply_markup, parse_mode='HTML')
+            print("[DEBUG] Message updated successfully")
+            await query.answer("✅ Статистика обновлена")
+        except Exception as e:
+            # Если произошла ошибка (сообщение не изменилось), показываем alert
+            print(f"[DEBUG] Error updating message: {e}")
+            await query.answer("✅ Статистика обновлена (изменений нет)")

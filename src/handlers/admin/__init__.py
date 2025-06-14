@@ -131,8 +131,14 @@ class AdminHandlers(AdminBaseHandler):
     async def edit_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.edit_topic_start(update, context)
     
+    async def edit_section_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.edit_section_topics(update, context)
+    
     async def remove_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.remove_topic_start(update, context)
+    
+    async def remove_section_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.remove_section_topics(update, context)
 
     # Дополнительные методы тем
     async def select_main_topic_for_new(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
