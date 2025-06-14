@@ -45,8 +45,6 @@ class CommandHandlers(BaseHandler):
                     auto_setup_message += f"👤 <b>ФИО:</b> {user_data['full_name']}\n"
                 if user_data['grade']:
                     auto_setup_message += f"🎓 <b>Класс:</b> {user_data['grade']}\n"
-                if user_data['phone_number']:
-                    auto_setup_message += f"📱 <b>Телефон:</b> {user_data['phone_number']}\n"
                 
                 auto_setup_message += f"\n📚 Теперь вы можете пользоваться ботом!"
                 
@@ -54,15 +52,6 @@ class CommandHandlers(BaseHandler):
             
             # Получаем информацию о пользователе после настройки
             user_info = self.db.get_user_info(user.id)
-            
-            # Проверяем номер телефона
-            phone_number = self.db.get_user_phone(user.id)
-            if not phone_number:
-                # Если номер телефона не указан, предлагаем его ввести
-                context.user_data['awaiting_phone_number'] = True
-                phone_request_text = "📱 Для лучшей связи, пожалуйста, введите ваш номер телефона (например: +77771234567).\n\nИли нажмите /skip чтобы пропустить этот шаг." if user_language == 'ru' else "📱 Жақсы байланыс үшін телефон нөіріңізді енгізіңіз (мысалы: +77771234567).\n\nНемесе бұл қадамды өткізу үшін /skip басыңыз."
-                await update.message.reply_text(phone_request_text)
-                return
             
             # Для обычных пользователей - проверяем ФИО и класс (на случай если автонастройка не сработала)
             if not user_info or not user_info[0]:  # Нет ФИО
@@ -192,25 +181,6 @@ class CommandHandlers(BaseHandler):
         
         await update.message.reply_text(id_text, parse_mode='Markdown')
 
-    async def skip_phone(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Пропустить ввод номера телефона."""
-        user_id = update.effective_user.id
-        user_language = self.db.get_user_language(user_id)
-        
-        if context.user_data.get('awaiting_phone_number'):
-            context.user_data['awaiting_phone_number'] = False
-            skip_text = "✅ Ввод номера телефона пропущен.\n\n📚 Теперь вы можете пользоваться ботом!" if user_language == 'ru' else "✅ Телефон нөмірін енгізу өткізілді.\n\n📚 Енді ботты пайдалана аласыз!"
-            await update.message.reply_text(
-                skip_text,
-                reply_markup=get_main_menu_markup(user_id)
-            )
-        else:
-            skip_error_text = "Эта команда используется только при запросе номера телефона." if user_language == 'ru' else "Бұл команда тек телефон нөмірі сұралған кезде пайдаланылады."
-            await update.message.reply_text(
-                skip_error_text,
-                reply_markup=get_main_menu_markup(user_id)
-            )
-
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         text = update.message.text.strip()
         user_id = update.effective_user.id
@@ -253,22 +223,6 @@ class CommandHandlers(BaseHandler):
                     cancel_text,
                     reply_markup=get_main_menu_markup(user_id)
                 )
-                return
-
-        # Handle phone number input
-        if context.user_data.get('awaiting_phone_number'):
-            if self._is_valid_phone(text):
-                self.db.update_user_phone(user_id, text)
-                context.user_data['awaiting_phone_number'] = False
-                phone_success_text = f"✅ Номер телефона {text} сохранен!\n\n📚 Теперь вы можете пользоваться ботом!" if user_language == 'ru' else f"✅ {text} телефон нөмірі сақталды!\n\n📚 Енді ботты пайдалана аласыз!"
-                await update.message.reply_text(
-                    phone_success_text,
-                    reply_markup=get_main_menu_markup(user_id)
-                )
-                return
-            else:
-                phone_error_text = "❌ Неверный формат номера телефона. Пожалуйста, введите номер в формате +77771234567 или 87771234567" if user_language == 'ru' else "❌ Телефон нөмірінің форматы дұрыс емес. +77771234567 немесе 87771234567 форматында енгізіңіз"
-                await update.message.reply_text(phone_error_text)
                 return
 
         # Handle full name input
@@ -431,17 +385,4 @@ class CommandHandlers(BaseHandler):
             get_message('help_text', user_language),
             reply_markup=get_main_menu_markup(user_id),
             parse_mode='Markdown'
-        )
-
-    def _is_valid_phone(self, phone: str) -> bool:
-        """Validate phone number format."""
-        # Remove all non-digit characters
-        digits_only = ''.join(filter(str.isdigit, phone))
-        
-        # Check if it starts with valid prefixes and has correct length
-        if len(digits_only) == 11:
-            return digits_only.startswith('7') or digits_only.startswith('8')
-        elif len(digits_only) == 10:
-            return True
-        
-        return False 
+        ) 
