@@ -105,14 +105,23 @@ class AdminBaseHandler(BaseHandler):
         text += f"👨‍💼 Админов: {admins_count}\n\n"
         text += f"Выберите раздел для управления:"
         
+        is_super = self.db.is_super_admin(user_id)
+        
         keyboard = [
             [InlineKeyboardButton("👥 Управление учениками", callback_data="admin_students")],
             [InlineKeyboardButton("📚 Управление темами", callback_data="admin_topics")],
             [InlineKeyboardButton("❓ Управление вопросами", callback_data="admin_questions")],
-            [InlineKeyboardButton("👨‍💼 Управление админами", callback_data="admin_admins")],
-            [InlineKeyboardButton("📊 Статистика и отчеты", callback_data="admin_stats")],
-            [InlineKeyboardButton("🔙 Назад к главному меню", callback_data="main_menu")]
         ]
+        
+        # Функции только для суперадмина
+        if is_super:
+            keyboard.append([InlineKeyboardButton("👑 Управление админами", callback_data="admin_admins")])
+        
+        keyboard.extend([
+            [InlineKeyboardButton("📊 Статистика и отчеты", callback_data="admin_stats")],
+            [InlineKeyboardButton("🔙 Назад к выбору тем", callback_data="back_to_main")]
+        ])
+        
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         if update.message:
