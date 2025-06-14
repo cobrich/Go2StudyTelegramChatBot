@@ -1014,4 +1014,34 @@ class StudentsHandler(AdminBaseHandler):
         
         # Очищаем состояние
         context.user_data.pop('edit_student_id', None)
-        context.user_data.pop('admin_action', None) 
+        context.user_data.pop('admin_action', None)
+
+    # === ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ИЗ СТАРОГО ФАЙЛА ===
+
+    async def _add_student_to_database(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                                     student_user_id: int, username: str, fullname: str, 
+                                     grade: int, admin_id: int, phone_number: str = "") -> bool:
+        """Добавление ученика в базу данных (метод из старого файла)."""
+        try:
+            # Добавляем в allowed_users
+            success = self.db.add_allowed_user_by_id(student_user_id, fullname, grade, admin_id, username, phone_number)
+            
+            if success:
+                # Синхронизируем с таблицей users
+                with sqlite3.connect(self.db.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO users (user_id, username, full_name, grade, phone_number, language)
+                        VALUES (?, ?, ?, ?, ?, 'ru')
+                    ''', (student_user_id, username, fullname, grade, phone_number))
+                    conn.commit()
+                    
+                logging.info(f"Student {student_user_id} added to database successfully")
+                return True
+            else:
+                logging.error(f"Failed to add student {student_user_id} to allowed_users")
+                return False
+                
+        except Exception as e:
+            logging.error(f"Error adding student to database: {e}")
+            return False 

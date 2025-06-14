@@ -100,6 +100,13 @@ class AdminHandlers(AdminBaseHandler):
         """Переключение статуса ученика."""
         return await self.students.edit_student_status_toggle(update, context)
 
+    # Дополнительные методы студентов
+    async def _add_student_to_database(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
+                                     student_user_id: int, username: str, fullname: str, 
+                                     grade: int, admin_id: int, phone_number: str = "") -> bool:
+        """Добавление ученика в базу данных."""
+        return await self.students._add_student_to_database(update, context, student_user_id, username, fullname, grade, admin_id, phone_number)
+
     # === ДЕЛЕГИРОВАНИЕ МЕТОДОВ УПРАВЛЕНИЯ ТЕМАМИ ===
     
     async def topics_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

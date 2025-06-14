@@ -199,6 +199,10 @@ class QuestionsHandler(AdminBaseHandler):
         await self.safe_answer_callback(query)
         await query.edit_message_text("🚧 Функция выбора темы для добавления вопроса в разработке...")
 
+    async def handle_delete_single_question_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_text: str) -> None:
+        """Обработка поиска для удаления одного вопроса."""
+        await update.message.reply_text("🚧 Функция поиска для удаления одного вопроса в разработке...")
+
     async def delete_single_question_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Подтверждение удаления одного вопроса."""
         query = update.callback_query
@@ -267,8 +271,4 @@ class QuestionsHandler(AdminBaseHandler):
 
     async def handle_edit_question_explanation(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_explanation: str) -> None:
         """Обработка нового объяснения вопроса."""
-        await update.message.reply_text("🚧 Функция обработки нового объяснения вопроса в разработке...")
-
-    async def handle_delete_single_question_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_text: str) -> None:
-        """Обработка поиска для удаления одного вопроса."""
-        await update.message.reply_text("🚧 Функция поиска для удаления одного вопроса в разработке...") 
+        await update.message.reply_text("🚧 Функция обработки нового объяснения вопроса в разработке...") 
