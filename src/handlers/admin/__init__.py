@@ -153,9 +153,6 @@ class AdminHandlers(AdminBaseHandler):
     async def edit_topic_name_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.edit_topic_name_start(update, context)
     
-    async def edit_topic_desc_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.topics.edit_topic_desc_start(update, context)
-    
     async def edit_topic_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.edit_topic_section_start(update, context)
     
@@ -326,11 +323,6 @@ class AdminHandlers(AdminBaseHandler):
             return True
         elif action == 'edit_topic_name':
             await self.topics.handle_edit_topic_name(update, context, text)
-            return True
-        elif action == 'edit_topic_description':
-            print(f"[DEBUG] Обработчик edit_topic_description вызван с текстом: '{text}'")
-            print(f"[DEBUG] user_data: {context.user_data}")
-            await self.topics.handle_edit_topic_description(update, context, text)
             return True
         
         # Обработка действий для вопросов

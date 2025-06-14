@@ -2728,21 +2728,6 @@ class Database:
             print(f"[ERROR] Ошибка обновления названия темы: {e}")
             return False
 
-    def update_topic_description(self, topic_id: int, new_description: str) -> bool:
-        """Обновить описание темы."""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('UPDATE subtopics SET description = ? WHERE id = ?', (new_description, topic_id))
-                conn.commit()
-                
-                print(f"[LOG] Описание темы {topic_id} обновлено")
-                return True
-                
-        except Exception as e:
-            print(f"[ERROR] Ошибка обновления описания темы: {e}")
-            return False
-
     def delete_topic_completely(self, topic_id: int) -> bool:
         """Полностью удалить тему и все связанные данные."""
         try:

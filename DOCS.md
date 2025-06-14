@@ -1733,3 +1733,42 @@ All topic editing buttons now work correctly:
 ---
 
 ### 🔧 Fix: Topic Status Toggle Interface Error (January 2025)
+
+### ✅ Fix: Removed Topic Description Functionality (January 2025)
+
+**✅ FIXED: Completely removed topic description functionality due to missing database column**
+
+#### 🐛 Root cause identified:
+- **Database schema issue**: Table `subtopics` has no `description` column
+- **Error**: `no such column: description` when trying to update topic descriptions
+- **Decision**: Remove functionality instead of adding unnecessary database column
+
+#### ✅ Complete cleanup performed:
+
+**1. Removed from `src/handlers/admin/topics.py`:**
+- ❌ `edit_topic_desc_start()` method - completely removed
+- ❌ `handle_edit_topic_description()` method - completely removed
+- ❌ Description display from `edit_topic_select()` interface
+- ❌ "📄 Изменить описание" button from edit interface
+
+**2. Removed from `src/bot.py`:**
+- ❌ `edit_topic_desc_start` callback handler - removed pattern `^edit_topic_desc_`
+
+**3. Removed from `src/handlers/admin/__init__.py`:**
+- ❌ `edit_topic_desc_start()` method delegation - removed
+- ❌ `edit_topic_description` text handler - removed from `handle_admin_text()`
+
+**4. Removed from `src/services/database.py`:**
+- ❌ `update_topic_description()` method - completely removed
+
+#### 📋 **Current topic editing capabilities:**
+- ✅ **Change topic name** - `edit_topic_name_start()`
+- ✅ **Change topic section** - `edit_topic_section_start()`
+- ✅ **Toggle active status** - `edit_topic_toggle_status()`
+- ❌ **Change description** - removed (no database support)
+
+**Result**: Clean, working topic management without broken description functionality.
+
+---
+
+### 🔧 Debug: Topic Description Edit Issue (January 2025)

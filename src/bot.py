@@ -438,10 +438,6 @@ def main() -> None:
         pattern="^edit_topic_name_"
     ))
     application.add_handler(CallbackQueryHandler(
-        admin_handlers.edit_topic_desc_start,
-        pattern="^edit_topic_desc_"
-    ))
-    application.add_handler(CallbackQueryHandler(
         admin_handlers.edit_topic_section_start,
         pattern="^edit_topic_section_"
     ))

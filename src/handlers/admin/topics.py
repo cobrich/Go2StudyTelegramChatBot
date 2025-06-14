@@ -390,14 +390,12 @@ class TopicsHandler(AdminBaseHandler):
             text = f"✏️ <b>Редактирование темы</b>\n\n"
             text += f"<b>Название:</b> {topic['name']}\n"
             text += f"<b>Раздел:</b> {topic.get('main_topic', 'Без раздела')}\n"
-            text += f"<b>Описание:</b> {topic.get('description', 'Не указано')}\n"
             text += f"<b>Статус:</b> {status_emoji} {status}\n"
             text += f"<b>Вопросов:</b> {topic['question_count']}\n\n"
             text += "Выберите действие:"
             
             keyboard = [
                 [InlineKeyboardButton("📝 Изменить название", callback_data=f"edit_topic_name_{topic_id}")],
-                [InlineKeyboardButton("📄 Изменить описание", callback_data=f"edit_topic_desc_{topic_id}")],
                 [InlineKeyboardButton("📚 Изменить раздел", callback_data=f"edit_topic_section_{topic_id}")],
                 [InlineKeyboardButton(f"{'❌ Деактивировать' if topic['is_active'] else '✅ Активировать'}", 
                                     callback_data=f"edit_topic_toggle_{topic_id}")],
@@ -428,8 +426,7 @@ class TopicsHandler(AdminBaseHandler):
             context.user_data['edit_topic_id'] = topic_id
             
             text = f"📝 <b>Изменение названия темы</b>\n\n"
-            text += f"Тема: <b>{topic['name']}</b>\n"
-            text += f"Текущее название: <i>{topic['name']}</i>\n\n"
+            text += f"Текущее название: <b>{topic['name']}</b>\n\n"
             text += "Введите новое название темы:"
             
             keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_topic_select_{topic_id}")]]
@@ -438,45 +435,6 @@ class TopicsHandler(AdminBaseHandler):
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
             
         except (ValueError, IndexError):
-            await query.edit_message_text("❌ Ошибка при редактировании темы.")
-
-    async def edit_topic_desc_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Начало изменения описания темы."""
-        query = update.callback_query
-        await self.safe_answer_callback(query)
-        
-        try:
-            topic_id = int(query.data.replace('edit_topic_desc_', ''))
-            print(f"[DEBUG] edit_topic_desc_start: topic_id = {topic_id}")
-            
-            topics = self.db.get_all_topics(active_only=False)
-            topic = next((t for t in topics if t['id'] == topic_id), None)
-            
-            if not topic:
-                print(f"[ERROR] Тема с ID {topic_id} не найдена")
-                await query.edit_message_text("❌ Тема не найдена.")
-                return
-            
-            print(f"[DEBUG] Найдена тема: {topic['name']}")
-            
-            context.user_data['admin_action'] = 'edit_topic_description'
-            context.user_data['edit_topic_id'] = topic_id
-            
-            print(f"[DEBUG] Установлены user_data: admin_action = edit_topic_description, edit_topic_id = {topic_id}")
-            
-            text = f"📄 <b>Изменение описания темы</b>\n\n"
-            text += f"Тема: <b>{topic['name']}</b>\n"
-            text += f"Текущее описание: <i>{topic.get('description', 'Не указано')}</i>\n\n"
-            text += "Введите новое описание темы:"
-            
-            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_topic_select_{topic_id}")]]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
-            print(f"[DEBUG] Сообщение отправлено, ожидаем ввод описания")
-            
-        except (ValueError, IndexError) as e:
-            print(f"[ERROR] Ошибка в edit_topic_desc_start: {e}")
             await query.edit_message_text("❌ Ошибка при редактировании темы.")
 
     async def edit_topic_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -626,7 +584,6 @@ class TopicsHandler(AdminBaseHandler):
                     
                     keyboard = [
                         [InlineKeyboardButton("📝 Изменить название", callback_data=f"edit_topic_name_{topic_id}")],
-                        [InlineKeyboardButton("📄 Изменить описание", callback_data=f"edit_topic_desc_{topic_id}")],
                         [InlineKeyboardButton("📚 Изменить раздел", callback_data=f"edit_topic_section_{topic_id}")],
                         [InlineKeyboardButton(status_action, callback_data=f"edit_topic_toggle_{topic_id}")],
                         [InlineKeyboardButton("🔙 К списку тем", callback_data="edit_topic_start")]
@@ -669,40 +626,6 @@ class TopicsHandler(AdminBaseHandler):
         # Очищаем данные
         context.user_data.pop('admin_action', None)
         context.user_data.pop('edit_topic_id', None)
-
-    async def handle_edit_topic_description(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_description: str) -> None:
-        """Обработка изменения описания темы."""
-        print(f"[DEBUG] handle_edit_topic_description вызван с описанием: '{new_description}'")
-        
-        topic_id = context.user_data.get('edit_topic_id')
-        admin_action = context.user_data.get('admin_action')
-        
-        print(f"[DEBUG] topic_id из context: {topic_id}")
-        print(f"[DEBUG] admin_action из context: {admin_action}")
-        
-        if not topic_id:
-            print(f"[ERROR] topic_id не найден в context.user_data")
-            await update.message.reply_text("❌ Ошибка: тема не выбрана.")
-            return
-        
-        print(f"[DEBUG] Вызываем db.update_topic_description({topic_id}, '{new_description}')")
-        success = self.db.update_topic_description(topic_id, new_description)
-        print(f"[DEBUG] Результат update_topic_description: {success}")
-        
-        if success:
-            text = f"✅ Описание темы успешно изменено!"
-        else:
-            text = f"❌ Ошибка при изменении описания темы."
-        
-        keyboard = [[InlineKeyboardButton("🔙 К редактированию темы", callback_data=f"edit_topic_select_{topic_id}")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
-        
-        # Очищаем данные
-        context.user_data.pop('admin_action', None)
-        context.user_data.pop('edit_topic_id', None)
-        print(f"[DEBUG] Очищены user_data")
 
     async def remove_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало удаления темы - выбор раздела."""
