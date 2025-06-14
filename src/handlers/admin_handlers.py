@@ -2727,17 +2727,95 @@ class AdminHandlers(BaseHandler):
         await update.message.reply_text(f"Введите правильный ответ (A, B, C или D):")
     
     async def _handle_add_question_correct(self, update: Update, context: ContextTypes.DEFAULT_TYPE, correct_text: str) -> None:
-        """Обработка добавления вопроса - этап 7 (правильный ответ)."""
+        """Обработка добавления вопроса - этап 7 (правильный ответ) - финальный с ИИ генерацией объяснения."""
         correct_letter = correct_text.upper().strip()
         
         if correct_letter not in ['A', 'B', 'C', 'D']:
             await update.message.reply_text("❌ Введите правильный ответ: A, B, C или D. Попробуйте еще раз:")
             return
-        
+
         context.user_data['new_question_correct'] = correct_letter
-        context.user_data['admin_action'] = 'add_question_explanation'
         
-        await update.message.reply_text(f"Введите объяснение к вопросу:")
+        # Собираем все данные для генерации объяснения
+        topic = context.user_data.get('new_question_topic')
+        question_text = context.user_data.get('new_question_text')
+        option_a = context.user_data.get('new_question_option_a')
+        option_b = context.user_data.get('new_question_option_b')
+        option_c = context.user_data.get('new_question_option_c')
+        option_d = context.user_data.get('new_question_option_d')
+        
+        # Определяем правильный ответ
+        options_map = {'A': option_a, 'B': option_b, 'C': option_c, 'D': option_d}
+        correct_answer = options_map[correct_letter]
+        
+        # Показываем сообщение о генерации объяснения
+        await update.message.reply_text("🤖 Генерирую объяснение с помощью ИИ...")
+        
+        # Инициализируем AI сервис для генерации объяснения
+        try:
+            from services.ai_service import AIService
+            ai_service = AIService()
+            
+            # Генерируем объяснение
+            explanation = ai_service.generate_detailed_explanation(
+                question_text, 
+                correct_answer, 
+                topic
+            )
+            
+            # Формируем неправильные варианты
+            incorrect_options = []
+            for letter, option in options_map.items():
+                if letter != correct_letter:
+                    incorrect_options.append(option)
+            
+            # Создаем вопрос для базы данных
+            db_question = {
+                'topic': topic,
+                'question': question_text,
+                'answer': correct_answer,
+                'explanation': explanation,
+                'incorrect_options': '\n'.join(incorrect_options),
+                'question_type': 'standard',
+                'source': 'admin'
+            }
+            
+            # Сохраняем в базу данных
+            self.db.add_question(db_question)
+            
+            text = f"✅ <b>Вопрос добавлен с ИИ объяснением!</b>\n\n"
+            text += f"<b>Тема:</b> {topic}\n"
+            text += f"<b>Вопрос:</b> {question_text}\n"
+            text += f"<b>Правильный ответ:</b> {correct_letter}) {correct_answer}\n\n"
+            text += f"<b>🤖 ИИ объяснение:</b>\n{explanation}"
+            
+            # Добавляем кнопки навигации
+            keyboard = [
+                [InlineKeyboardButton("➕ Добавить еще вопрос", callback_data="add_question")],
+                [InlineKeyboardButton("📊 Статистика вопросов", callback_data="questions_stats")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except Exception as e:
+            # В случае ошибки ИИ генерации, переходим к ручному вводу
+            error_text = f"⚠️ Ошибка ИИ генерации: {e}\n\nВведите объяснение вручную:"
+            context.user_data['admin_action'] = 'add_question_explanation'
+            await update.message.reply_text(error_text)
+            return
+        
+        # Очищаем все данные после успешного добавления
+        context.user_data.pop('admin_action', None)
+        context.user_data.pop('new_question_topic', None)
+        context.user_data.pop('new_question_text', None)
+        context.user_data.pop('new_question_option_a', None)
+        context.user_data.pop('new_question_option_b', None)
+        context.user_data.pop('new_question_option_c', None)
+        context.user_data.pop('new_question_option_d', None)
+        context.user_data.pop('new_question_correct', None)
     
     async def _handle_add_question_explanation(self, update: Update, context: ContextTypes.DEFAULT_TYPE, explanation: str) -> None:
         """Обработка добавления вопроса - этап 8 (объяснение) - финальный."""
@@ -2881,14 +2959,23 @@ class AdminHandlers(BaseHandler):
         text += f"<b>Тема:</b> {topic}\n"
         text += f"<b>Вопрос:</b> {question}\n"
         text += f"<b>Ответ:</b> {answer}\n"
-        text += f"<b>Объяснение:</b> {explanation}\n\n"
-        text += "Введите новое объяснение (или отправьте '-' чтобы оставить текущее):"
+        text += f"<b>Текущее объяснение:</b> {explanation}\n\n"
+        text += "Выберите действие:"
+        
+        # Добавляем кнопки для выбора типа редактирования
+        keyboard = [
+            [InlineKeyboardButton("🤖 Сгенерировать ИИ объяснение", callback_data=f"generate_ai_explanation_{question_id}")],
+            [InlineKeyboardButton("✏️ Ввести объяснение вручную", callback_data=f"manual_explanation_{question_id}")],
+            [InlineKeyboardButton("🔙 Назад к поиску", callback_data="edit_question")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         
         context.user_data['edit_question_id'] = question_id
         context.user_data['edit_question_answer'] = answer
-        context.user_data['admin_action'] = 'edit_question_explanation'
+        context.user_data['edit_question_topic'] = topic
+        context.user_data['edit_question_text'] = question
         
-        await update.message.reply_text(text, parse_mode='HTML')
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def _handle_edit_question_explanation(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_explanation: str) -> None:
         """Обработка редактирования объяснения вопроса."""
@@ -4104,3 +4191,89 @@ class AdminHandlers(BaseHandler):
             
             await query.edit_message_text(error_text, reply_markup=reply_markup)
             logging.error(f"Error deleting question {question_id}: {e}")
+
+    async def generate_ai_explanation_for_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Генерация ИИ объяснения для редактируемого вопроса."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        # Извлекаем ID вопроса из callback_data
+        question_id = int(query.data.split('_')[-1])
+        
+        # Получаем данные вопроса из context
+        topic = context.user_data.get('edit_question_topic')
+        question_text = context.user_data.get('edit_question_text')
+        answer = context.user_data.get('edit_question_answer')
+        
+        if not all([topic, question_text, answer]):
+            await query.edit_message_text("❌ Ошибка: данные вопроса не найдены.")
+            return
+        
+        # Показываем сообщение о генерации
+        await query.edit_message_text("🤖 Генерирую новое объяснение с помощью ИИ...")
+        
+        try:
+            from services.ai_service import AIService
+            ai_service = AIService()
+            
+            # Генерируем объяснение
+            new_explanation = ai_service.generate_detailed_explanation(
+                question_text, 
+                answer, 
+                topic
+            )
+            
+            # Обновляем в базе данных
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE questions 
+                    SET explanation = ?
+                    WHERE id = ?
+                ''', (new_explanation, question_id))
+                conn.commit()
+            
+            success_text = f"✅ <b>ИИ объяснение сгенерировано и сохранено!</b>\n\n"
+            success_text += f"<b>Вопрос ID {question_id}:</b>\n{question_text}\n\n"
+            success_text += f"<b>🤖 Новое ИИ объяснение:</b>\n{new_explanation}"
+            
+            keyboard = [
+                [InlineKeyboardButton("✏️ Редактировать еще вопрос", callback_data="edit_question")],
+                [InlineKeyboardButton("📊 Статистика вопросов", callback_data="questions_stats")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(success_text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except Exception as e:
+            error_text = f"❌ Ошибка генерации ИИ объяснения: {e}"
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать снова", callback_data=f"generate_ai_explanation_{question_id}")],
+                [InlineKeyboardButton("✏️ Ввести вручную", callback_data=f"manual_explanation_{question_id}")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(error_text, reply_markup=reply_markup)
+        
+        # Очищаем данные
+        context.user_data.pop('edit_question_id', None)
+        context.user_data.pop('edit_question_answer', None)
+        context.user_data.pop('edit_question_topic', None)
+        context.user_data.pop('edit_question_text', None)
+
+    async def manual_explanation_for_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Переход к ручному вводу объяснения для редактируемого вопроса."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        # Извлекаем ID вопроса из callback_data
+        question_id = int(query.data.split('_')[-1])
+        
+        text = f"✏️ <b>Ручное редактирование объяснения для вопроса ID {question_id}</b>\n\n"
+        text += "Введите новое объяснение (или отправьте '-' чтобы отменить):"
+        
+        context.user_data['admin_action'] = 'edit_question_explanation'
+        
+        await query.edit_message_text(text, parse_mode='HTML')

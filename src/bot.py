@@ -330,6 +330,16 @@ def main() -> None:
         pattern="^edit_question$"
     ))
     
+    # AI explanation generation handlers for question editing
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.generate_ai_explanation_for_edit,
+        pattern="^generate_ai_explanation_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.manual_explanation_for_edit,
+        pattern="^manual_explanation_"
+    ))
+    
     # Admin management handlers
     application.add_handler(CallbackQueryHandler(
         admin_handlers.add_admin_start,
