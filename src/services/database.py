@@ -273,14 +273,35 @@ class Database:
             conn.commit()
 
     def add_test_result(self, user_id: int, topic: str, percentage: float) -> None:
-        """Add a new test result."""
+        """Add test result for user."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'INSERT INTO test_results (user_id, topic, percentage) VALUES (?, ?, ?)',
+                (user_id, topic, percentage)
+            )
+            conn.commit()
+
+    def get_user_test_results(self, user_id: int) -> List[Dict[str, Any]]:
+        """Get all test results for a user."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO test_results (user_id, topic, percentage)
-                VALUES (?, ?, ?)
-            ''', (user_id, topic, percentage))
-            conn.commit()
+                SELECT topic, percentage, timestamp 
+                FROM test_results 
+                WHERE user_id = ? 
+                ORDER BY timestamp DESC
+            ''', (user_id,))
+            
+            results = []
+            for row in cursor.fetchall():
+                results.append({
+                    'topic': row[0],
+                    'percentage': row[1],
+                    'date': row[2][:10] if row[2] else ''  # Extract date part from timestamp
+                })
+            
+            return results
 
     def get_user_progress(self, user_id: int) -> Tuple[int, float]:
         """Get user's test progress statistics."""
@@ -2049,26 +2070,43 @@ class Database:
             } 
 
     def get_admin_info(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """Получить информацию об админе из таблицы admins."""
+        """Get admin information by user_id."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT user_id, username, full_name, is_super_admin, created_at
+                SELECT user_id, username, full_name, is_super_admin, created_at, created_by
                 FROM admins 
                 WHERE user_id = ?
             ''', (user_id,))
-            result = cursor.fetchone()
             
-            if result:
+            row = cursor.fetchone()
+            if row:
                 return {
-                    'user_id': result[0],
-                    'username': result[1],
-                    'full_name': result[2],
-                    'is_super_admin': bool(result[3]),
-                    'created_at': result[4]
+                    'user_id': row[0],
+                    'username': row[1],
+                    'full_name': row[2],
+                    'is_super_admin': bool(row[3]),
+                    'created_at': row[4],
+                    'created_by': row[5]
                 }
             return None
-    
+
+    def update_admin_info(self, user_id: int, full_name: str) -> bool:
+        """Update admin's full name."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE admins 
+                    SET full_name = ? 
+                    WHERE user_id = ?
+                ''', (full_name, user_id))
+                conn.commit()
+                return cursor.rowcount > 0
+        except sqlite3.Error as e:
+            logging.error(f"Error updating admin info: {e}")
+            return False
+
     def get_all_admins(self) -> List[Dict]:
         """Get list of all admins."""
         with sqlite3.connect(self.db_path) as conn:
