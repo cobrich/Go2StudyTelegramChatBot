@@ -56,6 +56,50 @@ class AdminHandlers(AdminBaseHandler):
         """Показать статистику по классам."""
         return await self.students.show_class_statistics(update, context)
 
+    async def remove_student_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало удаления ученика."""
+        return await self.students.remove_student_start(update, context)
+
+    async def remove_student_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение удаления ученика."""
+        return await self.students.remove_student_confirm(update, context)
+
+    async def remove_student_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение удаления ученика."""
+        return await self.students.remove_student_execute(update, context)
+
+    async def edit_student_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало редактирования ученика."""
+        return await self.students.edit_student_start(update, context)
+
+    async def edit_student_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выбор параметра для редактирования ученика."""
+        return await self.students.edit_student_select(update, context)
+
+    async def edit_student_name_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало изменения ФИО ученика."""
+        return await self.students.edit_student_name_start(update, context)
+
+    async def edit_student_grade_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало изменения класса ученика."""
+        return await self.students.edit_student_grade_start(update, context)
+
+    async def edit_student_phone_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало изменения телефона ученика."""
+        return await self.students.edit_student_phone_start(update, context)
+
+    async def edit_student_language_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало изменения языка ученика."""
+        return await self.students.edit_student_language_start(update, context)
+
+    async def set_student_language(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Установка языка ученика."""
+        return await self.students.set_student_language(update, context)
+
+    async def edit_student_status_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Переключение статуса ученика."""
+        return await self.students.edit_student_status_toggle(update, context)
+
     # === ДЕЛЕГИРОВАНИЕ МЕТОДОВ УПРАВЛЕНИЯ ТЕМАМИ ===
     
     async def topics_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -94,6 +138,55 @@ class AdminHandlers(AdminBaseHandler):
     async def remove_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.topics.remove_topic_start(update, context)
 
+    # Дополнительные методы тем
+    async def select_main_topic_for_new(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.select_main_topic_for_new(update, context)
+    
+    async def show_section_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.show_section_topics(update, context)
+    
+    async def add_base_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.add_base_topics_start(update, context)
+    
+    async def add_base_topic_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.add_base_topic_execute(update, context)
+    
+    async def add_all_missing_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.add_all_missing_topics_execute(update, context)
+    
+    async def edit_topic_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.edit_topic_select(update, context)
+    
+    async def edit_topic_name_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.edit_topic_name_start(update, context)
+    
+    async def edit_topic_desc_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.edit_topic_desc_start(update, context)
+    
+    async def edit_topic_toggle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.edit_topic_toggle_status(update, context)
+    
+    async def remove_topic_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.remove_topic_confirm(update, context)
+    
+    async def remove_topic_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.remove_topic_execute(update, context)
+    
+    async def merge_topics_select_target(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.merge_topics_select_target(update, context)
+    
+    async def merge_topics_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.merge_topics_confirm(update, context)
+    
+    async def merge_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.merge_topics_execute(update, context)
+    
+    async def remove_topic_permanent(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.remove_topic_permanent(update, context)
+    
+    async def remove_topic_permanent_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.topics.remove_topic_permanent_confirm(update, context)
+
     # === ДЕЛЕГИРОВАНИЕ МЕТОДОВ УПРАВЛЕНИЯ ВОПРОСАМИ ===
     
     async def questions_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -128,6 +221,31 @@ class AdminHandlers(AdminBaseHandler):
     async def delete_single_question_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.questions.delete_single_question_start(update, context)
 
+    # Дополнительные методы вопросов
+    async def process_pdf_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.questions.process_pdf_file(update, context)
+    
+    async def delete_questions_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.questions.delete_questions_confirm(update, context)
+    
+    async def delete_questions_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.questions.delete_questions_execute(update, context)
+    
+    async def add_question_topic_selected(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.questions.add_question_topic_selected(update, context)
+    
+    async def delete_single_question_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.questions.delete_single_question_confirm(update, context)
+    
+    async def delete_single_question_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.questions.delete_single_question_execute(update, context)
+    
+    async def generate_ai_explanation_for_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.questions.generate_ai_explanation_for_edit(update, context)
+    
+    async def manual_explanation_for_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.questions.manual_explanation_for_edit(update, context)
+
     # === ДЕЛЕГИРОВАНИЕ МЕТОДОВ УПРАВЛЕНИЯ АДМИНАМИ ===
     
     async def admins_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -145,6 +263,13 @@ class AdminHandlers(AdminBaseHandler):
     # Временные заглушки для админов
     async def remove_admin_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await self.admins.remove_admin_start(update, context)
+
+    # Дополнительные методы админов
+    async def remove_admin_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.admins.remove_admin_confirm(update, context)
+    
+    async def remove_admin_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await self.admins.remove_admin_execute(update, context)
 
     # === ДЕЛЕГИРОВАНИЕ МЕТОДОВ СТАТИСТИКИ ===
     
@@ -197,7 +322,87 @@ class AdminHandlers(AdminBaseHandler):
             await self.students.handle_student_by_id_grade(update, context, text)
             return True
         
-        # TODO: Добавить обработку других модулей
+        # Обработка редактирования учеников
+        elif action == 'edit_student_name':
+            await self.students.handle_edit_student_name(update, context, text)
+            return True
+        elif action == 'edit_student_grade':
+            await self.students.handle_edit_student_grade(update, context, text)
+            return True
+        elif action == 'edit_student_phone':
+            await self.students.handle_edit_student_phone(update, context, text)
+            return True
+        
+        # Обработка действий для тем
+        elif action == 'add_topic':
+            await self.topics.handle_add_topic(update, context, text)
+            return True
+        elif action == 'topic_description':
+            await self.topics.handle_topic_description(update, context, text)
+            return True
+        elif action == 'edit_topic_name':
+            await self.topics.handle_edit_topic_name(update, context, text)
+            return True
+        elif action == 'edit_topic_description':
+            await self.topics.handle_edit_topic_description(update, context, text)
+            return True
+        
+        # Обработка действий для вопросов
+        elif action == 'search_questions':
+            await self.questions.handle_search_questions(update, context, text)
+            return True
+        elif action == 'add_question_text':
+            await self.questions.handle_add_question_text(update, context, text)
+            return True
+        elif action == 'add_question_option_a':
+            await self.questions.handle_add_question_option_a(update, context, text)
+            return True
+        elif action == 'add_question_option_b':
+            await self.questions.handle_add_question_option_b(update, context, text)
+            return True
+        elif action == 'add_question_option_c':
+            await self.questions.handle_add_question_option_c(update, context, text)
+            return True
+        elif action == 'add_question_option_d':
+            await self.questions.handle_add_question_option_d(update, context, text)
+            return True
+        elif action == 'add_question_correct':
+            await self.questions.handle_add_question_correct(update, context, text)
+            return True
+        elif action == 'add_question_explanation':
+            await self.questions.handle_add_question_explanation(update, context, text)
+            return True
+        elif action == 'edit_question_search':
+            await self.questions.handle_edit_question_search(update, context, text)
+            return True
+        elif action == 'edit_question_id':
+            await self.questions.handle_edit_question_id(update, context, text)
+            return True
+        elif action == 'edit_question_explanation':
+            await self.questions.handle_edit_question_explanation(update, context, text)
+            return True
+        elif action == 'delete_single_question_search':
+            await self.questions.handle_delete_single_question_search(update, context, text)
+            return True
+        
+        # Обработка действий для админов
+        elif action == 'add_admin':
+            await self.admins.handle_add_admin(update, context, text)
+            return True
+        elif action == 'add_admin_username':
+            await self.admins.handle_add_admin_username(update, context, text)
+            return True
+        elif action == 'add_admin_fullname':
+            await self.admins.handle_add_admin_fullname(update, context, text)
+            return True
+        
+        # Обработка действий для базовой структуры
+        elif action == 'add_base_section_name':
+            await self.handle_add_base_section_name(update, context, text)
+            return True
+        elif action == 'add_base_section_subtopics':
+            await self.handle_add_base_section_subtopics(update, context, text)
+            return True
         
         return False
 
@@ -207,10 +412,45 @@ class AdminHandlers(AdminBaseHandler):
         """Обработка выбора языка при добавлении ученика."""
         return await self.students.handle_student_language_selection(update, context)
 
+    # === ОБРАБОТЧИКИ БАЗОВОЙ СТРУКТУРЫ ===
+    
+    async def handle_add_base_section_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE, section_name: str) -> None:
+        """Обработка названия базового раздела."""
+        await update.message.reply_text("🚧 Функция обработки названия базового раздела в разработке...")
+
+    async def handle_add_base_section_subtopics(self, update: Update, context: ContextTypes.DEFAULT_TYPE, subtopics_text: str) -> None:
+        """Обработка подтем базового раздела."""
+        await update.message.reply_text("🚧 Функция обработки подтем базового раздела в разработке...")
+
     # === ВРЕМЕННАЯ ЗАГЛУШКА ДЛЯ БАЗОВОЙ СТРУКТУРЫ ===
     
     async def manage_base_structure_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Временная заглушка для базовой структуры."""
         query = update.callback_query
         await self.safe_answer_callback(query)
-        await query.edit_message_text("🚧 Модуль базовой структуры в разработке...") 
+        await query.edit_message_text("🚧 Модуль базовой структуры в разработке...")
+
+    # Дополнительные методы базовой структуры
+    async def view_base_structure(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await super().view_base_structure(update, context)
+    
+    async def add_base_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await super().add_base_section_start(update, context)
+    
+    async def edit_base_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await super().edit_base_section_start(update, context)
+    
+    async def delete_base_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await super().delete_base_section_start(update, context)
+    
+    async def edit_base_section_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await super().edit_base_section_select(update, context)
+    
+    async def delete_base_section_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await super().delete_base_section_confirm(update, context)
+    
+    async def delete_base_section_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await super().delete_base_section_execute(update, context)
+    
+    async def confirm_add_student(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        return await super().confirm_add_student(update, context) 

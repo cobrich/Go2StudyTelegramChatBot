@@ -118,10 +118,75 @@ class AdminBaseHandler(BaseHandler):
         if not self.db.is_admin(user_id):
             return
         
-        action = context.user_data.get('admin_action')
-        
-        if action == 'upload_pdf':
-            # Этот метод будет в questions.py
-            pass
+        # Проверяем, ожидается ли PDF файл
+        if context.user_data.get('admin_action') == 'upload_pdf':
+            # Здесь должна быть обработка PDF, но пока заглушка
+            await update.message.reply_text("🚧 Обработка PDF файлов в разработке...")
         else:
-            await update.message.reply_text("❌ Неожиданный документ. Пожалуйста, используйте админ-панель для загрузки файлов.") 
+            await update.message.reply_text("❓ Неожиданный документ. Используйте команды админ-панели.")
+
+    # === ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ИЗ СТАРОГО ФАЙЛА ===
+
+    async def manage_base_structure_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Меню управления базовой структурой."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Модуль управления базовой структурой в разработке...")
+
+    async def view_base_structure(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Просмотр базовой структуры."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция просмотра базовой структуры в разработке...")
+
+    async def add_base_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало добавления базового раздела."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция добавления базового раздела в разработке...")
+
+    async def edit_base_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало редактирования базового раздела."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция редактирования базового раздела в разработке...")
+
+    async def delete_base_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало удаления базового раздела."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция удаления базового раздела в разработке...")
+
+    async def edit_base_section_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выбор базового раздела для редактирования."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция выбора базового раздела для редактирования в разработке...")
+
+    async def delete_base_section_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение удаления базового раздела."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция подтверждения удаления базового раздела в разработке...")
+
+    async def delete_base_section_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение удаления базового раздела."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция выполнения удаления базового раздела в разработке...")
+
+    async def confirm_add_student(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение добавления ученика."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция подтверждения добавления ученика в разработке...")
+
+    # === ОБРАБОТЧИКИ ТЕКСТА ДЛЯ БАЗОВОЙ СТРУКТУРЫ ===
+
+    async def handle_add_base_section_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE, section_name: str) -> None:
+        """Обработка названия базового раздела."""
+        await update.message.reply_text("🚧 Функция обработки названия базового раздела в разработке...")
+
+    async def handle_add_base_section_subtopics(self, update: Update, context: ContextTypes.DEFAULT_TYPE, subtopics_text: str) -> None:
+        """Обработка подтем базового раздела."""
+        await update.message.reply_text("🚧 Функция обработки подтем базового раздела в разработке...") 

@@ -173,4 +173,102 @@ class QuestionsHandler(AdminBaseHandler):
         """Временная заглушка для удаления одного вопроса."""
         query = update.callback_query
         await self.safe_answer_callback(query)
-        await query.edit_message_text("🚧 Функция удаления одного вопроса в разработке...") 
+        await query.edit_message_text("🚧 Функция удаления одного вопроса в разработке...")
+
+    # === ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ИЗ СТАРОГО ФАЙЛА ===
+
+    async def process_pdf_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Обработка PDF файла."""
+        await update.message.reply_text("🚧 Функция обработки PDF файла в разработке...")
+
+    async def delete_questions_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение удаления вопросов."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция подтверждения удаления вопросов в разработке...")
+
+    async def delete_questions_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение удаления вопросов."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция выполнения удаления вопросов в разработке...")
+
+    async def add_question_topic_selected(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выбор темы для добавления вопроса."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция выбора темы для добавления вопроса в разработке...")
+
+    async def delete_single_question_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение удаления одного вопроса."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция подтверждения удаления одного вопроса в разработке...")
+
+    async def delete_single_question_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение удаления одного вопроса."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция выполнения удаления одного вопроса в разработке...")
+
+    async def generate_ai_explanation_for_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Генерация ИИ объяснения для редактирования."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция генерации ИИ объяснения в разработке...")
+
+    async def manual_explanation_for_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Ручное объяснение для редактирования."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция ручного объяснения в разработке...")
+
+    # === ОБРАБОТЧИКИ ТЕКСТА ДЛЯ ВОПРОСОВ ===
+
+    async def handle_search_questions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_text: str) -> None:
+        """Обработка поиска вопросов."""
+        await update.message.reply_text("🚧 Функция поиска вопросов в разработке...")
+
+    async def handle_add_question_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE, question_text: str) -> None:
+        """Обработка текста вопроса."""
+        await update.message.reply_text("🚧 Функция обработки текста вопроса в разработке...")
+
+    async def handle_add_question_option_a(self, update: Update, context: ContextTypes.DEFAULT_TYPE, option_a: str) -> None:
+        """Обработка варианта A."""
+        await update.message.reply_text("🚧 Функция обработки варианта A в разработке...")
+
+    async def handle_add_question_option_b(self, update: Update, context: ContextTypes.DEFAULT_TYPE, option_b: str) -> None:
+        """Обработка варианта B."""
+        await update.message.reply_text("🚧 Функция обработки варианта B в разработке...")
+
+    async def handle_add_question_option_c(self, update: Update, context: ContextTypes.DEFAULT_TYPE, option_c: str) -> None:
+        """Обработка варианта C."""
+        await update.message.reply_text("🚧 Функция обработки варианта C в разработке...")
+
+    async def handle_add_question_option_d(self, update: Update, context: ContextTypes.DEFAULT_TYPE, option_d: str) -> None:
+        """Обработка варианта D."""
+        await update.message.reply_text("🚧 Функция обработки варианта D в разработке...")
+
+    async def handle_add_question_correct(self, update: Update, context: ContextTypes.DEFAULT_TYPE, correct_text: str) -> None:
+        """Обработка правильного ответа."""
+        await update.message.reply_text("🚧 Функция обработки правильного ответа в разработке...")
+
+    async def handle_add_question_explanation(self, update: Update, context: ContextTypes.DEFAULT_TYPE, explanation: str) -> None:
+        """Обработка объяснения вопроса."""
+        await update.message.reply_text("🚧 Функция обработки объяснения вопроса в разработке...")
+
+    async def handle_edit_question_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_text: str) -> None:
+        """Обработка поиска для редактирования вопроса."""
+        await update.message.reply_text("🚧 Функция поиска для редактирования вопроса в разработке...")
+
+    async def handle_edit_question_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE, question_id_text: str) -> None:
+        """Обработка ID вопроса для редактирования."""
+        await update.message.reply_text("🚧 Функция обработки ID вопроса для редактирования в разработке...")
+
+    async def handle_edit_question_explanation(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_explanation: str) -> None:
+        """Обработка нового объяснения вопроса."""
+        await update.message.reply_text("🚧 Функция обработки нового объяснения вопроса в разработке...")
+
+    async def handle_delete_single_question_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_text: str) -> None:
+        """Обработка поиска для удаления одного вопроса."""
+        await update.message.reply_text("🚧 Функция поиска для удаления одного вопроса в разработке...") 

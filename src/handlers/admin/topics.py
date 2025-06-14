@@ -211,4 +211,120 @@ class TopicsHandler(AdminBaseHandler):
         await self.safe_answer_callback(query)
         
         # Просто перенаправляем на список тем для обновления
-        await self.list_topics(update, context) 
+        await self.list_topics(update, context)
+
+    # === ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ИЗ СТАРОГО ФАЙЛА ===
+
+    async def select_main_topic_for_new(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выбор основной темы для новой подтемы."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция выбора основной темы в разработке...")
+
+    async def show_section_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Показать темы в разделе."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция просмотра тем раздела в разработке...")
+
+    async def add_base_topics_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало добавления базовых тем."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция добавления базовых тем в разработке...")
+
+    async def add_base_topic_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение добавления базовой темы."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция выполнения добавления базовой темы в разработке...")
+
+    async def add_all_missing_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Добавление всех отсутствующих тем."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция добавления всех отсутствующих тем в разработке...")
+
+    async def edit_topic_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выбор темы для редактирования."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция выбора темы для редактирования в разработке...")
+
+    async def edit_topic_name_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало редактирования названия темы."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция редактирования названия темы в разработке...")
+
+    async def edit_topic_desc_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало редактирования описания темы."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция редактирования описания темы в разработке...")
+
+    async def edit_topic_toggle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Переключение статуса темы."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция переключения статуса темы в разработке...")
+
+    async def remove_topic_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение удаления темы."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция подтверждения удаления темы в разработке...")
+
+    async def remove_topic_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение удаления темы."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция выполнения удаления темы в разработке...")
+
+    async def merge_topics_select_target(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выбор целевой темы для слияния."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция выбора целевой темы для слияния в разработке...")
+
+    async def merge_topics_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение слияния тем."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция подтверждения слияния тем в разработке...")
+
+    async def merge_topics_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение слияния тем."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция выполнения слияния тем в разработке...")
+
+    async def remove_topic_permanent(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Постоянное удаление темы."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция постоянного удаления темы в разработке...")
+
+    async def remove_topic_permanent_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение постоянного удаления темы."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция подтверждения постоянного удаления темы в разработке...")
+
+    # === ОБРАБОТЧИКИ ТЕКСТА ДЛЯ ТЕМ ===
+
+    async def handle_add_topic(self, update: Update, context: ContextTypes.DEFAULT_TYPE, topic_name: str) -> None:
+        """Обработка добавления темы."""
+        await update.message.reply_text("🚧 Функция добавления темы в разработке...")
+
+    async def handle_topic_description(self, update: Update, context: ContextTypes.DEFAULT_TYPE, description: str) -> None:
+        """Обработка описания темы."""
+        await update.message.reply_text("🚧 Функция обработки описания темы в разработке...")
+
+    async def handle_edit_topic_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_name: str) -> None:
+        """Обработка изменения названия темы."""
+        await update.message.reply_text("🚧 Функция изменения названия темы в разработке...")
+
+    async def handle_edit_topic_description(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_description: str) -> None:
+        """Обработка изменения описания темы."""
+        await update.message.reply_text("🚧 Функция изменения описания темы в разработке...") 

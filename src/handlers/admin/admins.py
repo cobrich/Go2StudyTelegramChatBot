@@ -98,10 +98,36 @@ class AdminsHandler(AdminBaseHandler):
         
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
-    # === ВРЕМЕННЫЕ ЗАГЛУШКИ ДЛЯ СОВМЕСТИМОСТИ ===
-    
     async def remove_admin_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Временная заглушка для удаления админа."""
         query = update.callback_query
         await self.safe_answer_callback(query)
-        await query.edit_message_text("🚧 Функция удаления админов в разработке...") 
+        await query.edit_message_text("🚧 Функция удаления админов в разработке...")
+
+    # === ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ИЗ СТАРОГО ФАЙЛА ===
+
+    async def remove_admin_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Подтверждение удаления админа."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция подтверждения удаления админа в разработке...")
+
+    async def remove_admin_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Выполнение удаления админа."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        await query.edit_message_text("🚧 Функция выполнения удаления админа в разработке...")
+
+    # === ОБРАБОТЧИКИ ТЕКСТА ДЛЯ АДМИНОВ ===
+
+    async def handle_add_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE, user_id_text: str) -> None:
+        """Обработка добавления админа."""
+        await update.message.reply_text("🚧 Функция добавления админа в разработке...")
+
+    async def handle_add_admin_username(self, update: Update, context: ContextTypes.DEFAULT_TYPE, username: str) -> None:
+        """Обработка username админа."""
+        await update.message.reply_text("🚧 Функция обработки username админа в разработке...")
+
+    async def handle_add_admin_fullname(self, update: Update, context: ContextTypes.DEFAULT_TYPE, fullname: str) -> None:
+        """Обработка ФИО админа."""
+        await update.message.reply_text("🚧 Функция обработки ФИО админа в разработке...") 
