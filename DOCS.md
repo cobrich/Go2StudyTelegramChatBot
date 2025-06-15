@@ -2604,3 +2604,40 @@ ALTER TABLE allowed_users ADD COLUMN has_access BOOLEAN DEFAULT 1;
 - All user information properly retrieved from unified table
 
 **Result**: Statistics module is correctly implemented and requires no changes.
+
+---
+
+### 🔧 Fix: Statistics Display - Students Only (January 2025)
+
+**✅ FIXED: Statistics now show only students, excluding admins**
+
+#### 🐛 Problem identified:
+- **Admin statistics showed "None" names** for some users
+- **Root cause**: Statistics included admins who are not in `allowed_users` table
+- **LEFT JOIN issue**: Query included all test results, even from users not in `allowed_users`
+- **Incorrect display**: Admins' test results appeared with empty names
+
+#### ✅ Solution implemented:
+
+**Changed SQL queries from LEFT JOIN to INNER JOIN:**
+- **Before**: `LEFT JOIN allowed_users au ON tr.user_id = au.user_id` (included all users)
+- **After**: `INNER JOIN allowed_users au ON tr.user_id = au.user_id` (only students)
+
+**Updated queries:**
+1. **Top topics statistics** - now shows only student activity
+2. **Top active students** - now guaranteed to have names from `allowed_users`
+3. **User history** - now shows "Last 20 student tests" instead of all tests
+
+#### 🎯 Result:
+- ✅ **No more "None" names** in statistics
+- ✅ **Students only** - admins excluded from student statistics
+- ✅ **Proper data integrity** - all displayed users have complete information
+- ✅ **Clear separation** - admin and student data properly separated
+
+#### 📊 What changed:
+- **Top 5 active students**: Now shows only actual students with names
+- **User history**: Now labeled as "Last 20 student tests"
+- **Data consistency**: All displayed users guaranteed to be in `allowed_users`
+
+**Files modified:**
+- `src/handlers/admin/stats.py` - Updated SQL queries to use INNER JOIN

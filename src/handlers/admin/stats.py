@@ -56,7 +56,7 @@ class StatsHandler(AdminBaseHandler):
                     SELECT tr.topic, COUNT(*) as test_count, AVG(tr.percentage) as avg_score,
                            au.full_name, au.grade
                     FROM test_results tr
-                    LEFT JOIN allowed_users au ON tr.user_id = au.user_id
+                    INNER JOIN allowed_users au ON tr.user_id = au.user_id
                     WHERE tr.timestamp >= ?
                     GROUP BY tr.topic, au.full_name, au.grade
                     ORDER BY test_count DESC
@@ -68,7 +68,7 @@ class StatsHandler(AdminBaseHandler):
                     SELECT tr.user_id, au.full_name, au.grade, COUNT(*) as test_count, 
                            AVG(tr.percentage) as avg_score
                     FROM test_results tr
-                    LEFT JOIN allowed_users au ON tr.user_id = au.user_id
+                    INNER JOIN allowed_users au ON tr.user_id = au.user_id
                     WHERE tr.timestamp >= ?
                     GROUP BY tr.user_id, au.full_name, au.grade
                     ORDER BY test_count DESC
@@ -137,7 +137,7 @@ class StatsHandler(AdminBaseHandler):
                         tr.topic, 
                         tr.percentage
                     FROM test_results tr
-                    LEFT JOIN allowed_users au ON tr.user_id = au.user_id
+                    INNER JOIN allowed_users au ON tr.user_id = au.user_id
                     ORDER BY tr.timestamp DESC
                     LIMIT 20
                 ''')
@@ -147,16 +147,16 @@ class StatsHandler(AdminBaseHandler):
                     text = "📋 <b>История активности</b>\n\nТестов не найдено."
                 else:
                     text = f"📋 <b>История активности</b>\n\n"
-                    text += f"Последние 20 тестов:\n\n"
+                    text += f"Последние 20 тестов учеников:\n\n"
                     
                     for i, (timestamp, full_name, username, user_id, topic, percentage) in enumerate(recent_tests, 1):
-                        # Исправленная логика определения имени
+                        # Теперь все пользователи гарантированно есть в allowed_users
                         if full_name:
                             name = full_name
                         elif username:
                             name = f"@{username}"
                         else:
-                            name = f"Пользователь {user_id}"  # Используем user_id вместо номера в списке
+                            name = f"Ученик {user_id}"
                         date_str = timestamp[:16] if timestamp else "н/д"
                         
                         text += f"{i}. <b>{name}</b>\n"
