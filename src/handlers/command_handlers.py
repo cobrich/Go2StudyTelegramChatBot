@@ -7,6 +7,7 @@ from utils.translations import get_message, get_language_change_warning
 from config.constants import HELP_TEXT, TOPICS
 from services.random_test_service import RandomTestService
 import sqlite3
+import random
 
 class CommandHandlers(BaseHandler):
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -422,12 +423,29 @@ class CommandHandlers(BaseHandler):
         # Convert questions data to the format expected by the test system
         questions = []
         for q_data in questions_data:
+            # Формируем список вариантов ответов как в QuestionService
+            options = [q_data.get('answer', '')]  # Сначала правильный ответ
+            
+            # Добавляем неправильные варианты
+            incorrect_options = q_data.get('incorrect_options', '')
+            if incorrect_options:
+                if isinstance(incorrect_options, str):
+                    incorrect_opts = [opt.strip() for opt in incorrect_options.split('|') if opt.strip()]
+                    options.extend(incorrect_opts)
+            
+            # Убеждаемся, что есть минимум 2 варианта
+            if len(options) < 2:
+                options.extend([f"Вариант {i}" for i in range(len(options), 4)])
+            
+            # Перемешиваем варианты
+            random.shuffle(options)
+            
             # Format: (question_text, correct_answer, options, options_list, source, image_path)
             question_tuple = (
-                q_data.get('question_text', ''),
-                q_data.get('correct_answer', ''),
-                q_data.get('options', ''),
-                q_data.get('options_list', []),
+                q_data.get('question', ''),  # Исправлено: 'question' вместо 'question_text'
+                q_data.get('answer', ''),    # Исправлено: 'answer' вместо 'correct_answer'
+                q_data.get('incorrect_options', ''),  # Исправлено: 'incorrect_options' вместо 'options'
+                options,  # Правильно сформированный список вариантов
                 'random_test',  # source
                 q_data.get('image_path', None)
             )
