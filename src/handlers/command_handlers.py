@@ -8,6 +8,7 @@ from config.constants import HELP_TEXT, TOPICS
 from services.random_test_service import RandomTestService
 import sqlite3
 import random
+import asyncio
 
 class CommandHandlers(BaseHandler):
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -187,9 +188,10 @@ class CommandHandlers(BaseHandler):
         await update.message.reply_text(id_text, parse_mode='Markdown')
 
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        text = update.message.text.strip()
+        """Handle text messages."""
         user_id = update.effective_user.id
         user_language = self.db.get_user_language(user_id)
+        text = update.message.text.strip()
         
         # Проверяем доступ пользователя перед обработкой любых сообщений
         if not self.db.check_user_access(user_id, update.effective_user.username):
@@ -200,11 +202,71 @@ class CommandHandlers(BaseHandler):
             )
             return
 
+        # Проверяем, является ли это командой (начинается с /)
+        if text.startswith('/'):
+            # Список разрешенных команд для учеников
+            allowed_student_commands = ['/start', '/reset', '/stop', '/help', '/myid']
+            
+            # Если пользователь не админ и команда не разрешена
+            if not self.db.is_admin(user_id) and text not in allowed_student_commands:
+                # Удаляем сообщение с неразрешенной командой
+                try:
+                    await update.message.delete()
+                except Exception:
+                    pass
+                
+                # Отправляем предупреждение и удаляем его через 3 секунды
+                warning_text = (
+                    "⚠️ Команда недоступна для учеников.\n\n"
+                    "🔹 Доступные команды:\n"
+                    "• /start - Главное меню\n"
+                    "• /reset - Сбросить состояние\n"
+                    "• /stop - Остановить бота\n"
+                    "• /help - Помощь"
+                )
+                
+                if user_language == 'kk':
+                    warning_text = (
+                        "⚠️ Команда оқушыларға қолжетімсіз.\n\n"
+                        "🔹 Қолжетімді командалар:\n"
+                        "• /start - Басты мәзір\n"
+                        "• /reset - Күйді тастау\n"
+                        "• /stop - Ботты тоқтату\n"
+                        "• /help - Көмек"
+                    )
+                
+                warning_msg = await update.message.reply_text(warning_text)
+                
+                # Асинхронно удаляем предупреждение через 4 секунды
+                asyncio.create_task(self._delete_message_after_delay(
+                    context.bot, 
+                    warning_msg.chat_id, 
+                    warning_msg.message_id, 
+                    4
+                ))
+                return
+
         # Проверяем, находится ли пользователь в активном тесте
         if self.db.is_user_active(user_id):
             # Пользователь в активном тесте, даем инструкции
             test_instruction = get_message('in_active_test_help', user_language)
-            await update.message.reply_text(test_instruction)
+            
+            # Удаляем сообщение пользователя
+            try:
+                await update.message.delete()
+            except Exception:
+                pass  # Игнорируем ошибки удаления
+            
+            # Отправляем инструкцию и удаляем её через 4 секунды (чуть дольше, так как текст больше)
+            instruction_msg = await update.message.reply_text(test_instruction)
+            
+            # Асинхронно удаляем сообщение через 4 секунды
+            asyncio.create_task(self._delete_message_after_delay(
+                context.bot, 
+                instruction_msg.chat_id, 
+                instruction_msg.message_id, 
+                4
+            ))
             return
 
         # Handle language change confirmation
@@ -329,14 +391,47 @@ class CommandHandlers(BaseHandler):
             if context.user_data.get('in_topic_selection'):
                 # Пользователь в процессе выбора темы, даем понятные инструкции
                 instruction_text = get_message('in_topic_selection_help', user_language)
-                await update.message.reply_text(instruction_text)
+                
+                # Удаляем сообщение пользователя
+                try:
+                    await update.message.delete()
+                except Exception:
+                    pass  # Игнорируем ошибки удаления
+                
+                # Отправляем инструкцию и удаляем её через 3 секунды
+                instruction_msg = await update.message.reply_text(instruction_text)
+                
+                # Асинхронно удаляем сообщение через 3 секунды
+                asyncio.create_task(self._delete_message_after_delay(
+                    context.bot, 
+                    instruction_msg.chat_id, 
+                    instruction_msg.message_id, 
+                    3
+                ))
+                
             else:
                 # Unknown command
                 unknown_text = get_message('topic_not_selected', user_language)
-                await update.message.reply_text(
+                
+                # Удаляем сообщение пользователя
+                try:
+                    await update.message.delete()
+                except Exception:
+                    pass  # Игнорируем ошибки удаления
+                
+                # Отправляем сообщение и удаляем его через 3 секунды
+                unknown_msg = await update.message.reply_text(
                     unknown_text,
                     reply_markup=get_main_menu_markup(user_id)
                 )
+                
+                # Асинхронно удаляем сообщение через 3 секунды
+                asyncio.create_task(self._delete_message_after_delay(
+                    context.bot, 
+                    unknown_msg.chat_id, 
+                    unknown_msg.message_id, 
+                    3
+                ))
 
     async def handle_language_change(self, update: Update, context: ContextTypes.DEFAULT_TYPE, language_text: str) -> None:
         """Handle language change request."""
@@ -533,3 +628,12 @@ class CommandHandlers(BaseHandler):
                 error_text,
                 reply_markup=get_main_menu_markup(user_id)
             ) 
+
+    async def _delete_message_after_delay(self, bot, chat_id: int, message_id: int, delay_seconds: int) -> None:
+        """Удаляет сообщение через указанное количество секунд."""
+        try:
+            await asyncio.sleep(delay_seconds)
+            await bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception as e:
+            # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
+            logging.debug(f"Could not delete message {message_id} in chat {chat_id}: {e}") 
