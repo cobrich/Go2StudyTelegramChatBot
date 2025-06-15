@@ -10,14 +10,14 @@ class AIService:
         genai.configure(api_key=GEMINI_API_KEY)
         self.model = genai.GenerativeModel(GEMINI_MODEL)
 
-    def generate_task(self, topic: str, main_topic: str = None) -> Tuple[Optional[str], Optional[str], Optional[List[str]], Optional[str]]:
+    def generate_task(self, topic: str, main_topic: str = None, language: str = 'ru') -> Tuple[Optional[str], Optional[str], Optional[List[str]], Optional[str]]:
         """Generate a single task for the given topic."""
         # Формируем контекст темы
         if main_topic:
             # Убираем эмодзи из основной темы для чистоты
             clean_main_topic = main_topic.split(' ', 1)[-1] if ' ' in main_topic else main_topic
             topic_context = f"Тема '{topic}' из раздела '{clean_main_topic}'"
-            specific_requirements = self._get_topic_specific_requirements(topic, clean_main_topic)
+            specific_requirements = self._get_topic_specific_requirements(topic, clean_main_topic, language)
         else:
             topic_context = f"Тема '{topic}'"
             specific_requirements = ""
@@ -96,7 +96,7 @@ class AIService:
         # Remove leading and trailing spaces
         return text.strip() 
 
-    def _get_topic_specific_requirements(self, topic: str, main_topic: str) -> str:
+    def _get_topic_specific_requirements(self, topic: str, main_topic: str, language: str = 'ru') -> str:
         """Получить специфические требования для темы на основе раздела."""
         topic_lower = topic.lower()
         main_topic_lower = main_topic.lower()

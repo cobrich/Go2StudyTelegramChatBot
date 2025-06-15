@@ -288,14 +288,9 @@ class QuestionService:
         all_tasks = [task for task in all_tasks if task is not None and len(task) >= 5]
         logging.info(f"[get_or_generate_tasks] Total tasks after all stages: {len(all_tasks)}")
         if len(all_tasks) < needed:
-            logging.warning(f"[get_or_generate_tasks] Could only generate {len(all_tasks)} tasks out of {needed} needed. Trying one more time...")
-            final_tasks = await self.get_or_generate_tasks(
-                user_id, topic, needed, 
-                force_ai=True,
-                existing_question_texts_to_exclude=existing_question_texts_to_exclude,
-                is_retake=is_retake
-            )
-            return final_tasks
+            logging.warning(f"[get_or_generate_tasks] Could only generate {len(all_tasks)} tasks out of {needed} needed.")
+            # Возвращаем то, что удалось сгенерировать, вместо рекурсивного вызова
+            return all_tasks
         # Лог финального списка вопросов - только после фильтрации
         for idx, q in enumerate(all_tasks[:needed]):
             if q is not None and len(q) >= 5:

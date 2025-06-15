@@ -151,7 +151,7 @@ def build_question_keyboard(options: list, q_num: int, max_reached: int, total_q
         if is_random_test:
             # Для случайных тестов показываем кнопку "В главное меню"
             main_menu_text = get_message('main_menu', user_language)
-            keyboard.append([InlineKeyboardButton(f"🏠 {main_menu_text}", callback_data="main_menu")])
+            keyboard.append([InlineKeyboardButton(f"{main_menu_text}", callback_data="main_menu")])
         else:
             # Для обычных тестов показываем кнопку "Назад к темам"
             back_to_topics_text = get_message('back_to_topics', user_language)

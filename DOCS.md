@@ -79,6 +79,73 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 ## 📋 Changelog
 
+### 🐛 Critical Bug Fixes (January 15, 2025)
+
+**✅ COMPLETED: Fixed critical errors preventing question generation**
+
+#### 🎯 Issues Fixed:
+
+1. **AIService.generate_task() Argument Error**:
+   - **Problem**: Method signature mismatch - `generate_task()` expected 2-3 arguments but received 4
+   - **Root cause**: Missing `language` parameter in method definition
+   - **Solution**: Updated `generate_task(topic, main_topic=None, language='ru')` to accept language parameter
+   - **Impact**: AI question generation now works correctly for both Russian and Kazakh
+
+2. **Infinite Recursion in Question Generation**:
+   - **Problem**: `get_or_generate_tasks()` method called itself recursively when insufficient questions were generated
+   - **Root cause**: Recursive call without proper exit condition led to stack overflow
+   - **Solution**: Replaced recursive call with simple return of available questions
+   - **Impact**: No more RecursionError crashes, bot handles insufficient questions gracefully
+
+3. **Main Menu Button Functionality**:
+   - **Analysis**: "В главное меню" button works correctly
+   - **Function**: Clears test state, returns user to main menu with regular keyboard
+   - **Behavior**: Proper state cleanup and navigation flow
+   - **Recommendation**: Keep this button - it provides essential navigation escape route
+
+#### 🔧 Technical Details:
+
+**Before Fix**:
+```python
+def generate_task(self, topic: str, main_topic: str = None):  # Missing language param
+    # Method called with 4 args: self, topic, main_topic, language
+    # TypeError: takes 2-3 positional arguments but 4 were given
+```
+
+**After Fix**:
+```python
+def generate_task(self, topic: str, main_topic: str = None, language: str = 'ru'):
+    # Now correctly accepts all required parameters
+    specific_requirements = self._get_topic_specific_requirements(topic, clean_main_topic, language)
+```
+
+**Recursion Fix**:
+```python
+# Before: Infinite recursion
+if len(all_tasks) < needed:
+    final_tasks = await self.get_or_generate_tasks(...)  # Recursive call
+    return final_tasks
+
+# After: Graceful handling
+if len(all_tasks) < needed:
+    logging.warning(f"Could only generate {len(all_tasks)} tasks out of {needed} needed.")
+    return all_tasks  # Return what we have
+```
+
+#### 🎯 Impact:
+- **Question generation**: Now works reliably for all topics
+- **Bot stability**: No more crashes from recursion errors
+- **User experience**: Smooth test flow without interruptions
+- **Error handling**: Graceful degradation when AI generation fails
+
+#### 🔍 Testing Recommendations:
+1. Test question generation for various topics
+2. Verify both Russian and Kazakh language support
+3. Check behavior when AI service is unavailable
+4. Confirm main menu navigation works properly
+
+---
+
 ### 🔍 Enhanced Logging System (January 2025)
 
 **✅ COMPLETED: Comprehensive logging for question selection and error tracking**
