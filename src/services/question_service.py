@@ -29,6 +29,10 @@ class QuestionService:
         if len(explanation) < 10 or len(explanation) > 2000:
             return False, f"Неправильная длина объяснения: {len(explanation)} символов"
         
+        # НОВАЯ ПРОВЕРКА: Соответствие ответа теме
+        if not self._validate_answer_topic_consistency(correct_answer, topic):
+            return False, f"Ответ '{correct_answer}' не соответствует теме '{topic}'"
+        
         # Проверка на признаки ошибок в тексте
         error_indicators = [
             "что-то не так", "ошибка в условии", "задача поставлена некорректно",
@@ -53,7 +57,7 @@ class QuestionService:
             if indicator in explanation_lower:
                 return False, f"Обнаружена мета-информация: '{indicator}'"
         
-        # НОВАЯ ПРОВЕРКА: Соответствие ответа и объяснения
+        # Проверка соответствия ответа и объяснения
         if not self._validate_answer_explanation_consistency(correct_answer, explanation):
             return False, "Ответ не соответствует объяснению"
         
@@ -64,6 +68,73 @@ class QuestionService:
         
         return True, ""
     
+    def _validate_answer_topic_consistency(self, answer: str, topic: str) -> bool:
+        """
+        Проверяет соответствие ответа теме.
+        
+        Returns:
+            bool: True если ответ соответствует теме
+        """
+        import re
+        
+        topic_lower = topic.lower()
+        answer_lower = answer.lower()
+        
+        # Извлекаем числовые значения из ответа
+        number_matches = re.findall(r'-?\d+(?:[.,]\d+)?', answer)
+        
+        if "натуральн" in topic_lower:
+            # Для натуральных чисел ответ должен быть только положительным целым числом
+            if number_matches:
+                try:
+                    for num_str in number_matches:
+                        num = float(num_str.replace(',', '.'))
+                        # Проверяем что число положительное и целое
+                        if num <= 0 or num != int(num):
+                            return False
+                except ValueError:
+                    return False
+            # Проверяем что в ответе нет дробей, отрицательных чисел, нуля
+            if any(indicator in answer_lower for indicator in ['.', ',', '/', '-', 'ноль', 'нуль']):
+                # Исключение для случаев типа "5-6" (диапазон) или "10-15"
+                if not re.match(r'^\d+-\d+', answer.strip()):
+                    return False
+        
+        elif "целые" in topic_lower:
+            # Для целых чисел ответ должен быть целым (может быть отрицательным или нулем)
+            if number_matches:
+                try:
+                    for num_str in number_matches:
+                        num = float(num_str.replace(',', '.'))
+                        # Проверяем что число целое
+                        if num != int(num):
+                            return False
+                except ValueError:
+                    return False
+            # Проверяем что в ответе нет дробей
+            if any(indicator in answer_lower for indicator in ['.', ',', '/']):
+                return False
+        
+        elif "обыкновенн" in topic_lower and "дроб" in topic_lower:
+            # Для обыкновенных дробей ответ должен содержать дробь или быть целым числом
+            has_fraction = '/' in answer
+            has_decimal = '.' in answer or ',' in answer
+            if has_decimal and not has_fraction:
+                return False  # Десятичная дробь недопустима
+        
+        elif "десятичн" in topic_lower and "дроб" in topic_lower:
+            # Для десятичных дробей ответ должен содержать десятичную дробь или быть целым числом
+            has_fraction = '/' in answer
+            if has_fraction:
+                return False  # Обыкновенная дробь недопустима
+        
+        elif "процент" in topic_lower:
+            # Для процентов ответ должен содержать знак % или слово "процент"
+            if '%' not in answer and 'процент' not in answer_lower:
+                return False
+        
+        return True
+
     def _validate_answer_explanation_consistency(self, answer: str, explanation: str) -> bool:
         """
         Проверяет соответствие между ответом и объяснением.
