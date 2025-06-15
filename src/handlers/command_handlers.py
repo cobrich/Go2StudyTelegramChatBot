@@ -391,7 +391,7 @@ class CommandHandlers(BaseHandler):
                 except Exception:
                     pass
                 
-                # Показываем инструкцию и удаляем через 3 секунды
+                # Показываем инструкцию и удаляем через 6 секунд
                 instruction_text = get_message('in_topic_selection_help', user_language)
                 instruction_msg = await update.message.reply_text(instruction_text)
                 
@@ -399,7 +399,7 @@ class CommandHandlers(BaseHandler):
                     context.bot, 
                     instruction_msg.chat_id, 
                     instruction_msg.message_id, 
-                    3
+                    6
                 ))
                 return
             
@@ -419,7 +419,7 @@ class CommandHandlers(BaseHandler):
                     delay = 4
                 else:
                     instruction_text = get_message('in_topic_selection_help', user_language)
-                    delay = 3
+                    delay = 6
                 
                 instruction_msg = await update.message.reply_text(instruction_text)
                 
@@ -447,7 +447,7 @@ class CommandHandlers(BaseHandler):
                     delay = 4
                 else:
                     instruction_text = get_message('in_topic_selection_help', user_language)
-                    delay = 3
+                    delay = 6
                 
                 instruction_msg = await update.message.reply_text(instruction_text)
                 
@@ -475,7 +475,7 @@ class CommandHandlers(BaseHandler):
                     delay = 4
                 else:
                     instruction_text = get_message('in_topic_selection_help', user_language)
-                    delay = 3
+                    delay = 6
                 
                 instruction_msg = await update.message.reply_text(instruction_text)
                 
@@ -505,7 +505,7 @@ class CommandHandlers(BaseHandler):
                         delay = 4
                     else:
                         instruction_text = get_message('in_topic_selection_help', user_language)
-                        delay = 3
+                        delay = 6
                     
                     instruction_msg = await update.message.reply_text(instruction_text)
                     
@@ -540,15 +540,15 @@ class CommandHandlers(BaseHandler):
                 except Exception:
                     pass  # Игнорируем ошибки удаления
                 
-                # Отправляем инструкцию и удаляем её через 3 секунды
+                # Отправляем инструкцию и удаляем её через 6 секунд
                 instruction_msg = await update.message.reply_text(instruction_text)
                 
-                # Асинхронно удаляем сообщение через 3 секунды
+                # Асинхронно удаляем сообщение через 6 секунд
                 asyncio.create_task(self._delete_message_after_delay(
                     context.bot, 
                     instruction_msg.chat_id, 
                     instruction_msg.message_id, 
-                    3
+                    6
                 ))
                 
             else:
