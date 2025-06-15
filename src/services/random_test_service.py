@@ -5,7 +5,7 @@
 
 import random
 from typing import List, Dict, Any, Optional
-from services.database import Database
+from .database import Database
 import logging
 
 logger = logging.getLogger(__name__)
@@ -124,7 +124,8 @@ class RandomTestService:
     def _get_balanced_questions_from_topics(self, questions_by_topic: Dict[str, List[Dict]], 
                                           total_count: int) -> List[Dict[str, Any]]:
         """
-        Равномерно распределяет вопросы по темам.
+        Равномерно распределяет вопросы по темам, но если вопросов недостаточно,
+        добирает из доступных тем.
         
         Args:
             questions_by_topic: Словарь {тема: [вопросы]}
@@ -136,16 +137,38 @@ class RandomTestService:
         if not questions_by_topic:
             return []
         
-        topics = list(questions_by_topic.keys())
+        # Фильтруем темы, в которых есть вопросы
+        topics_with_questions = {topic: questions for topic, questions in questions_by_topic.items() 
+                               if questions}
+        
+        if not topics_with_questions:
+            return []
+        
+        topics = list(topics_with_questions.keys())
         selected_questions = []
         
+        # Если тем мало, используем простую стратегию
+        if len(topics) <= 3:
+            # Берем вопросы из всех доступных тем пропорционально
+            all_available_questions = []
+            for questions in topics_with_questions.values():
+                all_available_questions.extend(questions)
+            
+            # Если доступных вопросов меньше чем нужно, берем все
+            if len(all_available_questions) <= total_count:
+                return all_available_questions
+            else:
+                # Выбираем случайные вопросы
+                return random.sample(all_available_questions, total_count)
+        
+        # Для большого количества тем используем сбалансированное распределение
         # Базовое количество вопросов на тему
         base_per_topic = total_count // len(topics)
         remainder = total_count % len(topics)
         
-        # Распределяем вопросы по темам
+        # Первый проход - берем базовое количество из каждой темы
         for i, topic in enumerate(topics):
-            topic_questions = questions_by_topic[topic]
+            topic_questions = topics_with_questions[topic]
             
             # Количество вопросов для этой темы
             questions_for_topic = base_per_topic
@@ -161,7 +184,27 @@ class RandomTestService:
                 selected = random.sample(topic_questions, questions_for_topic)
                 selected_questions.extend(selected)
         
-        return selected_questions
+        # Если не набрали нужное количество, добираем из оставшихся вопросов
+        if len(selected_questions) < total_count:
+            # Собираем все неиспользованные вопросы
+            used_question_ids = {q.get('id') for q in selected_questions if q.get('id')}
+            remaining_questions = []
+            
+            for questions in topics_with_questions.values():
+                for q in questions:
+                    if q.get('id') not in used_question_ids:
+                        remaining_questions.append(q)
+            
+            # Добираем недостающие вопросы
+            needed = total_count - len(selected_questions)
+            if remaining_questions:
+                if len(remaining_questions) <= needed:
+                    selected_questions.extend(remaining_questions)
+                else:
+                    additional = random.sample(remaining_questions, needed)
+                    selected_questions.extend(additional)
+        
+        return selected_questions[:total_count]  # Гарантируем точное количество
     
     def get_test_statistics(self, user_id: int) -> Dict[str, Any]:
         """
