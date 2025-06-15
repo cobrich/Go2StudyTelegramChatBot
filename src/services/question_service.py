@@ -11,8 +11,8 @@ class QuestionService:
     def __init__(self, db: Database, ai_service: AIService):
         self.db = db
         self.ai_service = ai_service
-        # Флаг для использования нового метода генерации (по умолчанию False для совместимости)
-        self.use_v3_generation = False
+        # Флаг для использования нового метода генерации (по умолчанию True - используем новый метод)
+        self.use_v3_generation = True
 
     def enable_v3_generation(self, enable: bool = True):
         """Включает/выключает использование нового метода генерации v3"""
