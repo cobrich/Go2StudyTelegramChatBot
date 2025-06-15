@@ -521,13 +521,27 @@ class StudentsHandler(AdminBaseHandler):
                 
                 username, full_name = student
                 
-                # Удаляем пользователя из allowed_users
+                # Удаляем все связанные данные ученика
+                # 1. Удаляем результаты тестов
+                cursor.execute('DELETE FROM test_results WHERE user_id = ?', (user_id,))
+                deleted_results = cursor.rowcount
+                
+                # 2. Удаляем ошибки пользователя
+                cursor.execute('DELETE FROM user_errors WHERE user_id = ?', (user_id,))
+                deleted_errors = cursor.rowcount
+                
+                # 3. Удаляем пользователя из allowed_users
                 cursor.execute('DELETE FROM allowed_users WHERE user_id = ?', (user_id,))
+                
+                conn.commit()
                 
                 # Формируем сообщение об успехе
                 identifier = f"@{username}" if username else f"ID: {user_id}"
                 success_text = f"✅ <b>Ученик удален</b>\n\n"
-                success_text += f"Ученик {identifier} ({full_name}) успешно удален из системы."
+                success_text += f"Ученик {identifier} ({full_name}) успешно удален из системы.\n\n"
+                success_text += f"📊 <b>Удалено данных:</b>\n"
+                success_text += f"• Результатов тестов: {deleted_results}\n"
+                success_text += f"• Записей об ошибках: {deleted_errors}"
                 
                 keyboard = [
                     [InlineKeyboardButton("🗑️ Удалить еще", callback_data="remove_student")],

@@ -2539,3 +2539,39 @@ ALTER TABLE allowed_users ADD COLUMN has_access BOOLEAN DEFAULT 1;
 - ✅ Четкое разделение ответственности между полями
 - ✅ Улучшенная админ-панель с детальной информацией
 - ✅ Обратная совместимость сохранена
+
+---
+
+### 🐛 Bug Fix: Complete Student Data Deletion (January 2025)
+
+**✅ FIXED: Student deletion now removes all associated data**
+
+#### 🐛 Problem:
+- When deleting a student via admin panel, only the record from `allowed_users` table was removed
+- Associated data in `user_errors` and `test_results` tables remained in the database
+- This caused data inconsistency and potential privacy issues
+
+#### ✅ Solution Implemented:
+1. **Updated `remove_student_execute()` method** in `src/handlers/admin/students.py`:
+   - Added deletion of all test results: `DELETE FROM test_results WHERE user_id = ?`
+   - Added deletion of all user errors: `DELETE FROM user_errors WHERE user_id = ?`
+   - Maintained proper deletion order to respect foreign key constraints
+   - Added statistics display showing how many records were deleted
+
+2. **Enhanced user feedback**:
+   - Success message now shows count of deleted test results and error records
+   - Format: "Deleted data: • Test results: X • Error records: Y"
+
+#### 🔧 Technical Details:
+- **File modified**: `src/handlers/admin/students.py`
+- **Method**: `remove_student_execute()`
+- **Database operations**: Now performs 3 DELETE operations in correct order:
+  1. `DELETE FROM test_results WHERE user_id = ?`
+  2. `DELETE FROM user_errors WHERE user_id = ?` 
+  3. `DELETE FROM allowed_users WHERE user_id = ?`
+
+#### ✅ Result:
+- Complete data cleanup when removing students
+- No orphaned records in database
+- Better privacy compliance
+- Transparent feedback to administrators
