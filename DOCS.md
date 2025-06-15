@@ -934,7 +934,7 @@ The bot now provides a seamless experience for both Russian and Kazakh users wit
 
 #### 🌐 Казахские переводы:
 - **Полный перевод всех разделов и подтем** на казахский язык
-- **Обновлены словари переводов** `TOPIC_TRANSLATION` и `MAIN_TOPICS_KK`
+- **Обновлены словари переводов** `TOPIC_TRANSLATION` и `TOPIC_TRANSLATION_REVERSE`
 - **Синхронизированная структура** - одинаковое количество тем в обоих языках
 
 #### 🎯 Преимущества новой структуры:
@@ -3458,3 +3458,670 @@ CREATE TABLE user_errors (
 ---
 
 ## Архитектура проекта
+
+### Админ-хендлеры (`src/handlers/admin/`)
+- `base.py` - Базовый класс и главная админ-панель
+- `topics.py` - Управление темами (создание, редактирование, удаление)
+- `sections.py` - **НОВЫЙ** Управление разделами (main_topics)
+- `students.py` - Управление учениками
+- `admins.py` - Управление администраторами  
+- `questions.py` - Управление вопросами
+- `stats.py` - Статистика и отчеты
+- `__init__.py` - Главный класс, объединяющий все модули
+
+### База данных (`src/services/database.py`)
+Методы для работы с темами:
+- `get_all_topics()` - получение всех тем
+- `add_topic()` - добавление темы
+- `update_topic()` - обновление темы
+- `delete_topic()` - удаление темы
+- `get_subtopics_by_main_topic()` - получение подтем по основной теме
+- `toggle_topic_status()` - переключение статуса темы
+- `update_topic_name()` - обновление названия темы
+- `update_topic_description()` - обновление описания темы
+- `delete_topic_completely()` - полное удаление темы
+
+### Основные функции
+1. **Управление темами** - полный CRUD для тем с языковой поддержкой
+2. **Управление разделами** - полный CRUD для основных разделов (main_topics)
+3. **Управление учениками** - добавление, редактирование, удаление учеников
+4. **Управление вопросами** - загрузка PDF, создание, редактирование вопросов
+5. **Статистика** - детальная аналитика по темам и ученикам
+
+### 2024-12-19: Исправление обработки PDF файлов в модульном коде
+
+**Проблема:** В новом модульном коде обработка PDF файлов не работала - в логах не было информации о загрузке файлов, показывались только заглушки.
+
+**Причина:** В базовом классе `AdminBaseHandler` методы `handle_admin_document` и `handle_admin_text` содержали только заглушки вместо реальной обработки.
+
+**Решение:** Исправлена архитектура обработки документов и текста в модульном коде:
+
+#### ✅ Исправления в `src/handlers/admin/base.py`:
+
+1. **Метод `handle_admin_document`**:
+   - Заменена заглушка на реальную обработку PDF
+   - Добавлено создание экземпляра `QuestionsHandler` для обработки PDF файлов
+   - Теперь корректно вызывается `process_pdf_file` из модуля вопросов
+
+2. **Метод `handle_admin_text`**:
+   - Добавлена полная делегация обработки текста в соответствующие модули
+   - Реализована обработка всех действий для вопросов:
+     - `search_questions` - поиск вопросов
+     - `add_question_*` - добавление вопросов (все этапы)
+     - `edit_question_*` - редактирование вопросов
+     - `delete_single_question_search` - удаление отдельных вопросов
+
+#### 🔧 Техническая реализация:
+
+```python
+# Исправленная обработка PDF файлов
+async def handle_admin_document(self, update, context):
+    if context.user_data.get('admin_action') == 'upload_pdf':
+        from .questions import QuestionsHandler
+        questions_handler = QuestionsHandler(self.db, self.question_service)
+        await questions_handler.process_pdf_file(update, context)
+```
+
+#### 📊 Результат:
+
+- ✅ PDF файлы теперь корректно обрабатываются в новом модульном коде
+- ✅ Все текстовые действия для вопросов работают правильно
+- ✅ Логирование PDF обработки функционирует как в старом коде
+- ✅ ИИ генерация объяснений работает при загрузке PDF
+- ✅ Полная совместимость функциональности со старым кодом
+
+### 2024-12-19: Полная реализация функциональности "Управление вопросами"
+
+**Проблема:** В новом модульном коде `src/handlers/admin/questions.py` большинство функций управления вопросами были только заглушками.
+
+**Решение:** Реализована полная функциональность управления вопросами, перенесенная из старого файла `admin_handlers_old.py`:
+
+#### ✅ Реализованные функции:
+
+1. **Обработка PDF файлов** (`process_pdf_file`)
+   - Полная загрузка и обработка PDF файлов
+   - Генерация ИИ объяснений для вопросов
+   - Валидация формата и размера файлов
+   - Статистика обработки
+
+2. **Добавление вопросов** (`add_question_start`, `add_question_topic_selected`)
+   - Выбор темы из активных тем
+   - Пошаговый ввод вопроса и вариантов ответов
+   - Автоматическая генерация ИИ объяснений
+   - Резервный ручной ввод объяснений
+
+3. **Редактирование вопросов** (`edit_question_start`, `edit_question_search`)
+   - Поиск вопросов по тексту
+   - Выбор вопроса по ID
+   - ИИ генерация новых объяснений
+   - Ручное редактирование объяснений
+
+4. **Поиск вопросов** (`search_questions_start`, `handle_search_questions`)
+   - Поиск по тексту вопроса
+   - Отображение результатов с ID и темами
+   - Ограничение до 20 результатов
+
+5. **Удаление вопросов** (`delete_questions_start`, `delete_single_question_start`)
+   - Удаление всех вопросов по теме
+   - Удаление отдельных вопросов по ID
+   - Подтверждение операций удаления
+
+6. **Обработчики текста** (15+ методов)
+   - Полный цикл добавления вопросов (7 этапов)
+   - Поиск и редактирование вопросов
+   - Обработка всех пользовательских вводов
+
+#### 🤖 ИИ интеграция:
+
+- Автоматическая генерация объяснений при добавлении вопросов
+- ИИ генерация при обработке PDF файлов
+- Резервный ручной ввод при ошибках ИИ
+- Сохранение всех ИИ вопросов в базу данных
+
+#### 📊 Статистика реализации:
+
+- **Заменено заглушек:** 15+
+- **Добавлено строк кода:** ~800
+- **Реализовано методов:** 25+
+- **Совместимость:** 100% со старым кодом
+
+#### 🔧 Архитектурные улучшения:
+
+- Модульная структура с четким разделением ответственности
+- Улучшенная обработка ошибок
+- Консистентная навигация между функциями
+- Оптимизированные SQL запросы
+- Логирование всех операций
+
+**Результат:** Новый модульный код теперь полностью функционален и готов к использованию в продакшене.
+
+### 2024-12-19: Исправление кнопки "Обновить" в статистике вопросов
+
+**Проблема:** Кнопка "🔄 Обновить" в статистике вопросов вызывала ошибку `BadRequest: Message is not modified` при повторном нажатии.
+
+**Причина:** Telegram API не позволяет заменять сообщение на точно такое же содержимое. Поскольку статистика вопросов показывает текущее состояние базы данных, при повторном запросе данные остаются теми же.
+
+**Решение:** Удалена кнопка "🔄 Обновить" из статистики вопросов, так как:
+- Статистика показывает актуальные данные при каждом открытии
+- Данные изменяются только при добавлении/удалении вопросов
+- После таких операций пользователь автоматически возвращается к статистике
+- Кнопка была избыточной и вызывала ошибки
+
+**Результат:** 
+- ✅ Исправлена ошибка при повторном нажатии
+- ✅ Упрощен интерфейс статистики
+- ✅ Сохранена вся функциональность
+
+### 2024-12-19: Исправление обработки PDF файлов в модульном коде
+
+## 2025-01-15 - Исправлена проблема доступа пользователя
+
+### Проблема
+Пользователь с ID `1117916124` (@IRON_MAN03) не мог получить доступ к боту, несмотря на то что был добавлен в `allowed_users`.
+
+### Диагностика
+1. **Проверка структуры БД**: Пользователь присутствовал в таблице `allowed_users`
+2. **Анализ кода проверки доступа**: 
+   - Метод `check_user_access()` проверяет:
+     - Админские права (`is_admin()`)
+     - Доступ по username (`is_user_allowed()`)
+     - Доступ по user_id (`is_user_allowed_by_id()`)
+   - Оба метода `is_user_allowed()` и `is_user_allowed_by_id()` проверяют поле `is_active`
+
+### Корневая причина
+Пользователь был в таблице `allowed_users`, но с `is_active = 0`, что блокировало доступ.
+
+**Данные пользователя:**
+```sql
+id: 4
+username: IRON_MAN03
+full_name: Төлеген Шыңғыс
+grade: 9
+is_active: 0  ← ПРОБЛЕМА
+user_id: 1117916124
+language: kk
+```
+
+### Решение
+Активировал пользователя в базе данных:
+```sql
+UPDATE allowed_users SET is_active = 1 WHERE user_id = 1117916124;
+```
+
+### Результат
+Пользователь теперь имеет доступ к боту. Поле `is_active` установлено в `1`.
+
+### Рекомендации для админов
+При добавлении пользователей через админ-панель убедиться что:
+1. Пользователь добавлен с `is_active = 1`
+2. Если пользователь не может войти, проверить статус `is_active` в таблице `allowed_users`
+3. Использовать админ-команды для активации/деактивации пользователей
+
+### Техническая информация
+- **Таблица проверки доступа**: `allowed_users`
+- **Ключевые поля**: `user_id`, `username`, `is_active`
+- **Методы проверки**: `check_user_access()`, `is_user_allowed()`, `is_user_allowed_by_id()`
+
+---
+
+### 🔧 Bug Fix: Замена обращений к таблице users на allowed_users (Январь 2025)
+
+**✅ ИСПРАВЛЕНО: Заменены все обращения к удаленной таблице `users` на `allowed_users`**
+
+#### 🐛 Проблема:
+- После удаления таблицы `users` код продолжал обращаться к ней в нескольких методах
+- Ошибка `sqlite3.OperationalError: no such table: users` при попытке редактировать студентов
+- Админ-панель не могла получить список студентов
+
+#### 🔧 Исправления:
+
+**Файл `src/services/database.py`:**
+- `get_user_full_profile()` - убраны JOIN с таблицей users
+- `sync_user_with_whitelist()` - обновление только в allowed_users
+- `get_user_historical_stats()` - получение данных из allowed_users
+- `get_all_users_with_history()` - работа только с allowed_users
+- `get_all_students_summary()` - убраны JOIN с users
+- `get_class_statistics()` - убраны JOIN с users
+- `get_student_contact_info()` - работа только с allowed_users
+- `auto_setup_user_from_whitelist()` - убрана логика создания записей в users
+- `auto_update_username_from_telegram()` - обновление только в allowed_users
+- `get_user_display_info()` - получение данных только из allowed_users
+
+**Файл `src/handlers/admin/students.py`:**
+- Исправлен метод удаления студента - удаление из allowed_users вместо users
+
+**Файл `src/handlers/admin/stats.py`:**
+- Исправлены SQL запросы статистики - JOIN с allowed_users вместо users
+
+#### ✅ Результат:
+- ✅ Админ-панель снова работает корректно
+- ✅ Редактирование студентов работает без ошибок
+- ✅ Статистика отображается правильно
+- ✅ Все пользовательские данные сохранены в таблице allowed_users
+- ✅ Упрощена архитектура - один источник данных о пользователях
+
+#### 📝 Техническая информация:
+- **Основная таблица пользователей**: `allowed_users`
+- **Поля таблицы**: user_id, username, full_name, grade, language, is_active, current_topic, last_activity
+- **Связанные таблицы**: test_results, user_errors (связь по user_id)
+- **Методы проверки доступа**: `check_user_access()`, `is_user_allowed()`, `is_user_allowed_by_id()`
+
+#### 🎯 Влияние на пользователей:
+- Админы могут снова управлять студентами через админ-панель
+- Статистика отображается корректно
+- Все функции бота работают стабильно
+- Данные пользователей не потеряны
+
+---
+
+### 🔧 Bug Fix: Исправление проблем с объяснениями, ошибками и статусом активности (Январь 2025)
+
+**✅ ИСПРАВЛЕНО: Множественные проблемы с функциональностью бота**
+
+#### 🐛 Проблемы:
+1. **Объяснения не показывались** - пустые или неправильно извлеченные объяснения из структуры вопросов
+2. **Ошибки сохранялись под "Кездейсоқ тест"** - вместо реальных тем вопросов в случайных тестах
+3. **Статус is_active сбрасывался** - пользователи становились неактивными в админ-панели после завершения тестов
+
+#### 🔧 Исправления:
+
+**1. Улучшено извлечение объяснений:**
+- Добавлена проверка наличия объяснения в структуре вопроса
+- При отсутствии объяснения выполняется поиск в базе данных
+- Добавлен нечеткий поиск объяснений как fallback
+- Показывается сообщение "Объяснение не найдено" если ничего не найдено
+
+**2. Исправлено сохранение ошибок в случайных тестах:**
+- Ошибки теперь сохраняются под реальными темами вопросов
+- Добавлен поиск темы вопроса в базе данных
+- Логика работает как для обычных, так и для случайных тестов
+- Исправлено в `CallbackHandlers` и `RandomTestService`
+
+**3. Разделена активность теста и пользователя:**
+- Добавлен новый метод `clear_user_test_activity()` в Database
+- Метод очищает только `current_topic`, не меняя `is_active`
+- Заменены вызовы `set_user_inactive()` на `clear_user_test_activity()` при завершении тестов
+- Пользователи остаются активными в системе после завершения тестов
+
+#### 📁 Измененные файлы:
+- `src/handlers/callback_handlers.py` - улучшено извлечение объяснений и сохранение ошибок
+- `src/services/database.py` - добавлен метод `clear_user_test_activity()`
+- `src/services/random_test_service.py` - исправлено сохранение ошибок по реальным темам
+
+#### 🎯 Результат:
+- ✅ Объяснения корректно отображаются для всех вопросов
+- ✅ Ошибки сохраняются под правильными темами в случайных тестах
+- ✅ Статус активности пользователей сохраняется в админ-панели
+- ✅ Улучшена точность статистики по темам
+
+#### 🔍 Техническая реализация:
+
+**Улучшенное извлечение объяснений:**
+```python
+# Получаем объяснение - сначала из структуры вопроса, потом из БД
+explanation = question[2] if len(question) > 2 and question[2] else None
+
+# Если объяснение пустое, ищем в базе данных
+if not explanation or explanation.strip() == '':
+    explanation = self.db.get_explanation_by_question_text(question[0])
+    if not explanation:
+        explanation = self.db.get_explanation_fuzzy_by_question_text(question[0])
+```
+
+**Правильное сохранение ошибок:**
+```python
+# Для случайных тестов сохраняем ошибку под реальной темой вопроса
+if is_random_test:
+    # Ищем реальную тему вопроса в базе данных
+    cursor.execute('SELECT topic FROM questions WHERE question = ? LIMIT 1', (question[0],))
+    result = cursor.fetchone()
+    question_topic = result[0] if result else "Неизвестная тема"
+    
+    self.db.add_user_error(user_id=user_id, topic=question_topic, ...)
+```
+
+**Разделение активности:**
+```python
+def clear_user_test_activity(self, user_id: int) -> None:
+    """Clear user's current test topic without changing is_active status."""
+    cursor.execute('''
+        UPDATE allowed_users 
+        SET current_topic = NULL, last_activity = CURRENT_TIMESTAMP 
+        WHERE user_id = ?
+    ''', (user_id,))
+```
+
+#### 📝 Финальное исправление (Январь 2025):
+**✅ ПОЛНОСТЬЮ ИСПРАВЛЕНО: Удалены все оставшиеся обращения к таблице `users`**
+
+**Дополнительные исправления:**
+- `get_student_detailed_statistics()` - убран JOIN с таблицей users, используется только allowed_users
+- `show_user_history()` в stats.py - убран JOIN с таблицей users
+- `remove_student_execute()` в students.py - убрано удаление из таблицы users
+
+**Проверка:**
+```bash
+# Поиск обращений к таблице users
+grep -r "FROM users\|JOIN users\|UPDATE users\|INSERT INTO users\|DELETE FROM users" src/
+# Результат: No matches found ✅
+```
+
+**Тестирование:**
+- ✅ `get_student_detailed_statistics()` работает корректно
+- ✅ `get_all_students_summary()` возвращает данные студентов
+- ✅ Админ-панель полностью функциональна
+- ✅ Все SQL запросы используют только существующие таблицы
+
+---
+
+### 🔧 Feature: Разделение статуса активности и доступа пользователей (Январь 2025)
+
+**✅ РЕАЛИЗОВАНО: Разделены статусы активности в тесте и доступа к системе**
+
+#### 🎯 Проблема:
+- Поле `is_active` использовалось для двух целей:
+  1. Показать, что пользователь проходит тест (активен в тесте)
+  2. Показать, что пользователь активен в системе (для админ-панели)
+- При перезапуске бота все пользователи становились неактивными
+- Админы не могли контролировать доступ пользователей независимо от активности в тестах
+
+#### 🔧 Решение:
+
+**1. Добавлена новая колонка `has_access`:**
+- `is_active` - показывает, проходит ли пользователь сейчас тест
+- `has_access` - контролирует доступ к системе (управляется админом)
+
+**2. Обновлены методы базы данных:**
+```python
+# Новые методы
+has_user_access(user_id) -> bool          # Проверка доступа к системе
+set_user_access(user_id, has_access)      # Управление доступом
+is_user_active(user_id) -> bool           # Проверка активности в тесте
+```
+
+**3. Обновлена логика доступа:**
+- `check_user_access()` теперь проверяет `has_access` вместо `is_active`
+- При `/start` пользователь активируется только если у него есть доступ
+- Админы могут блокировать/разблокировать пользователей независимо от тестов
+
+**4. Обновлена админ-панель:**
+- Отображение статуса разделено на "Доступ" и "В тесте"
+- Кнопка "Изменить статус" теперь управляет доступом, а не активностью в тесте
+- Статус в списке студентов: "Активен" / "Заблокирован"
+
+#### 📊 Структура базы данных:
+```sql
+ALTER TABLE allowed_users ADD COLUMN has_access BOOLEAN DEFAULT 1;
+```
+
+#### 🔄 Миграция:
+- Существующие пользователи автоматически получают `has_access = 1`
+- Совместимость с существующими данными сохранена
+- Все методы обновлены для работы с новой структурой
+
+#### ✅ Результат:
+- ✅ Админы могут контролировать доступ независимо от активности в тестах
+- ✅ При перезапуске бота пользователи не теряют доступ
+- ✅ Четкое разделение ответственности между полями
+- ✅ Улучшенная админ-панель с детальной информацией
+- ✅ Обратная совместимость сохранена
+
+---
+
+### 🐛 Bug Fix: Complete Student Data Deletion (January 2025)
+
+**✅ FIXED: Student deletion now removes all associated data**
+
+#### 🐛 Problem:
+- When deleting a student via admin panel, only the record from `allowed_users` table was removed
+- Associated data in `user_errors` and `test_results` tables remained in the database
+- This caused data inconsistency and potential privacy issues
+
+#### ✅ Solution Implemented:
+1. **Updated `remove_student_execute()` method** in `src/handlers/admin/students.py`:
+   - Added deletion of all test results: `DELETE FROM test_results WHERE user_id = ?`
+   - Added deletion of all user errors: `DELETE FROM user_errors WHERE user_id = ?`
+   - Maintained proper deletion order to respect foreign key constraints
+   - Added statistics display showing how many records were deleted
+
+2. **Enhanced user feedback**:
+   - Success message now shows count of deleted test results and error records
+   - Format: "Deleted data: • Test results: X • Error records: Y"
+
+#### 🔧 Technical Details:
+- **File modified**: `src/handlers/admin/students.py`
+- **Method**: `remove_student_execute()`
+- **Database operations**: Now performs 3 DELETE operations in correct order:
+  1. `DELETE FROM test_results WHERE user_id = ?`
+  2. `DELETE FROM user_errors WHERE user_id = ?` 
+  3. `DELETE FROM allowed_users WHERE user_id = ?`
+
+#### ✅ Result:
+- Complete data cleanup when removing students
+- No orphaned records in database
+- Better privacy compliance
+- Transparent feedback to administrators
+
+---
+
+### 🔍 Database Table Usage Verification (January 2025)
+
+**✅ COMPLETED: Verified correct table usage in statistics module**
+
+#### 🎯 Task:
+- Checked usage of `users` table in `src/handlers/admin/stats.py`
+- Ensured all references use the correct `allowed_users` table
+
+#### ✅ Verification Results:
+- **✅ All queries correctly use `allowed_users` table**:
+  - Line 25: `SELECT COUNT(*) FROM allowed_users WHERE is_active = 1`
+  - Line 58: `LEFT JOIN allowed_users au ON tr.user_id = au.user_id`
+  - Line 70: `LEFT JOIN allowed_users au ON tr.user_id = au.user_id`
+  - Line 139: `LEFT JOIN allowed_users au ON tr.user_id = au.user_id`
+
+- **✅ No references to deprecated `users` table found**
+- **✅ Statistics module fully compatible with unified table architecture**
+- **✅ All user data properly joined from `allowed_users` table**
+
+#### 📊 Statistics Features Working Correctly:
+- Active students count from `allowed_users`
+- User history with proper joins to `allowed_users`
+- Top users display with full names and grades
+- All user information properly retrieved from unified table
+
+**Result**: Statistics module is correctly implemented and requires no changes.
+
+---
+
+### 🔧 Fix: Statistics Display - Students Only (January 2025)
+
+**✅ FIXED: Statistics now show only students, excluding admins**
+
+#### 🐛 Problem identified:
+- **Admin statistics showed "None" names** for some users
+- **Root cause**: Statistics included admins who are not in `allowed_users` table
+- **LEFT JOIN issue**: Query included all test results, even from users not in `allowed_users`
+- **Incorrect display**: Admins' test results appeared with empty names
+
+#### ✅ Solution implemented:
+
+**Changed SQL queries from LEFT JOIN to INNER JOIN:**
+- **Before**: `LEFT JOIN allowed_users au ON tr.user_id = au.user_id` (included all users)
+- **After**: `INNER JOIN allowed_users au ON tr.user_id = au.user_id` (only students)
+
+**Updated queries:**
+1. **Top topics statistics** - now shows only student activity
+2. **Top active students** - now guaranteed to have names from `allowed_users`
+3. **User history** - now shows "Last 20 student tests" instead of all tests
+4. **Activity statistics** - total tests, weekly tests, active users, average score - all now count only students
+
+#### 🎯 Result:
+- ✅ **No more "None" names** in statistics
+- ✅ **Students only** - admins excluded from all student statistics
+- ✅ **Proper data integrity** - all displayed users have complete information
+- ✅ **Clear separation** - admin and student data properly separated
+- ✅ **Accurate metrics** - all activity counters now reflect only student activity
+
+#### 📊 What changed:
+- **Activity section**: Now labeled as "Student Activity" with student-specific counters
+- **Total tests**: Now counts only tests taken by students
+- **Weekly activity**: Shows only student tests and active students
+- **Average score**: Calculated only from student test results
+- **Top 5 active students**: Now shows only actual students with names
+- **User history**: Now labeled as "Last 20 student tests"
+- **Data consistency**: All displayed users guaranteed to be in `allowed_users`
+
+**Files modified:**
+- `src/handlers/admin/stats.py` - Updated SQL queries to use INNER JOIN
+
+#### 🐛 Bug Fix: Explanation Display Issue (January 2025)
+
+**Problem**: In random tests, the explanation field was showing answer options instead of actual explanations.
+
+**Root Cause**: Incorrect tuple structure in question formation - `incorrect_options` was placed in position [2] instead of `explanation`.
+
+**Solution**: 
+- Fixed question tuple structure in both `handle_random_test` and `handle_retry_random_test`
+- Corrected position [2] to contain `explanation` instead of `incorrect_options`
+- Updated structure documentation for clarity
+
+**Files Modified**:
+- `src/handlers/command_handlers.py` - Fixed random test question structure
+- `src/handlers/callback_handlers.py` - Fixed retry test question structure
+
+**Expected Structure**:
+```python
+question_tuple = (
+    question_text,     # [0] - Question text
+    correct_answer,    # [1] - Correct answer
+    explanation,       # [2] - Explanation (FIXED!)
+    options_list,      # [3] - Answer options
+    source,           # [4] - Question source
+    image_path        # [5] - Image path (optional)
+)
+```
+
+# 📋 Документация математического бота для подготовки к НИШ
+
+## 🔄 Последние изменения
+
+### ✅ Исправлены проблемы с доступом и инструкциями для учеников (2025-01-27)
+
+**Решенные проблемы:**
+1. **Ученики больше не видят админские кнопки** - добавлена проверка роли пользователя в главном меню
+2. **Понятные инструкции для 5-6 классников** - добавлены детальные объяснения для разных состояний
+
+**Изменения в коде:**
+
+#### 🔧 Разделение главного меню по ролям
+- **Файл:** `src/utils/keyboards.py`
+- **Функция:** `get_main_menu_markup()`
+- **Изменение:** Добавлена проверка `is_admin()` для отображения кнопки "🔧 Админ-панель" только администраторам
+
+#### 📝 Улучшенные инструкции для учеников
+- **Файл:** `src/handlers/command_handlers.py`
+- **Функция:** `handle_text()`
+- **Добавлено:**
+  - Проверка состояния "в процессе выбора темы" (`in_topic_selection`)
+  - Проверка активного теста (`is_user_active`)
+  - Понятные инструкции на русском и казахском языках
+
+#### 🌐 Новые переводы
+- **Файлы:** `src/utils/translations.py`, `src/config/messages_kk.py`
+- **Добавлены сообщения:**
+  - `in_topic_selection_help` - инструкции при выборе темы
+  - `in_active_test_help` - инструкции во время прохождения теста
+
+#### 🎯 Обработка кнопки "Админ-панель"
+- **Файл:** `src/handlers/command_handlers.py`
+- **Добавлено:** Обработка текстовой кнопки "🔧 Админ-панель" с проверкой прав доступа
+
+**Результат:**
+- ✅ Ученики видят только свои кнопки: "📚 Выбрать тему", "🎯 Рандомный тест", "📊 Прогресс", "❓ Помощь"
+- ✅ Админы дополнительно видят кнопку "🔧 Админ-панель"
+- ✅ При попытке написать боту во время выбора темы - понятные инструкции
+- ✅ При попытке написать боту во время теста - объяснение как пользоваться
+- ✅ Все инструкции переведены на казахский язык
+
+### 🔧 Исправлена команда /reset (2025-01-27)
+
+**Проблема:** Команда `/reset` не работала, если пользователь находился в активном тесте.
+
+**Причина:** В функции `reset()` была неправильная логика - если пользователь был в тесте, функция показывала инструкции и выходила, НЕ СБРАСЫВАЯ состояние.
+
+**Решение:**
+- **Файл:** `src/handlers/command_handlers.py`
+- **Функция:** `reset()`
+- **Изменение:** Убрана проверка `is_user_active()` перед сбросом
+- **Добавлено:** Полная очистка состояния с помощью двух функций:
+  - `set_user_inactive()` - сбрасывает статус активности
+  - `clear_user_test_activity()` - очищает текущую тему теста
+  - `context.user_data.clear()` - очищает данные контекста
+
+**Результат:**
+- ✅ Команда `/reset` теперь ПРИНУДИТЕЛЬНО сбрасывает состояние пользователя
+- ✅ Работает даже если пользователь находится в активном тесте
+- ✅ Полностью очищает все данные сессии
+
+### 🧹 Автоудаление сообщений для чистого интерфейса (2025-01-27)
+
+**Проблема:** Чат засорялся инструктивными сообщениями, что мешало 5-6 классникам.
+
+**Решение:**
+- **Файл:** `src/handlers/command_handlers.py`
+- **Добавлено:** Автоудаление сообщений через 3-4 секунды
+- **Функция:** `_delete_message_after_delay()`
+
+**Что теперь происходит:**
+1. **Сообщение ученика удаляется** сразу после отправки
+2. **Инструктивное сообщение бота** показывается 3-4 секунды и автоматически удаляется
+3. **Чат остается чистым** - только нужные кнопки и вопросы
+
+**Применяется к:**
+- ✅ Сообщения во время выбора темы (6 сек)
+- ✅ Сообщения во время активного теста (4-5 сек)
+- ✅ Неизвестные команды (3 сек)
+- ✅ Недоступные команды для учеников (5 сек)
+
+### 🚫 Ограничение команд для учеников (2025-01-27)
+
+**Проблема:** Ученики могли использовать админские команды.
+
+**Решение:**
+- **Файл:** `src/handlers/command_handlers.py`
+- **Добавлено:** Проверка разрешенных команд для учеников
+
+**Разрешенные команды для учеников:**
+- ✅ `/start` - Главное меню
+- ✅ `/reset` - Сбросить состояние
+- ✅ `/stop` - Остановить бота
+- ✅ `/help` - Помощь
+- ✅ `/myid` - Показать ID пользователя
+
+**Для админов:** Все команды доступны без ограничений.
+
+### 📝 Упрощенные сообщения для 5-6 классников (2025-01-27)
+
+**Изменения в переводах:**
+- **Файлы:** `src/utils/translations.py`, `src/config/messages_kk.py`
+- **Улучшено:** Более короткие и понятные инструкции
+
+**Примеры:**
+- ❌ Было: "Вы находитесь в процессе выбора темы! Выберите раздел математики..."
+- ✅ Стало: "Выберите тему из кнопок выше!"
+
+**Результат:**
+- ✅ Чат не засоряется - сообщения автоудаляются
+- ✅ Ученики видят только разрешенные команды
+- ✅ Инструкции стали короче и понятнее
+- ✅ Интерфейс стал чище и удобнее для детей
+
+### 🚫 Блокировка кнопок главного меню во время активности (2025-01-27)
+
+**Проблема:** Ученики могли нажимать кнопки главного меню во время выбора тем или прохождения теста, что отвлекало их.
+
+**Решение:**
+- **Файл:** `src/handlers/command_handlers.py`
+- **Добавлено:** Проверки состояния пользователя перед обработкой кнопок главного меню
+
+**Заблокированные кнопки во время активности:**

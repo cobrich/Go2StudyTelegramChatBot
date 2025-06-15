@@ -384,12 +384,21 @@ class QuestionService:
         logging.info(f"[get_or_generate_tasks] Need to generate {remaining} new AI questions (final stage)")
         new_tasks = []
         loop = asyncio.get_running_loop()
+        
+        # Генерируем больше вопросов чем нужно, чтобы компенсировать отклонения валидацией
+        max_attempts = max(remaining * 2, remaining + 5)  # Генерируем в 2 раза больше или +5
         generation_tasks = [
             loop.run_in_executor(None, self.ai_service.generate_task, topic, main_topic, language)
-            for _ in range(remaining)
+            for _ in range(max_attempts)
         ]
         results = await asyncio.gather(*generation_tasks, return_exceptions=True)
+        
+        valid_questions = 0
         for result in results:
+            # Прерываем если уже набрали нужное количество
+            if valid_questions >= remaining:
+                break
+                
             logging.info(f"[get_or_generate_tasks][final AI generation result]: {result}")
             if isinstance(result, Exception):
                 logging.error(f"[get_or_generate_tasks][final AI generation] Error generating task: {result}")
@@ -401,11 +410,16 @@ class QuestionService:
                     logging.warning(f"[get_or_generate_tasks][final AI generation] Skipping result with None fields: question={question}, answer={correct_answer}, explanation={explanation}")
                     continue
                 
-                # Строгая валидация AI-вопроса
+                # Более мягкая валидация AI-вопроса для обеспечения нужного количества
                 is_valid, error_msg = self._validate_ai_question(question, correct_answer, explanation, topic)
                 if not is_valid:
-                    logging.warning(f"[get_or_generate_tasks][final AI generation] Skipping invalid AI question: {error_msg}. Question: {question[:100]}...")
-                    continue
+                    # Если у нас еще мало вопросов, применяем более мягкую валидацию
+                    if valid_questions < remaining // 2:  # Если набрали меньше половины нужного
+                        logging.warning(f"[get_or_generate_tasks][final AI generation] Soft validation: accepting questionable AI question due to shortage: {error_msg}. Question: {question[:100]}...")
+                        # Принимаем вопрос несмотря на валидацию
+                    else:
+                        logging.warning(f"[get_or_generate_tasks][final AI generation] Skipping invalid AI question: {error_msg}. Question: {question[:100]}...")
+                        continue
                 
                 if question not in existing_question_texts_to_exclude:
                     # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
@@ -450,11 +464,75 @@ class QuestionService:
                         None
                     ))
                     existing_question_texts_to_exclude.add(question)
-                    logging.info(f"[get_or_generate_tasks][final AI generation] Added AI question: {question}")
+                    valid_questions += 1
+                    logging.info(f"[get_or_generate_tasks][final AI generation] Added AI question {valid_questions}/{remaining}: {question}")
                 else:
                     logging.info(f"[get_or_generate_tasks][final AI generation] Skipped duplicate AI question: {question}")
             else:
                 logging.warning(f"[get_or_generate_tasks][final AI generation] Skipping empty or invalid result: {result}")
+        
+        # Если все еще не хватает вопросов, делаем дополнительную попытку с еще более мягкой валидацией
+        if valid_questions < remaining:
+            logging.warning(f"[get_or_generate_tasks] Still need {remaining - valid_questions} more questions, making additional attempt with relaxed validation")
+            additional_attempts = (remaining - valid_questions) * 2
+            additional_generation_tasks = [
+                loop.run_in_executor(None, self.ai_service.generate_task, topic, main_topic, language)
+                for _ in range(additional_attempts)
+            ]
+            additional_results = await asyncio.gather(*additional_generation_tasks, return_exceptions=True)
+            
+            for result in additional_results:
+                if valid_questions >= remaining:
+                    break
+                    
+                if isinstance(result, Exception):
+                    continue
+                if result:
+                    question, correct_answer, incorrect_options, explanation = result
+                    if not question or not correct_answer or not explanation:
+                        continue
+                    
+                    # Очень мягкая валидация - принимаем почти все
+                    if question not in existing_question_texts_to_exclude:
+                        if not self.db.get_explanation_by_question_text(question):
+                            if question and correct_answer and explanation:
+                                self.db.add_question({
+                                    'topic': topic,
+                                    'question': question,
+                                    'answer': correct_answer,
+                                    'explanation': explanation,
+                                    'incorrect_options': '\n'.join(incorrect_options) if isinstance(incorrect_options, list) else (incorrect_options or ''),
+                                    'question_type': 'standard',
+                                    'source': 'ai'
+                                })
+                        
+                        options = [correct_answer]
+                        if incorrect_options:
+                            if isinstance(incorrect_options, list):
+                                options.extend([opt for opt in incorrect_options if opt and str(opt).strip()])
+                            elif isinstance(incorrect_options, str):
+                                options.extend([opt.strip() for opt in incorrect_options.split('\n') if opt.strip()])
+                        
+                        options = [str(opt) for opt in options if opt and str(opt).strip()]
+                        if len(options) < 2:
+                            options.extend([f"Вариант {i}" for i in range(len(options), 4)])
+                        
+                        if correct_answer not in options:
+                            options.append(correct_answer)
+                        options = list(dict.fromkeys(options))
+                        random.shuffle(options)
+                        new_tasks.append((
+                            question,
+                            correct_answer,
+                            explanation,
+                            options,
+                            'ai',
+                            None
+                        ))
+                        existing_question_texts_to_exclude.add(question)
+                        valid_questions += 1
+                        logging.info(f"[get_or_generate_tasks][additional attempt] Added AI question {valid_questions}/{remaining}: {question}")
+        
         all_tasks = tasks + new_tasks
         # Filter out any None values from all_tasks before logging and returning
         all_tasks = [task for task in all_tasks if task is not None and len(task) >= 5]
