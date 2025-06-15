@@ -266,21 +266,35 @@ class CallbackHandlers(BaseHandler):
             is_random_test = self.get_user_data(context).get('is_random_test', False)
             if is_random_test:
                 # Извлекаем реальную тему из данных вопроса
-                # Предполагаем, что вопрос имеет структуру: (question_text, answer, explanation, options, source, image_path, topic)
-                # Или ищем тему в базе данных по тексту вопроса
+                # Предполагаем, что вопрос имеет структуру: (question_text, answer, explanation, options, source, image_path, question_id)
                 question_topic = None
+                question_id = None
                 
-                # Пытаемся найти тему вопроса в базе данных
-                try:
-                    # Ищем вопрос в базе данных по тексту
-                    with sqlite3.connect(self.db.db_path) as conn:
-                        cursor = conn.cursor()
-                        cursor.execute('SELECT topic FROM questions WHERE question = ? LIMIT 1', (question[0],))
-                        result = cursor.fetchone()
-                        if result:
-                            question_topic = result[0]
-                except Exception as e:
-                    logging.error(f"Error finding question topic: {e}")
+                # Проверяем есть ли question_id в структуре вопроса
+                if len(question) > 6 and question[6] is not None:
+                    question_id = question[6]
+                    # Получаем тему из базы данных по question_id
+                    try:
+                        with sqlite3.connect(self.db.db_path) as conn:
+                            cursor = conn.cursor()
+                            cursor.execute('SELECT topic FROM questions WHERE id = ? LIMIT 1', (question_id,))
+                            result = cursor.fetchone()
+                            if result:
+                                question_topic = result[0]
+                    except Exception as e:
+                        logging.error(f"Error finding question topic by ID: {e}")
+                
+                # Если не нашли тему по ID, ищем по тексту вопроса
+                if not question_topic:
+                    try:
+                        with sqlite3.connect(self.db.db_path) as conn:
+                            cursor = conn.cursor()
+                            cursor.execute('SELECT topic FROM questions WHERE question = ? LIMIT 1', (question[0],))
+                            result = cursor.fetchone()
+                            if result:
+                                question_topic = result[0]
+                    except Exception as e:
+                        logging.error(f"Error finding question topic: {e}")
                 
                 # Если не нашли тему, используем "Неизвестная тема"
                 if not question_topic:
@@ -295,24 +309,42 @@ class CallbackHandlers(BaseHandler):
                 
                 logging.info(f"❌ Неправильный ответ в случайном тесте (пользователь {user_id}):")
                 logging.info(f"  📚 Тема: {question_topic}")
+                logging.info(f"  🆔 Question ID: {question_id}")
                 logging.info(f"  ❓ Вопрос: {question_text_short}")
                 logging.info(f"  👤 Ответ пользователя: {selected_answer}")
                 logging.info(f"  ✅ Правильный ответ: {correct_answer}")
                 logging.info(f"  💡 Объяснение: {explanation}")
                 logging.info(f"  ---")
                 
-                self.db.add_user_error(
-                    user_id=user_id,
-                    topic=question_topic,  # Используем реальную тему вопроса
-                    question_text=question[0],
-                    user_answer_text=selected_answer,
-                    correct_answer_text=correct_answer,
-                    explanation_text=explanation
-                )
+                # Используем новый метод если есть question_id
+                if question_id is not None:
+                    self.db.add_user_error_by_question_id(
+                        user_id=user_id,
+                        question_id=question_id,
+                        topic=question_topic,
+                        user_answer_text=selected_answer,
+                        correct_answer_text=correct_answer
+                    )
+                else:
+                    # Fallback к старому методу для AI-генерированных вопросов
+                    self.db.add_user_error(
+                        user_id=user_id,
+                        topic=question_topic,
+                        question_text=question[0],
+                        user_answer_text=selected_answer,
+                        correct_answer_text=correct_answer,
+                        explanation_text=explanation
+                    )
             else:
                 # Для обычных тестов используем текущую тему
                 current_topic = self.get_user_data(context).get('current_topic')
                 question_text = question[0]
+                question_id = None
+                
+                # Проверяем есть ли question_id в структуре вопроса
+                if len(question) > 6 and question[6] is not None:
+                    question_id = question[6]
+                
                 if len(question_text) > 150:
                     question_text_short = question_text[:150] + "..."
                 else:
@@ -320,23 +352,41 @@ class CallbackHandlers(BaseHandler):
                 
                 logging.info(f"❌ Неправильный ответ в обычном тесте (пользователь {user_id}):")
                 logging.info(f"  📚 Тема: {current_topic}")
+                logging.info(f"  🆔 Question ID: {question_id}")
                 logging.info(f"  ❓ Вопрос: {question_text_short}")
                 logging.info(f"  👤 Ответ пользователя: {selected_answer}")
                 logging.info(f"  ✅ Правильный ответ: {correct_answer}")
                 logging.info(f"  💡 Объяснение: {explanation}")
                 logging.info(f"  ---")
                 
-                self.db.add_user_error(
-                    user_id=user_id,
-                    topic=current_topic,
-                    question_text=question[0],
-                    user_answer_text=selected_answer,
-                    correct_answer_text=correct_answer,
-                    explanation_text=explanation
-                )
+                # Используем новый метод если есть question_id
+                if question_id is not None:
+                    self.db.add_user_error_by_question_id(
+                        user_id=user_id,
+                        question_id=question_id,
+                        topic=current_topic,
+                        user_answer_text=selected_answer,
+                        correct_answer_text=correct_answer
+                    )
+                else:
+                    # Fallback к старому методу для AI-генерированных вопросов
+                    self.db.add_user_error(
+                        user_id=user_id,
+                        topic=current_topic,
+                        question_text=question[0],
+                        user_answer_text=selected_answer,
+                        correct_answer_text=correct_answer,
+                        explanation_text=explanation
+                    )
         else:
             # Логируем правильный ответ
             question_text = question[0]
+            question_id = None
+            
+            # Проверяем есть ли question_id в структуре вопроса
+            if len(question) > 6 and question[6] is not None:
+                question_id = question[6]
+            
             if len(question_text) > 150:
                 question_text_short = question_text[:150] + "..."
             else:
@@ -346,11 +396,16 @@ class CallbackHandlers(BaseHandler):
             test_type = "случайном" if is_random_test else "обычном"
             
             logging.info(f"✅ Правильный ответ в {test_type} тесте (пользователь {user_id}):")
+            logging.info(f"  🆔 Question ID: {question_id}")
             logging.info(f"  ❓ Вопрос: {question_text_short}")
             logging.info(f"  👤 Ответ пользователя: {selected_answer}")
             
             # Decrement error count if this was previously an error
-            self.db.decrement_error_count(user_id, question[0])
+            if question_id is not None:
+                self.db.decrement_error_count_by_question_id(user_id, question_id)
+            else:
+                # Fallback к старому методу для AI-генерированных вопросов
+                self.db.decrement_error_count(user_id, question[0])
 
         # Get error count for display
         error_count = 0

@@ -3394,3 +3394,74 @@ This enhancement improves user experience by ensuring all users have appropriate
 **Результат**: Исправлена ошибка `Button_data_invalid`, теперь удаление вопросов по теме работает корректно независимо от длины названия темы.
 
 // ... existing code ...
+
+### 2025-06-15: Миграция структуры user_errors для каскадного удаления
+
+**Проблема:** При удалении вопросов из таблицы `questions`, связанные записи в `user_errors` оставались в базе данных, что приводило к накоплению "мертвых" данных.
+
+**Решение:** Реализована миграция таблицы `user_errors` к новой структуре с использованием `question_id` вместо хранения полного текста вопроса.
+
+#### Изменения в структуре базы данных:
+
+**Старая структура `user_errors`:**
+```sql
+CREATE TABLE user_errors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    topic TEXT NOT NULL,
+    question_text TEXT NOT NULL,  -- Полный текст вопроса
+    user_answer TEXT NOT NULL,
+    correct_answer TEXT NOT NULL,
+    explanation TEXT,
+    error_count INTEGER DEFAULT 1,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+```
+
+**Новая структура `user_errors`:**
+```sql
+CREATE TABLE user_errors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    question_id INTEGER NOT NULL,  -- Ссылка на questions.id
+    topic TEXT NOT NULL,
+    user_answer TEXT NOT NULL,
+    correct_answer TEXT NOT NULL,
+    error_count INTEGER DEFAULT 1,
+    first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+    UNIQUE(user_id, question_id)
+)
+```
+
+#### Ключевые преимущества:
+
+1. **Каскадное удаление**: При удалении вопроса из `questions`, все связанные ошибки в `user_errors` автоматически удаляются
+2. **Нормализация данных**: Вместо дублирования текста вопроса используется ссылка на ID
+3. **Целостность данных**: Внешний ключ гарантирует, что ошибки всегда связаны с существующими вопросами
+4. **Уникальность**: Ограничение `UNIQUE(user_id, question_id)` предотвращает дублирование ошибок
+
+#### Реализованные методы:
+
+- `add_user_error_by_question_id()` - добавление ошибки по ID вопроса
+- `decrement_error_count_by_question_id()` - уменьшение счетчика ошибок по ID вопроса
+- `_migrate_user_errors_table()` - автоматическая миграция при инициализации базы данных
+
+#### Обратная совместимость:
+
+- Старые методы `add_user_error()` и `decrement_error_count()` сохранены для AI-генерированных вопросов
+- Новые методы используются для вопросов из базы данных (имеющих ID)
+- Автоматическое определение типа вопроса в обработчиках
+
+#### Тестирование:
+
+- Создан `test_migration.py` для проверки корректности миграции
+- Создан `test_bot_functionality.py` для проверки работы всей системы
+- Протестировано каскадное удаление и работа с обычными/случайными тестами
+
+**Статус:** ✅ Реализовано и протестировано
+
+---
+
+## Архитектура проекта

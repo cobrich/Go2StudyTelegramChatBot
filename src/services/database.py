@@ -22,6 +22,8 @@ class Database:
     def _init_db(self):
         """Initialize database with all required tables."""
         with sqlite3.connect(self.db_path) as conn:
+            # Enable foreign key constraints
+            conn.execute("PRAGMA foreign_keys = ON")
             cursor = conn.cursor()
             
             # Create admins table
@@ -65,12 +67,10 @@ class Database:
                 CREATE TABLE IF NOT EXISTS main_topics (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
-                    language TEXT DEFAULT 'ru',
-                    order_index INTEGER DEFAULT 0,
+                    language TEXT DEFAULT "ru",
                     is_active BOOLEAN DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     created_by INTEGER,
-                    UNIQUE(name, language),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (created_by) REFERENCES admins(user_id)
                 )
             ''')
@@ -80,13 +80,12 @@ class Database:
                 CREATE TABLE IF NOT EXISTS subtopics (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
-                    main_topic TEXT NOT NULL,
-                    language TEXT DEFAULT 'ru',
-                    order_index INTEGER DEFAULT 0,
+                    main_topic_id INTEGER NOT NULL,
+                    description TEXT,
                     is_active BOOLEAN DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     created_by INTEGER,
-                    UNIQUE(name, main_topic, language),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (main_topic_id) REFERENCES main_topics(id),
                     FOREIGN KEY (created_by) REFERENCES admins(user_id)
                 )
             ''')
@@ -95,16 +94,15 @@ class Database:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS questions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic TEXT NOT NULL,
                     question TEXT NOT NULL,
                     answer TEXT NOT NULL,
-                    incorrect_options TEXT,
                     explanation TEXT,
-                    topic TEXT NOT NULL,
-                    source TEXT DEFAULT 'manual',
+                    incorrect_options TEXT,
+                    question_type TEXT DEFAULT 'standard',
+                    source TEXT DEFAULT 'db',
                     image_path TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    created_by INTEGER,
-                    FOREIGN KEY (created_by) REFERENCES admins(user_id)
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
             
@@ -120,22 +118,8 @@ class Database:
                 )
             ''')
             
-            # Create user_errors table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS user_errors (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    topic TEXT NOT NULL,
-                    question TEXT NOT NULL,
-                    user_answer TEXT NOT NULL,
-                    correct_answer TEXT NOT NULL,
-                    explanation TEXT,
-                    error_count INTEGER DEFAULT 1,
-                    first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES allowed_users(user_id)
-                )
-            ''')
+            # Migrate user_errors table to new structure
+            self._migrate_user_errors_table(cursor)
             
             # Add missing columns to existing tables if they don't exist
             try:
@@ -163,9 +147,113 @@ class Database:
             # Create Kazakh main topics if they don't exist
             self.create_kazakh_main_topics()
 
+    def _migrate_user_errors_table(self, cursor):
+        """Migrate user_errors table to new structure with question_id."""
+        try:
+            # Check if old user_errors table exists and has old structure
+            cursor.execute("PRAGMA table_info(user_errors)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            # If table doesn't exist or already has new structure, create new table
+            if not columns or 'question_id' in columns:
+                if not columns:  # Table doesn't exist
+                    cursor.execute('''
+                        CREATE TABLE user_errors (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            user_id INTEGER NOT NULL,
+                            question_id INTEGER NOT NULL,
+                            topic TEXT NOT NULL,
+                            user_answer TEXT NOT NULL,
+                            correct_answer TEXT NOT NULL,
+                            error_count INTEGER DEFAULT 1,
+                            first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+                            UNIQUE(user_id, question_id)
+                        )
+                    ''')
+                    logging.info("Created new user_errors table with question_id structure")
+                return
+            
+            # Old structure exists, need to migrate
+            logging.info("Starting migration of user_errors table to new structure...")
+            
+            # Create new table with new structure
+            cursor.execute('''
+                CREATE TABLE user_errors_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    question_id INTEGER NOT NULL,
+                    topic TEXT NOT NULL,
+                    user_answer TEXT NOT NULL,
+                    correct_answer TEXT NOT NULL,
+                    error_count INTEGER DEFAULT 1,
+                    first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES allowed_users(user_id),
+                    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+                    UNIQUE(user_id, question_id)
+                )
+            ''')
+            
+            # Migrate data from old table to new table
+            # Old structure: user_id, topic, question_text, user_answer, correct_answer, explanation, error_count, timestamp
+            # New structure: user_id, question_id, topic, user_answer, correct_answer, error_count, first_error_date, last_error_date
+            cursor.execute('''
+                INSERT INTO user_errors_new (user_id, question_id, topic, user_answer, correct_answer, error_count, first_error_date, last_error_date)
+                SELECT 
+                    ue.user_id,
+                    COALESCE(q.id, -1) as question_id,  -- Use -1 for questions not found in questions table
+                    ue.topic,
+                    ue.user_answer,
+                    ue.correct_answer,
+                    ue.error_count,
+                    ue.timestamp as first_error_date,
+                    ue.timestamp as last_error_date
+                FROM user_errors ue
+                LEFT JOIN questions q ON q.question = ue.question_text
+                WHERE COALESCE(q.id, -1) != -1  -- Only migrate records where we found matching question
+            ''')
+            
+            migrated_count = cursor.rowcount
+            logging.info(f"Migrated {migrated_count} user_errors records to new structure")
+            
+            # Drop old table and rename new table
+            cursor.execute('DROP TABLE user_errors')
+            cursor.execute('ALTER TABLE user_errors_new RENAME TO user_errors')
+            
+            logging.info("Successfully migrated user_errors table to new structure")
+            
+        except Exception as e:
+            logging.error(f"Error during user_errors migration: {e}")
+            # If migration fails, create new empty table with new structure
+            try:
+                cursor.execute('DROP TABLE IF EXISTS user_errors_new')
+                cursor.execute('DROP TABLE IF EXISTS user_errors')
+                cursor.execute('''
+                    CREATE TABLE user_errors (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        question_id INTEGER NOT NULL,
+                        topic TEXT NOT NULL,
+                        user_answer TEXT NOT NULL,
+                        correct_answer TEXT NOT NULL,
+                        error_count INTEGER DEFAULT 1,
+                        first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+                        UNIQUE(user_id, question_id)
+                    )
+                ''')
+                logging.info("Created new user_errors table after migration failure")
+            except Exception as create_error:
+                logging.error(f"Failed to create new user_errors table: {create_error}")
+
     def _get_connection(self):
-        """Get database connection context manager."""
-        return sqlite3.connect(self.db_path)
+        """Get database connection with foreign keys enabled."""
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn
 
     def set_user_active(self, user_id: int, topic: str) -> None:
         """Set user as active with current topic."""
@@ -281,78 +369,112 @@ class Database:
                       explanation_text: str) -> None:
         """Add a user's error to the database or increment error count if exists."""
         try:
-            logging.info(f"[DEBUG][add_user_error] user_id={user_id}, topic={topic}, question_text={question_text}, user_answer_text={user_answer_text}, correct_answer_text={correct_answer_text}, explanation_text={explanation_text}")
+            logging.info(f"[DEBUG][add_user_error] user_id={user_id}, topic={topic}, question_text={question_text[:100]}..., user_answer_text={user_answer_text}, correct_answer_text={correct_answer_text}")
+            
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                # Check if error already exists
+                
+                # First, find the question_id by question text
+                cursor.execute('SELECT id FROM questions WHERE question = ? LIMIT 1', (question_text,))
+                question_result = cursor.fetchone()
+                
+                if not question_result:
+                    logging.warning(f"[DEBUG][add_user_error] Question not found in database: {question_text[:100]}...")
+                    return
+                
+                question_id = question_result[0]
+                
+                # Check if error already exists for this user and question
                 cursor.execute('''
                     SELECT id, error_count FROM user_errors 
-                    WHERE user_id = ? AND question_text = ?
-                ''', (user_id, question_text))
+                    WHERE user_id = ? AND question_id = ?
+                ''', (user_id, question_id))
                 result = cursor.fetchone()
+                
                 if result:
                     error_id, current_count = result
                     cursor.execute('''
                         UPDATE user_errors 
                         SET error_count = error_count + 1,
-                            timestamp = CURRENT_TIMESTAMP
+                            last_error_date = CURRENT_TIMESTAMP
                         WHERE id = ?
                     ''', (error_id,))
-                    logging.info(f"[DEBUG][add_user_error] Updated error_count for id={error_id}")
+                    logging.info(f"[DEBUG][add_user_error] Updated error_count for id={error_id}, question_id={question_id}")
                 else:
                     cursor.execute('''
                         INSERT INTO user_errors 
-                        (user_id, topic, question_text, user_answer, correct_answer, explanation)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (user_id, topic, question_text, user_answer_text,
-                         correct_answer_text, explanation_text))
-                    logging.info(f"[DEBUG][add_user_error] Inserted new error for user_id={user_id}, question_text={question_text}")
+                        (user_id, question_id, topic, user_answer, correct_answer)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (user_id, question_id, topic, user_answer_text, correct_answer_text))
+                    logging.info(f"[DEBUG][add_user_error] Inserted new error for user_id={user_id}, question_id={question_id}")
+                
                 conn.commit()
+                
                 # Логируем количество строк и последние 3 записи
                 cursor.execute('SELECT COUNT(*) FROM user_errors')
                 count = cursor.fetchone()[0]
                 logging.info(f"[DEBUG][add_user_error] user_errors row count after commit: {count}")
-                cursor.execute('SELECT id, user_id, question_text, error_count FROM user_errors ORDER BY id DESC LIMIT 3')
+                cursor.execute('SELECT id, user_id, question_id, error_count FROM user_errors ORDER BY id DESC LIMIT 3')
                 last_rows = cursor.fetchall()
                 logging.info(f"[DEBUG][add_user_error] last 3 rows: {last_rows}")
+                
         except Exception as e:
             logging.error(f"[DEBUG][add_user_error] Exception: {e}")
 
     def decrement_error_count(self, user_id: int, question_text: str) -> None:
         """Decrement error count for a question and remove if reaches 0."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT error_count FROM user_errors WHERE user_id = ? AND question_text = ?', (user_id, question_text))
-            before = cursor.fetchone()
-            logging.info(f"[DEBUG][decrement_error_count] before: {before}")
-            cursor.execute('''
-                UPDATE user_errors 
-                SET error_count = error_count - 1
-                WHERE user_id = ? AND question_text = ?
-            ''', (user_id, question_text))
-            cursor.execute('SELECT error_count FROM user_errors WHERE user_id = ? AND question_text = ?', (user_id, question_text))
-            after = cursor.fetchone()
-            logging.info(f"[DEBUG][decrement_error_count] after: {after}")
-            # Remove if count reaches 0
-            cursor.execute('''
-                DELETE FROM user_errors 
-                WHERE user_id = ? AND question_text = ? AND error_count <= 0
-            ''', (user_id, question_text))
-            logging.info(f"[DEBUG][decrement_error_count] deleted if error_count <= 0 for user_id={user_id}, question_text={question_text}")
-            conn.commit()
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Find question_id by question text
+                cursor.execute('SELECT id FROM questions WHERE question = ? LIMIT 1', (question_text,))
+                question_result = cursor.fetchone()
+                
+                if not question_result:
+                    logging.warning(f"[DEBUG][decrement_error_count] Question not found: {question_text[:100]}...")
+                    return
+                
+                question_id = question_result[0]
+                
+                cursor.execute('SELECT error_count FROM user_errors WHERE user_id = ? AND question_id = ?', (user_id, question_id))
+                before = cursor.fetchone()
+                logging.info(f"[DEBUG][decrement_error_count] before: {before}")
+                
+                cursor.execute('''
+                    UPDATE user_errors 
+                    SET error_count = error_count - 1
+                    WHERE user_id = ? AND question_id = ?
+                ''', (user_id, question_id))
+                
+                cursor.execute('SELECT error_count FROM user_errors WHERE user_id = ? AND question_id = ?', (user_id, question_id))
+                after = cursor.fetchone()
+                logging.info(f"[DEBUG][decrement_error_count] after: {after}")
+                
+                # Remove if count reaches 0
+                cursor.execute('''
+                    DELETE FROM user_errors 
+                    WHERE user_id = ? AND question_id = ? AND error_count <= 0
+                ''', (user_id, question_id))
+                logging.info(f"[DEBUG][decrement_error_count] deleted if error_count <= 0 for user_id={user_id}, question_id={question_id}")
+                
+                conn.commit()
+                
+        except Exception as e:
+            logging.error(f"[DEBUG][decrement_error_count] Exception: {e}")
 
     def get_tasks_for_topic(self, topic: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Get tasks for a specific topic."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT question, answer, explanation, incorrect_options, question_type, source
+                SELECT id, question, answer, explanation, incorrect_options, question_type, source, image_path
                 FROM questions
                 WHERE topic = ?
                 ORDER BY RANDOM()
                 LIMIT ?
             ''', (topic, limit))
-            columns = ['question', 'answer', 'explanation', 'incorrect_options', 'question_type', 'source']
+            columns = ['id', 'question', 'answer', 'explanation', 'incorrect_options', 'question_type', 'source', 'image_path']
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     def get_error_tasks_for_user(self, user_id: int, topic: str, limit: int = 10) -> List[Dict[str, Any]]:
@@ -360,14 +482,14 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT DISTINCT q.question, q.answer, q.explanation, q.incorrect_options, ue.error_count
+                SELECT DISTINCT q.id, q.question, q.answer, q.explanation, q.incorrect_options, ue.error_count, q.image_path
                 FROM questions q
-                JOIN user_errors ue ON q.question = ue.question_text
+                JOIN user_errors ue ON q.id = ue.question_id
                 WHERE ue.user_id = ? AND ue.topic = ?
-                ORDER BY ue.error_count DESC, ue.timestamp DESC
+                ORDER BY ue.error_count DESC, ue.last_error_date DESC
                 LIMIT ?
             ''', (user_id, topic, limit))
-            columns = ['question', 'answer', 'explanation', 'incorrect_options', 'error_count']
+            columns = ['id', 'question', 'answer', 'explanation', 'incorrect_options', 'error_count', 'image_path']
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     def get_explanation_by_question_text(self, question_text: str) -> Optional[str]:
@@ -1227,7 +1349,7 @@ class Database:
             
             # Получаем количество ошибок
             cursor.execute('''
-                SELECT COUNT(DISTINCT question_text) as unique_errors,
+                SELECT COUNT(DISTINCT question_id) as unique_errors,
                        SUM(error_count) as total_errors
                 FROM user_errors WHERE user_id = ?
             ''', (user_id,))
@@ -1256,7 +1378,7 @@ class Database:
                        COUNT(tr.id) as total_tests,
                        AVG(tr.percentage) as avg_score,
                        MAX(tr.timestamp) as last_test,
-                       COUNT(DISTINCT ue.question_text) as unique_errors
+                       COUNT(DISTINCT ue.question_id) as unique_errors
                 FROM allowed_users au
                 LEFT JOIN test_results tr ON au.user_id = tr.user_id
                 LEFT JOIN user_errors ue ON au.user_id = ue.user_id
@@ -1388,23 +1510,24 @@ class Database:
             
             # Статистика по ошибкам
             cursor.execute('''
-                SELECT topic,
-                       COUNT(DISTINCT question_text) as unique_errors,
-                       SUM(error_count) as total_errors,
-                       MAX(timestamp) as last_error
-                FROM user_errors 
-                WHERE user_id = ?
-                GROUP BY topic
+                SELECT ue.topic,
+                       COUNT(DISTINCT ue.question_id) as unique_errors,
+                       SUM(ue.error_count) as total_errors,
+                       MAX(ue.last_error_date) as last_error
+                FROM user_errors ue
+                WHERE ue.user_id = ?
+                GROUP BY ue.topic
                 ORDER BY total_errors DESC
             ''', (user_id,))
             error_stats = cursor.fetchall()
             
             # Последние ошибки (топ-10)
             cursor.execute('''
-                SELECT question_text, topic, error_count, timestamp
-                FROM user_errors 
-                WHERE user_id = ?
-                ORDER BY timestamp DESC
+                SELECT q.question, ue.topic, ue.error_count, ue.last_error_date
+                FROM user_errors ue
+                JOIN questions q ON ue.question_id = q.id
+                WHERE ue.user_id = ?
+                ORDER BY ue.last_error_date DESC
                 LIMIT 10
             ''', (user_id,))
             recent_errors = cursor.fetchall()
@@ -1487,7 +1610,7 @@ class Database:
                        au.last_activity, au.is_active,
                        COUNT(tr.id) as total_tests,
                        AVG(tr.percentage) as avg_score,
-                       COUNT(DISTINCT ue.question_text) as unique_errors,
+                       COUNT(DISTINCT ue.question_id) as unique_errors,
                        MAX(tr.timestamp) as last_test
                 FROM allowed_users au
                 LEFT JOIN test_results tr ON au.user_id = tr.user_id
@@ -2639,3 +2762,73 @@ class Database:
             conn.commit()
             
             return cursor.rowcount > 0
+
+    def add_user_error_by_question_id(self, user_id: int, question_id: int, topic: str,
+                                     user_answer_text: str, correct_answer_text: str) -> None:
+        """Add a user's error to the database using question_id (new method for new structure)."""
+        try:
+            logging.info(f"[DEBUG][add_user_error_by_question_id] user_id={user_id}, question_id={question_id}, topic={topic}")
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Check if error already exists for this user and question
+                cursor.execute('''
+                    SELECT id, error_count FROM user_errors 
+                    WHERE user_id = ? AND question_id = ?
+                ''', (user_id, question_id))
+                result = cursor.fetchone()
+                
+                if result:
+                    error_id, current_count = result
+                    cursor.execute('''
+                        UPDATE user_errors 
+                        SET error_count = error_count + 1,
+                            last_error_date = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    ''', (error_id,))
+                    logging.info(f"[DEBUG][add_user_error_by_question_id] Updated error_count for id={error_id}, question_id={question_id}")
+                else:
+                    cursor.execute('''
+                        INSERT INTO user_errors 
+                        (user_id, question_id, topic, user_answer, correct_answer)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (user_id, question_id, topic, user_answer_text, correct_answer_text))
+                    logging.info(f"[DEBUG][add_user_error_by_question_id] Inserted new error for user_id={user_id}, question_id={question_id}")
+                
+                conn.commit()
+                
+        except Exception as e:
+            logging.error(f"[DEBUG][add_user_error_by_question_id] Exception: {e}")
+
+    def decrement_error_count_by_question_id(self, user_id: int, question_id: int) -> None:
+        """Decrement error count for a question by question_id and remove if reaches 0."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('SELECT error_count FROM user_errors WHERE user_id = ? AND question_id = ?', (user_id, question_id))
+                before = cursor.fetchone()
+                logging.info(f"[DEBUG][decrement_error_count_by_question_id] before: {before}")
+                
+                cursor.execute('''
+                    UPDATE user_errors 
+                    SET error_count = error_count - 1
+                    WHERE user_id = ? AND question_id = ?
+                ''', (user_id, question_id))
+                
+                cursor.execute('SELECT error_count FROM user_errors WHERE user_id = ? AND question_id = ?', (user_id, question_id))
+                after = cursor.fetchone()
+                logging.info(f"[DEBUG][decrement_error_count_by_question_id] after: {after}")
+                
+                # Remove if count reaches 0
+                cursor.execute('''
+                    DELETE FROM user_errors 
+                    WHERE user_id = ? AND question_id = ? AND error_count <= 0
+                ''', (user_id, question_id))
+                logging.info(f"[DEBUG][decrement_error_count_by_question_id] deleted if error_count <= 0 for user_id={user_id}, question_id={question_id}")
+                
+                conn.commit()
+                
+        except Exception as e:
+            logging.error(f"[DEBUG][decrement_error_count_by_question_id] Exception: {e}")

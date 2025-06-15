@@ -347,8 +347,21 @@ class RandomTestService:
                     
                     # Сохраняем ошибку в базу данных
                     question_topic = topic
+                    question_id = question_data.get('question_id')
                     
-                    # Если тема не указана, ищем в базе данных
+                    # Если есть question_id, получаем тему из базы данных по ID
+                    if question_id is not None:
+                        try:
+                            with sqlite3.connect(self.db.db_path) as conn:
+                                cursor = conn.cursor()
+                                cursor.execute('SELECT topic FROM questions WHERE id = ? LIMIT 1', (question_id,))
+                                result = cursor.fetchone()
+                                if result:
+                                    question_topic = result[0]
+                        except Exception as e:
+                            logger.error(f"Ошибка поиска темы вопроса по ID: {e}")
+                    
+                    # Если тема не указана или не найдена по ID, ищем по тексту вопроса
                     if not question_topic or question_topic == 'Неизвестная тема':
                         try:
                             with sqlite3.connect(self.db.db_path) as conn:
@@ -365,14 +378,25 @@ class RandomTestService:
                     if not question_topic:
                         question_topic = "Неизвестная тема" if user_language == 'ru' else "Белгісіз тақырып"
                     
-                    self.db.add_user_error(
-                        user_id=user_id,
-                        topic=question_topic,
-                        question_text=question_text,
-                        user_answer_text=user_answer,
-                        correct_answer_text=correct_answer,
-                        explanation_text=explanation
-                    )
+                    # Используем новый метод если есть question_id
+                    if question_id is not None:
+                        self.db.add_user_error_by_question_id(
+                            user_id=user_id,
+                            question_id=question_id,
+                            topic=question_topic,
+                            user_answer_text=user_answer,
+                            correct_answer_text=correct_answer
+                        )
+                    else:
+                        # Fallback к старому методу для AI-генерированных вопросов
+                        self.db.add_user_error(
+                            user_id=user_id,
+                            topic=question_topic,
+                            question_text=question_text,
+                            user_answer_text=user_answer,
+                            correct_answer_text=correct_answer,
+                            explanation_text=explanation
+                        )
             else:
                 logger.info(f"🎉 Отличный результат! Пользователь {user_id} ответил правильно на все вопросы")
             

@@ -217,7 +217,8 @@ class QuestionService:
                     task['explanation'],
                     options,  # Теперь гарантированно список
                     'db',
-                    task['image_path'] if 'image_path' in task else None
+                    task['image_path'] if 'image_path' in task else None,
+                    task.get('id')  # Добавляем question_id
                 ))
                 error_questions.append(task['question'])  # Add to error questions list
                 existing_question_texts_to_exclude.add(task['question'])
@@ -367,7 +368,8 @@ class QuestionService:
                         task['explanation'],
                         options,  # Теперь гарантированно список
                         task.get('source', 'db'),
-                        task['image_path'] if 'image_path' in task else None
+                        task['image_path'] if 'image_path' in task else None,
+                        task.get('id')  # Добавляем question_id
                     ))
                     existing_question_texts_to_exclude.add(task['question'])
                     logging.info(f"[get_or_generate_tasks] Added db_task: {task['question']}")
