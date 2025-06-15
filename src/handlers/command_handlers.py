@@ -97,10 +97,6 @@ class CommandHandlers(BaseHandler):
         self.clear_user_data(context)
         self.set_user_data(context, 'session_started', True)
 
-        # Активируем текущего пользователя при входе (только если у него есть доступ)
-        if self.db.check_user_access(user.id, user.username) and self.db.has_user_access(user.id):
-            self.db.set_user_active(user.id, None)  # Активируем пользователя без конкретной темы
-
         try:
             # Try to remove any existing keyboard
             await context.bot.send_message(
