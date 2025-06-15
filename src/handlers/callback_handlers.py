@@ -263,7 +263,20 @@ class CallbackHandlers(BaseHandler):
                 if not question_topic:
                     question_topic = "Неизвестная тема" if user_language == 'ru' else "Белгісіз тақырып"
                 
-                logging.info(f"[DEBUG] Random test error: user_id={user_id}, real_topic={question_topic}, question_text={question[0]}")
+                # Детальное логирование ошибки в случайном тесте
+                question_text = question[0]
+                if len(question_text) > 150:
+                    question_text_short = question_text[:150] + "..."
+                else:
+                    question_text_short = question_text
+                
+                logging.info(f"❌ Неправильный ответ в случайном тесте (пользователь {user_id}):")
+                logging.info(f"  📚 Тема: {question_topic}")
+                logging.info(f"  ❓ Вопрос: {question_text_short}")
+                logging.info(f"  👤 Ответ пользователя: {selected_answer}")
+                logging.info(f"  ✅ Правильный ответ: {correct_answer}")
+                logging.info(f"  💡 Объяснение: {explanation}")
+                logging.info(f"  ---")
                 
                 self.db.add_user_error(
                     user_id=user_id,
@@ -275,16 +288,44 @@ class CallbackHandlers(BaseHandler):
                 )
             else:
                 # Для обычных тестов используем текущую тему
-                logging.info(f"[DEBUG] Regular test error: user_id={user_id}, topic={self.get_user_data(context).get('current_topic')}, question_text={question[0]}")
+                current_topic = self.get_user_data(context).get('current_topic')
+                question_text = question[0]
+                if len(question_text) > 150:
+                    question_text_short = question_text[:150] + "..."
+                else:
+                    question_text_short = question_text
+                
+                logging.info(f"❌ Неправильный ответ в обычном тесте (пользователь {user_id}):")
+                logging.info(f"  📚 Тема: {current_topic}")
+                logging.info(f"  ❓ Вопрос: {question_text_short}")
+                logging.info(f"  👤 Ответ пользователя: {selected_answer}")
+                logging.info(f"  ✅ Правильный ответ: {correct_answer}")
+                logging.info(f"  💡 Объяснение: {explanation}")
+                logging.info(f"  ---")
+                
                 self.db.add_user_error(
                     user_id=user_id,
-                    topic=self.get_user_data(context).get('current_topic'),
+                    topic=current_topic,
                     question_text=question[0],
                     user_answer_text=selected_answer,
                     correct_answer_text=correct_answer,
                     explanation_text=explanation
                 )
         else:
+            # Логируем правильный ответ
+            question_text = question[0]
+            if len(question_text) > 150:
+                question_text_short = question_text[:150] + "..."
+            else:
+                question_text_short = question_text
+            
+            is_random_test = self.get_user_data(context).get('is_random_test', False)
+            test_type = "случайном" if is_random_test else "обычном"
+            
+            logging.info(f"✅ Правильный ответ в {test_type} тесте (пользователь {user_id}):")
+            logging.info(f"  ❓ Вопрос: {question_text_short}")
+            logging.info(f"  👤 Ответ пользователя: {selected_answer}")
+            
             # Decrement error count if this was previously an error
             self.db.decrement_error_count(user_id, question[0])
 
@@ -404,8 +445,38 @@ class CallbackHandlers(BaseHandler):
         correct = sum(1 for r in user_results if r['is_correct'])
         # Добавляю запись о прохождении теста только здесь
         percentage = (correct / total * 100.0) if total > 0 else 0.0
+        
+        # Проверяем, является ли это случайным тестом
+        is_random_test = self.get_user_data(context).get('is_random_test', False)
+        test_type = "случайного" if is_random_test else "обычного"
+        
+        # Детальное логирование итогового результата
+        logging.info(f"📊 Итоговый результат {test_type} теста (пользователь {user_id}):")
+        logging.info(f"  📚 Тема: {topic}")
+        logging.info(f"  ✅ Правильных ответов: {correct}/{total} ({percentage:.1f}%)")
+        
         self.db.add_test_result(user_id, topic, percentage)
         errors = [r for r in user_results if not r['is_correct']]
+        
+        # Логируем детали всех ошибок
+        if errors:
+            logging.info(f"  ❌ Ошибки в тесте ({len(errors)} из {total}):")
+            for i, err in enumerate(errors, 1):
+                question_text = err.get('question', 'Вопрос не найден')
+                if len(question_text) > 100:
+                    question_text_short = question_text[:100] + "..."
+                else:
+                    question_text_short = question_text
+                
+                logging.info(f"    {i}. Вопрос #{err['q_num']+1}: {question_text_short}")
+                logging.info(f"       👤 Ответ пользователя: {err['user_answer']}")
+                logging.info(f"       ✅ Правильный ответ: {err['correct_answer']}")
+                logging.info(f"       💡 Объяснение: {err.get('explanation', 'Объяснение отсутствует')}")
+                logging.info(f"       ---")
+        else:
+            logging.info(f"  🎉 Отличный результат! Все ответы правильные")
+        
+        logging.info(f"✅ Тест завершен и результат сохранен для пользователя {user_id}")
         
         # Всегда показываем красивый краткий результат с кнопками для объяснений
         results_text = get_message('test_results', user_language, 
@@ -431,9 +502,6 @@ class CallbackHandlers(BaseHandler):
                     callback_data=f"show_expl_{err['q_num']}"
                 )
             ])
-        
-        # Проверяем, является ли это случайным тестом
-        is_random_test = self.get_user_data(context).get('is_random_test', False)
         
         if is_random_test:
             # Для случайного теста добавляем кнопку "Пройти еще раз" (повторение ошибок)

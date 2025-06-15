@@ -79,6 +79,100 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 ## 📋 Changelog
 
+### 🔍 Enhanced Logging System (January 2025)
+
+**✅ COMPLETED: Comprehensive logging for question selection and error tracking**
+
+#### 🎯 What was implemented:
+
+1. **Detailed Question Selection Logging**:
+   - **Available topics display**: Shows all available topics with question counts
+   - **Selected questions breakdown**: Groups questions by topic with detailed information
+   - **Question text preview**: Shows first 100 characters of each question for identification
+   - **Test type identification**: Distinguishes between random and retry tests
+
+2. **Enhanced Error Logging**:
+   - **Real-time error tracking**: Logs each incorrect answer immediately with full context
+   - **Detailed error information**: Question text, user answer, correct answer, and explanation
+   - **Topic identification**: Shows actual topic for each question (especially important for random tests)
+   - **Visual formatting**: Uses emojis and structured formatting for better readability
+
+3. **Comprehensive Test Results Logging**:
+   - **Final test summary**: Complete overview of test performance
+   - **All errors listed**: Detailed breakdown of every incorrect answer with explanations
+   - **Perfect score recognition**: Special logging for tests with no errors
+   - **Test type context**: Clearly identifies random vs regular tests
+
+#### 🔧 Technical Implementation:
+
+**Random Test Service (`src/services/random_test_service.py`)**:
+- Added `_log_selected_questions()` method for detailed question logging
+- Enhanced `generate_random_test()` with topic availability logging
+- Improved `generate_retry_test()` with error topic analysis
+- Upgraded `save_random_test_result()` with comprehensive error logging
+
+**Callback Handlers (`src/handlers/callback_handlers.py`)**:
+- Enhanced `handle_answer()` with real-time error/success logging
+- Improved `handle_show_results()` with complete test summary logging
+- Added visual formatting with emojis for better log readability
+
+#### 📊 Logging Examples:
+
+**Question Selection Logging**:
+```
+📊 Доступные темы для пользователя 123456:
+  • Сравнение чисел: 15 вопросов
+  • Сложение в пределах 100: 12 вопросов
+  • Умножение на 2-5: 18 вопросов
+
+📋 Подобранные вопросы для случайный тест (пользователь 123456):
+  📚 Тема: Сравнение чисел (3 вопроса)
+    1. Какое число больше: 45 или 38?
+    2. Расположите числа в порядке возрастания: 23, 15, 41...
+    3. Сравните числа и поставьте знак: 67 ... 76
+```
+
+**Error Logging**:
+```
+❌ Неправильный ответ в случайном тесте (пользователь 123456):
+  📚 Тема: Сложение в пределах 100
+  ❓ Вопрос: Вычислите: 45 + 37 = ?
+  👤 Ответ пользователя: 72
+  ✅ Правильный ответ: 82
+  💡 Объяснение: При сложении 45 + 37: 5 + 7 = 12 (пишем 2, запоминаем 1), 4 + 3 + 1 = 8. Ответ: 82
+  ---
+```
+
+**Test Results Summary**:
+```
+📊 Итоговый результат случайного теста (пользователь 123456):
+  📚 Тема: Случайный тест
+  ✅ Правильных ответов: 7/10 (70.0%)
+  ❌ Ошибки в тесте (3 из 10):
+    1. Вопрос #3: Вычислите: 45 + 37 = ?
+       👤 Ответ пользователя: 72
+       ✅ Правильный ответ: 82
+       💡 Объяснение: При сложении 45 + 37: 5 + 7 = 12...
+       ---
+✅ Тест завершен и результат сохранен для пользователя 123456
+```
+
+#### 🎯 Benefits:
+
+1. **Better Debugging**: Easy identification of question selection issues
+2. **Learning Analytics**: Clear view of student mistakes and patterns
+3. **Content Quality**: Ability to identify problematic questions or explanations
+4. **Performance Monitoring**: Track which topics need more questions
+5. **User Support**: Quick understanding of student difficulties
+
+#### 🔧 Configuration:
+- All logging uses the standard Python `logging` module
+- Log level can be controlled via environment variables
+- Structured format makes logs easy to parse and analyze
+- Visual formatting with emojis improves readability
+
+---
+
 ### 🌐 Task 1: Kazakh Language Support Implementation (January 2025)
 
 **✅ TASK 1 COMPLETED: Full Kazakh language support implemented**

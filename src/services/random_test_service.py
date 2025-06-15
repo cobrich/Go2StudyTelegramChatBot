@@ -54,20 +54,28 @@ class RandomTestService:
                     questions_by_topic[topic] = []
                 questions_by_topic[topic].append(question)
             
+            # Логируем доступные темы и количество вопросов в каждой
+            logger.info(f"📊 Доступные темы для пользователя {user_id}:")
+            for topic, questions in questions_by_topic.items():
+                logger.info(f"  • {topic}: {len(questions)} вопросов")
+            
             # Генерируем сбалансированный тест
             selected_questions = self._get_balanced_questions_from_topics(
                 questions_by_topic, question_count
             )
             
+            # Логируем подобранные вопросы
+            self._log_selected_questions(user_id, selected_questions, "случайный тест")
+            
             # Перемешиваем вопросы для случайного порядка
             random.shuffle(selected_questions)
             
-            logger.info(f"Generated random test for user {user_id}: {len(selected_questions)} questions from {len(questions_by_topic)} topics")
+            logger.info(f"✅ Сгенерирован случайный тест для пользователя {user_id}: {len(selected_questions)} вопросов из {len(questions_by_topic)} тем")
             
             return selected_questions
             
         except Exception as e:
-            logger.error(f"Error generating random test for user {user_id}: {e}")
+            logger.error(f"❌ Ошибка генерации случайного теста для пользователя {user_id}: {e}")
             return []
     
     def generate_retry_test(self, user_id: int, question_count: int = 10) -> List[Dict[str, Any]]:
@@ -87,18 +95,25 @@ class RandomTestService:
             error_topics = self.db.get_error_topics(user_id)
             
             if not error_topics:
-                # Если нет ошибок, генерируем обычный случайный тест
+                logger.info(f"🎯 У пользователя {user_id} нет ошибок, генерируем обычный случайный тест")
                 return self.generate_random_test(user_id, question_count)
+            
+            # Логируем проблемные темы
+            logger.info(f"🔄 Проблемные темы для пользователя {user_id}:")
+            for topic_name, error_count in error_topics:
+                logger.info(f"  • {topic_name}: {error_count} ошибок")
             
             # Получаем вопросы по проблемным темам
             retry_questions = []
             for topic_name, error_count in error_topics:
                 topic_questions = self.db.get_error_tasks_for_user(user_id, topic_name, limit=10)
                 retry_questions.extend(topic_questions)
+                logger.info(f"  📝 Добавлено {len(topic_questions)} вопросов из темы '{topic_name}'")
             
             # Если вопросов с ошибками недостаточно, добавляем случайные
             if len(retry_questions) < question_count:
                 additional_needed = question_count - len(retry_questions)
+                logger.info(f"➕ Недостаточно вопросов с ошибками ({len(retry_questions)}), добавляем {additional_needed} случайных вопросов")
                 random_questions = self.generate_random_test(user_id, additional_needed)
                 
                 # Убираем дубликаты
@@ -112,16 +127,48 @@ class RandomTestService:
             # Ограничиваем количество вопросов
             retry_questions = retry_questions[:question_count]
             
+            # Логируем подобранные вопросы для повторного теста
+            self._log_selected_questions(user_id, retry_questions, "повторный тест")
+            
             # Перемешиваем
             random.shuffle(retry_questions)
             
-            logger.info(f"Generated retry test for user {user_id}: {len(retry_questions)} questions")
+            logger.info(f"✅ Сгенерирован повторный тест для пользователя {user_id}: {len(retry_questions)} вопросов")
             
             return retry_questions
             
         except Exception as e:
-            logger.error(f"Error generating retry test for user {user_id}: {e}")
+            logger.error(f"❌ Ошибка генерации повторного теста для пользователя {user_id}: {e}")
             return self.generate_random_test(user_id, question_count)
+    
+    def _log_selected_questions(self, user_id: int, questions: List[Dict[str, Any]], test_type: str):
+        """
+        Логирует подобранные вопросы с детальной информацией.
+        
+        Args:
+            user_id: ID пользователя
+            questions: Список подобранных вопросов
+            test_type: Тип теста (случайный/повторный)
+        """
+        logger.info(f"📋 Подобранные вопросы для {test_type} (пользователь {user_id}):")
+        
+        # Группируем вопросы по темам для лучшего отображения
+        questions_by_topic = {}
+        for i, question in enumerate(questions, 1):
+            topic = question.get('topic', 'Неизвестная тема')
+            if topic not in questions_by_topic:
+                questions_by_topic[topic] = []
+            questions_by_topic[topic].append((i, question))
+        
+        # Логируем по темам
+        for topic, topic_questions in questions_by_topic.items():
+            logger.info(f"  📚 Тема: {topic} ({len(topic_questions)} вопросов)")
+            for question_num, question in topic_questions:
+                question_text = question.get('question', question.get('question_text', 'Текст вопроса не найден'))
+                # Обрезаем длинный текст вопроса для читаемости
+                if len(question_text) > 100:
+                    question_text = question_text[:100] + "..."
+                logger.info(f"    {question_num}. {question_text}")
     
     def _get_balanced_questions_from_topics(self, questions_by_topic: Dict[str, List[Dict]], 
                                           total_count: int) -> List[Dict[str, Any]]:
@@ -263,27 +310,56 @@ class RandomTestService:
             # Импортируем функцию перевода
             random_test_topic_name = get_message('random_test_topic_name', user_language)
             
+            # Логируем результат теста
+            correct_count = sum(1 for q in questions_data if q.get('is_correct', True))
+            total_count = len(questions_data)
+            logger.info(f"📊 Результат теста для пользователя {user_id}: {correct_count}/{total_count} ({score_percentage:.1f}%)")
+            
             # Сохраняем общий результат теста
             self.db.add_test_result(user_id, random_test_topic_name, score_percentage)
             
-            # Сохраняем ошибки по темам
-            for question_data in questions_data:
-                if not question_data.get('is_correct', True):  # Если ответ неправильный
-                    # Для случайного теста сохраняем ошибку под реальной темой вопроса
-                    question_topic = question_data.get('topic')
+            # Логируем и сохраняем ошибки
+            incorrect_questions = [q for q in questions_data if not q.get('is_correct', True)]
+            
+            if incorrect_questions:
+                logger.info(f"❌ Неправильно отвеченные вопросы (пользователь {user_id}):")
+                
+                for i, question_data in enumerate(incorrect_questions, 1):
+                    # Логируем детали неправильного ответа
+                    question_text = question_data.get('question_text', question_data.get('question', 'Текст вопроса не найден'))
+                    user_answer = question_data.get('user_answer', 'Ответ не указан')
+                    correct_answer = question_data.get('correct_answer', 'Правильный ответ не найден')
+                    explanation = question_data.get('explanation', 'Объяснение отсутствует')
+                    topic = question_data.get('topic', 'Неизвестная тема')
+                    
+                    # Обрезаем длинные тексты для читаемости логов
+                    if len(question_text) > 150:
+                        question_text_short = question_text[:150] + "..."
+                    else:
+                        question_text_short = question_text
+                    
+                    logger.info(f"  {i}. 📚 Тема: {topic}")
+                    logger.info(f"     ❓ Вопрос: {question_text_short}")
+                    logger.info(f"     👤 Ответ пользователя: {user_answer}")
+                    logger.info(f"     ✅ Правильный ответ: {correct_answer}")
+                    logger.info(f"     💡 Объяснение: {explanation}")
+                    logger.info(f"     ---")
+                    
+                    # Сохраняем ошибку в базу данных
+                    question_topic = topic
                     
                     # Если тема не указана, ищем в базе данных
-                    if not question_topic:
+                    if not question_topic or question_topic == 'Неизвестная тема':
                         try:
                             with sqlite3.connect(self.db.db_path) as conn:
                                 cursor = conn.cursor()
                                 cursor.execute('SELECT topic FROM questions WHERE question = ? LIMIT 1', 
-                                             (question_data.get('question_text', ''),))
+                                             (question_text,))
                                 result = cursor.fetchone()
                                 if result:
                                     question_topic = result[0]
                         except Exception as e:
-                            logger.error(f"Error finding question topic: {e}")
+                            logger.error(f"Ошибка поиска темы вопроса: {e}")
                     
                     # Если все еще не нашли тему, используем "Неизвестная тема"
                     if not question_topic:
@@ -291,14 +367,16 @@ class RandomTestService:
                     
                     self.db.add_user_error(
                         user_id=user_id,
-                        topic=question_topic,  # Используем реальную тему вопроса
-                        question_text=question_data.get('question_text', ''),
-                        user_answer_text=question_data.get('user_answer', ''),
-                        correct_answer_text=question_data.get('correct_answer', ''),
-                        explanation_text=question_data.get('explanation', '')
+                        topic=question_topic,
+                        question_text=question_text,
+                        user_answer_text=user_answer,
+                        correct_answer_text=correct_answer,
+                        explanation_text=explanation
                     )
+            else:
+                logger.info(f"🎉 Отличный результат! Пользователь {user_id} ответил правильно на все вопросы")
             
-            logger.info(f"Saved random test result for user {user_id}: {score_percentage}%")
+            logger.info(f"✅ Результат случайного теста сохранен для пользователя {user_id}: {score_percentage}%")
             
         except Exception as e:
-            logger.error(f"Error saving random test result for user {user_id}: {e}") 
+            logger.error(f"❌ Ошибка сохранения результата случайного теста для пользователя {user_id}: {e}") 
