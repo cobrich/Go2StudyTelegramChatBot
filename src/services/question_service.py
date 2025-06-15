@@ -11,6 +11,22 @@ class QuestionService:
     def __init__(self, db: Database, ai_service: AIService):
         self.db = db
         self.ai_service = ai_service
+        # Флаг для использования нового метода генерации (по умолчанию False для совместимости)
+        self.use_v3_generation = False
+
+    def enable_v3_generation(self, enable: bool = True):
+        """Включает/выключает использование нового метода генерации v3"""
+        self.use_v3_generation = enable
+        logging.info(f"AI generation method changed to: {'v3 (Meta-prompt)' if enable else 'original'}")
+
+    def _generate_ai_task(self, topic: str, main_topic: str = None, language: str = 'ru'):
+        """Генерирует AI задачу используя выбранный метод"""
+        if self.use_v3_generation:
+            logging.info(f"[_generate_ai_task] Using v3 method for topic: {topic}")
+            return self.ai_service.generate_task_v3(topic, main_topic, language)
+        else:
+            logging.info(f"[_generate_ai_task] Using original method for topic: {topic}")
+            return self.ai_service.generate_task(topic, main_topic, language)
 
     def _validate_ai_question(self, question: str, correct_answer: str, explanation: str, topic: str) -> Tuple[bool, str]:
         """
@@ -315,9 +331,8 @@ class QuestionService:
                     generation_tasks.append(
                         loop.run_in_executor(
                             None,
-                            self.ai_service.generate_similar_task,
+                            self._generate_ai_task,
                             topic,
-                            error_question,
                             main_topic,
                             language
                         )
@@ -326,7 +341,7 @@ class QuestionService:
                 if len(generation_tasks) < remaining:
                     logging.info(f"[get_or_generate_tasks][retake] Not enough error_questions, scheduling {remaining - len(generation_tasks)} regular AI generations")
                     generation_tasks.extend([
-                        loop.run_in_executor(None, self.ai_service.generate_task, topic, main_topic, language)
+                        loop.run_in_executor(None, self._generate_ai_task, topic, main_topic, language)
                         for _ in range(remaining - len(generation_tasks))
                     ])
                 results = await asyncio.gather(*generation_tasks, return_exceptions=True)
@@ -459,7 +474,7 @@ class QuestionService:
         # Генерируем больше вопросов чем нужно, чтобы компенсировать отклонения валидацией
         max_attempts = max(remaining * 2, remaining + 5)  # Генерируем в 2 раза больше или +5
         generation_tasks = [
-            loop.run_in_executor(None, self.ai_service.generate_task, topic, main_topic, language)
+            loop.run_in_executor(None, self._generate_ai_task, topic, main_topic, language)
             for _ in range(max_attempts)
         ]
         results = await asyncio.gather(*generation_tasks, return_exceptions=True)
@@ -547,7 +562,7 @@ class QuestionService:
             logging.warning(f"[get_or_generate_tasks] Still need {remaining - valid_questions} more questions, making additional attempt with relaxed validation")
             additional_attempts = (remaining - valid_questions) * 2
             additional_generation_tasks = [
-                loop.run_in_executor(None, self.ai_service.generate_task, topic, main_topic, language)
+                loop.run_in_executor(None, self._generate_ai_task, topic, main_topic, language)
                 for _ in range(additional_attempts)
             ]
             additional_results = await asyncio.gather(*additional_generation_tasks, return_exceptions=True)

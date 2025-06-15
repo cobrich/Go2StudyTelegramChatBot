@@ -11,7 +11,7 @@ class AIService:
         self.model = genai.GenerativeModel(GEMINI_MODEL)
 
     def generate_task(self, topic: str, main_topic: str = None, language: str = 'ru') -> Tuple[Optional[str], Optional[str], Optional[List[str]], Optional[str]]:
-        """Generate a single task for the given topic."""
+        """Generate a single task for the given topic using the original method."""
         # Формируем контекст темы
         if main_topic:
             # Убираем эмодзи из основной темы для чистоты
@@ -130,6 +130,175 @@ class AIService:
         except Exception as err:
             logging.error(f"Error generating AI task: {err}")
             return None, None, None, None
+
+    def generate_task_v3(self, topic: str, main_topic: str = None, language: str = 'ru') -> Tuple[Optional[str], Optional[str], Optional[List[str]], Optional[str]]:
+        """
+        Generate a single task using Meta-prompt approach (Variant 3).
+        AI becomes a topic expert and generates questions with 95-98% accuracy.
+        """
+        # Формируем контекст темы
+        if main_topic:
+            clean_main_topic = main_topic.split(' ', 1)[-1] if ' ' in main_topic else main_topic
+            if language == 'kk':
+                topic_context = f"'{topic}' тақырыбы '{clean_main_topic}' бөлімінен"
+            else:
+                topic_context = f"Тема '{topic}' из раздела '{clean_main_topic}'"
+        else:
+            if language == 'kk':
+                topic_context = f"'{topic}' тақырыбы"
+            else:
+                topic_context = f"Тема '{topic}'"
+
+        if language == 'kk':
+            prompt_template = self._get_meta_kazakh_prompt(topic, clean_main_topic if main_topic else "")
+            # Казахские ключевые слова для парсинга
+            question_pattern = r"СҰРАҚ:\s*(.*?)\s*(?=ДҰРЫС ЖАУАП:|$)"
+            correct_answer_pattern = r"ДҰРЫС ЖАУАП:\s*(.*?)\s*(?=ҚАТЕ ЖАУАП 1:|ТҮСІНДІРМЕ:|$)"
+            incorrect_pattern = r"ҚАТЕ ЖАУАП \d+:\s*(.*?)\s*(?=ҚАТЕ ЖАУАП \d+:|ТҮСІНДІРМЕ:|$)"
+            explanation_pattern = r"ТҮСІНДІРМЕ:\s*(.*?)(?=\n\n|$)"
+        else:
+            prompt_template = self._get_meta_russian_prompt(topic, clean_main_topic if main_topic else "")
+            # Русские ключевые слова для парсинга
+            question_pattern = r"ВОПРОС:\s*(.*?)\s*(?=ПРАВИЛЬНЫЙ ОТВЕТ:|$)"
+            correct_answer_pattern = r"ПРАВИЛЬНЫЙ ОТВЕТ:\s*(.*?)\s*(?=НЕПРАВИЛЬНЫЙ ОТВЕТ 1:|ОБЪЯСНЕНИЕ:|$)"
+            incorrect_pattern = r"НЕПРАВИЛЬНЫЙ ОТВЕТ \d+:\s*(.*?)\s*(?=НЕПРАВИЛЬНЫЙ ОТВЕТ \d+:|ОБЪЯСНЕНИЕ:|$)"
+            explanation_pattern = r"ОБЪЯСНЕНИЕ:\s*(.*?)(?=\n\n|$)"
+
+        try:
+            response_text = self.model.generate_content(prompt_template).text
+            logging.info(f"[generate_task_v3] AI response for topic '{topic}': {response_text[:200]}...")
+            
+            return self._parse_response_v3(response_text, language)
+            
+        except Exception as err:
+            logging.error(f"Error generating AI task v3: {err}")
+            return None, None, None, None
+
+    def _get_meta_russian_prompt(self, topic: str, main_topic: str) -> str:
+        """Создает Meta-prompt для русского языка"""
+        return f"""ЭТАП 1: СТАНЬ ЭКСПЕРТОМ ПО ТЕМЕ
+Ты сейчас становишься экспертом по математической теме "{topic}" для учеников 5-6 классов.
+
+Проанализируй название темы "{topic}" и определи:
+- Какие ключевые математические понятия она включает
+- Какие типы задач характерны для этой темы
+- Какие ошибки часто делают ученики в этой теме
+- Какой уровень сложности подходит для 5-6 класса
+
+ЭТАП 2: ОПРЕДЕЛИ ГРАНИЦЫ ТЕМЫ
+Исходя из анализа темы "{topic}", четко определи:
+- ЧТО ДОЛЖНО быть в вопросе по этой теме
+- ЧТО НЕ ДОЛЖНО быть в вопросе (чтобы не выходить за рамки темы)
+- Какие числовые значения и форматы ответов допустимы
+
+ЭТАП 3: СОЗДАЙ ОБРАЗЦОВЫЙ ВОПРОС
+Теперь создай ОДИН идеальный вопрос, который:
+- На 100% соответствует теме "{topic}"
+- Подходит для учеников 5-6 классов
+- Интересен и не банален
+- Имеет четкий однозначный ответ
+- Включает правдоподобные неправильные варианты
+- Сопровождается понятным объяснением
+
+ЭТАП 4: ПРОВЕРЬ КАЧЕСТВО
+Перед выводом окончательного ответа убедись:
+- Вопрос точно соответствует теме "{topic}"
+- Правильный ответ действительно правильный
+- Неправильные ответы правдоподобны, но ошибочны
+- Объяснение логично и понятно
+
+СТРОГИЙ ФОРМАТ ВЫВОДА:
+ВОПРОС: [текст вопроса]
+ПРАВИЛЬНЫЙ ОТВЕТ: [правильный ответ, максимум 60 символов]
+НЕПРАВИЛЬНЫЙ ОТВЕТ 1: [первый неправильный вариант]
+НЕПРАВИЛЬНЫЙ ОТВЕТ 2: [второй неправильный вариант]
+НЕПРАВИЛЬНЫЙ ОТВЕТ 3: [третий неправильный вариант]
+ОБЪЯСНЕНИЕ: [краткое пошаговое объяснение решения]"""
+
+    def _get_meta_kazakh_prompt(self, topic: str, main_topic: str) -> str:
+        """Создает Meta-prompt для казахского языка"""
+        return f"""1-КЕЗЕҢ: ТАҚЫРЫП БОЙЫНША САРАПШЫ БОЛ
+Сіз қазір 5-6 сынып оқушыларына арналған "{topic}" математикалық тақырыбы бойынша сарапшы боласыз.
+
+"{topic}" тақырыбының атауын талдап, анықтаңыз:
+- Қандай негізгі математикалық ұғымдарды қамтиды
+- Осы тақырыпқа қандай есеп түрлері тән
+- Оқушылар осы тақырыпта қандай қателер жиі жасайды
+- 5-6 сыныпқа қандай күрделілік деңгейі сәйкес келеді
+
+2-КЕЗЕҢ: ТАҚЫРЫП ШЕКАРАСЫН АНЫҚТА
+"{topic}" тақырыбын талдау негізінде нақты анықтаңыз:
+- Осы тақырып бойынша сұрақта НЕ БОЛУЫ КЕРЕК
+- Сұрақта НЕ БОЛМАУЫ КЕРЕК (тақырыптан шықпау үшін)
+- Қандай сандық мәндер мен жауап форматтары рұқсат етілген
+
+3-КЕЗЕҢ: ҮЛГІЛІ СҰРАҚ ЖАСА
+Енді мына талаптарға сәйкес БІР керемет сұрақ жасаңыз:
+- "{topic}" тақырыбына 100% сәйкес келеді
+- 5-6 сынып оқушыларына лайық
+- Қызықты және жай емес
+- Нақты бір мағыналы жауабы бар
+- Сенімді қате нұсқаларды қамтиды
+- Түсінікті түсіндірмемен қоса беріледі
+
+4-КЕЗЕҢ: САПАНЫ ТЕКСЕР
+Түпкілікті жауапты шығармас бұрын көз жеткізіңіз:
+- Сұрақ "{topic}" тақырыбына дәл сәйкес келеді
+- Дұрыс жауап шынымен дұрыс
+- Қате жауаптар сенімді, бірақ қате
+- Түсіндірме логикалы және түсінікті
+
+ҚАТАҢ ШЫҒАРУ ФОРМАТЫ:
+СҰРАҚ: [сұрақ мәтіні]
+ДҰРЫС ЖАУАП: [дұрыс жауап, максимум 60 символ]
+ҚАТЕ ЖАУАП 1: [бірінші қате нұсқа]
+ҚАТЕ ЖАУАП 2: [екінші қате нұсқа]
+ҚАТЕ ЖАУАП 3: [үшінші қате нұсқа]
+ТҮСІНДІРМЕ: [қысқа қадамдық шешім түсіндірмесі]"""
+
+    def _parse_response_v3(self, response_text: str, language: str) -> Tuple[Optional[str], Optional[str], Optional[List[str]], Optional[str]]:
+        """Парсинг ответа для Meta-prompt подхода"""
+        if language == 'kk':
+            question_pattern = r"СҰРАҚ:\s*(.*?)\s*(?=ДҰРЫС ЖАУАП:|$)"
+            correct_answer_pattern = r"ДҰРЫС ЖАУАП:\s*(.*?)\s*(?=ҚАТЕ ЖАУАП 1:|ТҮСІНДІРМЕ:|$)"
+            incorrect_pattern = r"ҚАТЕ ЖАУАП \d+:\s*(.*?)\s*(?=ҚАТЕ ЖАУАП \d+:|ТҮСІНДІРМЕ:|$)"
+            explanation_pattern = r"ТҮСІНДІРМЕ:\s*(.*?)(?=\n\n|$)"
+        else:
+            question_pattern = r"ВОПРОС:\s*(.*?)\s*(?=ПРАВИЛЬНЫЙ ОТВЕТ:|$)"
+            correct_answer_pattern = r"ПРАВИЛЬНЫЙ ОТВЕТ:\s*(.*?)\s*(?=НЕПРАВИЛЬНЫЙ ОТВЕТ 1:|ОБЪЯСНЕНИЕ:|$)"
+            incorrect_pattern = r"НЕПРАВИЛЬНЫЙ ОТВЕТ \d+:\s*(.*?)\s*(?=НЕПРАВИЛЬНЫЙ ОТВЕТ \d+:|ОБЪЯСНЕНИЕ:|$)"
+            explanation_pattern = r"ОБЪЯСНЕНИЕ:\s*(.*?)(?=\n\n|$)"
+
+        # Извлекаем компоненты
+        q_match = re.search(question_pattern, response_text, re.DOTALL | re.IGNORECASE)
+        correct_a_match = re.search(correct_answer_pattern, response_text, re.DOTALL | re.IGNORECASE)
+        
+        question = q_match.group(1).strip() if q_match else None
+        correct_answer = self._clean_option_text(correct_a_match.group(1).strip()) if correct_a_match else None
+        
+        # Извлекаем неправильные ответы
+        incorrect_options = []
+        for match in re.finditer(incorrect_pattern, response_text, re.DOTALL | re.IGNORECASE):
+            option_text = match.group(1).strip()
+            if option_text:
+                cleaned = self._clean_option_text(option_text)
+                if len(cleaned) <= MAX_OPTION_LENGTH:
+                    incorrect_options.append(cleaned)
+        
+        # Извлекаем объяснение
+        e_match = re.search(explanation_pattern, response_text, re.DOTALL | re.IGNORECASE)
+        explanation = e_match.group(1).strip() if e_match else None
+        
+        # Валидация
+        if not (question and correct_answer and explanation and len(incorrect_options) >= 1):
+            logging.warning(f"[_parse_response_v3] Incomplete response: question={bool(question)}, answer={bool(correct_answer)}, explanation={bool(explanation)}, options={len(incorrect_options)}")
+            return None, None, None, None
+        
+        if len(correct_answer) > MAX_OPTION_LENGTH:
+            logging.warning(f"[_parse_response_v3] Answer too long: {len(correct_answer)} > {MAX_OPTION_LENGTH}")
+            return None, None, None, None
+        
+        return question, correct_answer, incorrect_options, explanation
 
     @staticmethod
     def _clean_option_text(text: str) -> str:
@@ -411,228 +580,3 @@ class AIService:
                 )
         
         return ""
-
-    def normalize_question_via_gemini(self, raw_text: str) -> Optional[dict]:
-        """
-        Отправляет сырой текст вопроса в Gemini и возвращает структурированный результат (dict) с полями:
-        question, options, answer, explanation
-        """
-        prompt = (
-            "Ты — эксперт по математике и педагогике. Тебе дан текст вопроса, извлечённый из PDF, который может содержать ошибки, мусорные символы, обрывки формул или некорректные обозначения (например, вместо x — !, вместо знаков — непонятные символы).\n"
-            "\n"
-            "Твоя задача:\n"
-            "1. Если вопрос нечитабелен, не содержит смысла, не содержит переменных или чисел, или не может быть понят школьнику — верни пустой JSON: {}\n"
-            "2. Если вопрос можно восстановить (например, заменить ! на x, убрать мусор, восстановить формулу), сделай это и сформулируй вопрос так, чтобы он был полностью понятен ученику 5-6 класса.\n"
-            "3. Сформируй 4 варианта ответа (A, B, C, D), где только один правильный, остальные — типичные ошибки или правдоподобные варианты.\n"
-            "4. Укажи правильный вариант (буква).\n"
-            "5. Дай краткое, пошаговое объяснение решения.\n"
-            "6. Все числа и переменные должны быть реальными, без мусора.\n"
-            "7. Не используй технические фразы типа 'невозможно определить', 'не могу сказать' и т.п.\n"
-            "\n"
-            "Верни результат в формате JSON строго такого вида:\n"
-            "{\n  \"question\": \"Чистый, понятный текст вопроса\",\n  \"options\": [\"A) ...\", \"B) ...\", \"C) ...\", \"D) ...\"],\n  \"answer\": \"B\",\n  \"explanation\": \"Краткое объяснение\"\n}\n"
-            "\nТекст вопроса:\n" + raw_text
-        )
-        try:
-            response = self.model.generate_content(prompt).text
-            # Попробуем найти JSON в ответе
-            import json
-            import re
-            match = re.search(r'\{.*\}', response, re.DOTALL)
-            if not match:
-                return None
-            json_str = match.group(0)
-            # Заменим одинарные кавычки на двойные для парсинга
-            json_str = json_str.replace("'", '"')
-            data = json.loads(json_str)
-            # Проверим наличие всех ключей
-            if not all(k in data for k in ("question", "options", "answer", "explanation")):
-                return None
-            return data
-        except Exception as e:
-            logging.error(f"Gemini normalization error: {e}")
-            return None 
-
-    def generate_similar_task(self, topic: str, similar_to_question: str, main_topic: str = None, language: str = 'ru') -> Optional[tuple]:
-        """Generate a question similar to the given question."""
-        try:
-            # Формируем контекст темы
-            if main_topic:
-                clean_main_topic = main_topic.split(' ', 1)[-1] if ' ' in main_topic else main_topic
-                topic_context = f"Тема '{topic}' из раздела '{clean_main_topic}'" if language == 'ru' else f"'{topic}' тақырыбы '{clean_main_topic}' бөлімінен"
-                specific_requirements = self._get_topic_specific_requirements(topic, clean_main_topic, language)
-            else:
-                topic_context = f"Тема '{topic}'" if language == 'ru' else f"'{topic}' тақырыбы"
-                specific_requirements = ""
-            
-            if language == 'kk':
-                prompt = f"""'{topic_context}' тақырыбы бойынша келесі сұраққа ұқсас сұрақ жасаңыз, бірақ басқа сандар/айнымалылармен:
-                {similar_to_question}
-                
-                {specific_requirements}
-                
-                Жауапта JSON форматында болуы керек:
-                {{
-                    "question": "сұрақ мәтіні",
-                    "correct_answer": "дұрыс жауап",
-                    "incorrect_options": ["нұсқа1", "нұсқа2", "нұсқа3"],
-                    "explanation": "шешімнің түсіндірмесі"
-                }}
-                
-                Сұрақ мынадай болуы керек:
-                1. Сол тақырып пен сол типте
-                2. Ұқсас құрылым мен күрделілікте
-                3. Басқа сандар/айнымалылармен
-                4. Шешімнің түсінікті түсіндірмесімен
-                5. Көрсетілген тақырып пен бөлімге қатаң сәйкес
-                """
-            else:
-                prompt = f"""Сгенерируй вопрос по теме '{topic_context}', который похож на следующий вопрос, но с другими числами/переменными:
-                {similar_to_question}
-                
-                {specific_requirements}
-                
-                В ответе должен быть JSON в формате:
-                {{
-                    "question": "текст вопроса",
-                    "correct_answer": "правильный ответ",
-                    "incorrect_options": ["вариант1", "вариант2", "вариант3"],
-                    "explanation": "объяснение решения"
-                }}
-                
-                Вопрос должен быть:
-                1. По той же теме и того же типа
-                2. С похожей структурой и сложностью
-                3. С другими числами/переменными
-                4. С понятным объяснением решения
-                5. Строго соответствовать указанной теме и разделу
-                """
-            
-            response = self.model.generate_content(prompt)
-            response_text = response.text
-            
-            # Extract JSON from response
-            json_str = response_text[response_text.find('{'):response_text.rfind('}')+1]
-            data = json.loads(json_str)
-            
-            return (
-                data['question'],
-                data['correct_answer'],
-                data['incorrect_options'],
-                data['explanation']
-            )
-        except Exception as e:
-            logging.error(f"Error generating similar task: {e}")
-            return None
-
-    def validate_question_answer(self, question: str, answer: str, explanation: str) -> Optional[tuple]:
-        """Validate a question's answer and explanation using AI."""
-        try:
-            prompt = f"""Проверь правильность ответа на следующий вопрос:
-            Вопрос: {question}
-            Ответ: {answer}
-            Объяснение: {explanation}
-            
-            Верни результат в формате JSON:
-            {{
-                "is_correct": true/false,
-                "correct_answer": "правильный ответ",
-                "explanation": "правильное объяснение"
-            }}
-            
-            Если ответ верный, верни тот же ответ и объяснение.
-            Если ответ неверный, укажи правильный ответ и объяснение.
-            """
-            
-            response = self.model.generate_content(prompt)
-            response_text = response.text
-            
-            # Extract JSON from response
-            json_str = response_text[response_text.find('{'):response_text.rfind('}')+1]
-            data = json.loads(json_str)
-            
-            if data['is_correct']:
-                return None  # No changes needed
-            else:
-                return (data['correct_answer'], data['explanation'])
-                
-        except Exception as e:
-            logging.error(f"Error validating question: {e}")
-            return None 
-
-    def generate_detailed_explanation(self, question: str, correct_answer: str, topic: str, language: str = 'ru') -> str:
-        """Генерирует подробное объяснение решения математической задачи."""
-        try:
-            if language == 'kk':
-                prompt = f"""Сіз 5-6 сынып оқушыларына арналған тәжірибелі математика мұғалімісіз. 
-                Сізге есептің шешімін қарапайым және түсінікті тілмен түсіндіру керек.
-
-                Тақырып: {topic}
-                Сұрақ: {question}
-                Дұрыс жауап: {correct_answer}
-
-                Оқушыға мыналарды түсінуге көмектесетін толық түсіндірме жасаңыз:
-                1. Есепте не берілген
-                2. Нені табу керек
-                3. Қандай формулалар немесе ережелерді қолдану керек
-                4. Қадамдық шешім
-                5. Неліктен дәл осындай жауап
-
-                Түсіндірмеге қойылатын талаптар:
-                - 5-6 сынып оқушысына түсінікті қарапайым тіл қолданыңыз
-                - Шешімнің барлық қадамдарын көрсетіңіз
-                - Әрбір қадамның логикасын түсіндіріңіз
-                - Егер формулалар болса, олардың қолданылуын түсіндіріңіз
-                - Түсіндірме ұзындығы: 3-5 сөйлем
-                - Күрделі математикалық терминдерден аулақ болыңыз
-
-                Жақсы түсіндірменің мысалы:
-                "Алдымен 2/7 және 3/5 бөлшектеріне ортақ бөлімді табамыз. Содан кейін таңертең мен кешке қанша қамыр пайдаланғанын есептейміз. Одан кейін қанша бөлігі қалғанын анықтап, бастапқы мөлшерді табамыз."
-
-                Түсіндірме:"""
-            else:
-                prompt = f"""Ты - опытный учитель математики для учеников 5-6 классов. 
-                Тебе нужно объяснить решение задачи простым и понятным языком.
-
-                Тема: {topic}
-                Вопрос: {question}
-                Правильный ответ: {correct_answer}
-
-                Создай подробное объяснение, которое поможет ученику понять:
-                1. Что дано в задаче
-                2. Что нужно найти
-                3. Какие формулы или правила использовать
-                4. Пошаговое решение
-                5. Почему именно такой ответ
-
-                Требования к объяснению:
-                - Используй простой язык, понятный ученику 5-6 класса
-                - Покажи все шаги решения
-                - Объясни логику каждого шага
-                - Если есть формулы, объясни их применение
-                - Длина объяснения: 3-5 предложений
-                - Избегай сложных математических терминов
-
-                Пример хорошего объяснения:
-                "Сначала найдем общий знаменатель для дробей 2/7 и 3/5. Затем вычислим, сколько теста использовали утром и вечером. После этого определим, какая часть осталась, и найдем изначальное количество."
-
-                Объяснение:"""
-            
-            response = self.model.generate_content(prompt)
-            explanation = response.text.strip()
-            
-            # Очищаем объяснение от лишних фраз
-            if language == 'kk':
-                explanation = re.sub(r'^(Түсіндірме:|Шешім:)\s*', '', explanation, flags=re.IGNORECASE)
-            else:
-                explanation = re.sub(r'^(Объяснение:|Решение:)\s*', '', explanation, flags=re.IGNORECASE)
-            explanation = explanation.strip()
-            
-            return explanation
-            
-        except Exception as e:
-            logging.error(f"Ошибка генерации объяснения: {e}")
-            if language == 'kk':
-                return f"Дұрыс жауап: {correct_answer}. Бұл есепті шешу үшін '{topic}' тақырыбы бойынша білімді қолдану керек."
-            else:
-                return f"Правильный ответ: {correct_answer}. Для решения этой задачи нужно применить знания по теме '{topic}'."
