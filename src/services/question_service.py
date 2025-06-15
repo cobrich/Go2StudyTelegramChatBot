@@ -303,7 +303,7 @@ class QuestionService:
                     logging.warning(f"[get_or_generate_tasks] Skipping db_task with empty fields: {task}")
                     continue
                 if task['question'] not in existing_question_texts_to_exclude:
-                    options = [task['answer']]
+                    options = []
                     if task['incorrect_options']:
                         # Убеждаемся, что incorrect_options правильно разбиваются на список
                         if isinstance(task['incorrect_options'], str):
@@ -317,6 +317,12 @@ class QuestionService:
                     if len(options) < 2:  # Добавляем фиктивные варианты если их мало
                         options.extend([f"Вариант {i}" for i in range(len(options), 4)])
                     
+                    # КРИТИЧЕСКИ ВАЖНО: Гарантируем наличие правильного ответа в вариантах
+                    if task['answer'] not in options:
+                        options.append(task['answer'])
+                    
+                    # Удаляем дубликаты, сохраняя порядок
+                    options = list(dict.fromkeys(options))
                     random.shuffle(options)
                     tasks.append((
                         task['question'],
