@@ -348,7 +348,7 @@ class CallbackHandlers(BaseHandler):
             # Last question - show final result and complete test
             self.db.clear_user_test_activity(user_id)  # Очищаем только тему теста
             self.db.set_user_inactive(user_id)  # Очищаем статус активного теста
-            self.clear_user_data(context)
+            # НЕ очищаем user_data здесь, чтобы сохранить результаты для показа
             # Показываем только кнопку 'Показать результаты'
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('show_results', user_language), callback_data="show_results")]])
             try:
@@ -367,7 +367,6 @@ class CallbackHandlers(BaseHandler):
                     )
                 except Exception as e2:
                     logging.error(f"Error sending fallback message: {e2}")
-            # Не очищаем user_data, чтобы сохранить результаты для итогов
         else:
             # Not last question - move to next
             next_index = current_index + 1
