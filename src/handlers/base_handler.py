@@ -3,13 +3,13 @@ from telegram.ext import ContextTypes
 from services.database import Database
 from services.question_service import QuestionService
 from utils.keyboards import get_main_menu_markup
+from utils.translations import get_message
 import logging
 
 class BaseHandler:
     def __init__(self, db: Database, question_service: QuestionService):
         self.db = db
         self.question_service = question_service
-        self.main_menu_markup = get_main_menu_markup()
 
     async def safe_answer_callback(self, query) -> None:
         """Safely answer callback query, ignoring expired queries."""
@@ -22,6 +22,7 @@ class BaseHandler:
     async def check_user_active(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
         """Check if user is active and handle accordingly."""
         user_id = update.effective_user.id
+        user_language = self.db.get_user_language(user_id)
         msg = update.effective_message
         if self.db.is_user_active(user_id):
             # Check if we have valid test data in context
@@ -35,10 +36,10 @@ class BaseHandler:
                 self.clear_user_data(context)
                 return False
             
+            active_test_message = get_message('active_test_warning', user_language)
             await msg.reply_text(
-                "Вы проходите тест. Чтобы выбрать другую опцию, пожалуйста, завершите текущий тест. "
-                "Для возврата к выбору тем без завершения теста, перейдите к первому вопросу теста.",
-                reply_markup=self.main_menu_markup
+                active_test_message,
+                reply_markup=get_main_menu_markup(user_id)
             )
             return True
         return False
@@ -57,11 +58,14 @@ class BaseHandler:
 
     async def handle_error(self, update: Update, error: Exception) -> None:
         """Handle errors in a consistent way."""
+        user_id = update.effective_user.id
+        user_language = self.db.get_user_language(user_id)
         logging.error(f"Error in handler: {error}")
         try:
+            error_message = get_message('general_error', user_language)
             await update.message.reply_text(
-                "Произошла ошибка. Пожалуйста, попробуйте еще раз или используйте /start для перезапуска бота.",
-                reply_markup=self.main_menu_markup
+                error_message,
+                reply_markup=get_main_menu_markup(user_id)
             )
         except Exception as e:
             logging.error(f"Error sending error message: {e}") 

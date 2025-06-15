@@ -20,87 +20,23 @@ class Database:
         self._init_db()
 
     def _init_db(self):
-        """Initialize database tables if they don't exist."""
+        """Initialize database with all required tables."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            # Add source column if it doesn't exist and set default value for existing records
-            try:
-                cursor.execute('ALTER TABLE questions ADD COLUMN source TEXT DEFAULT "db"')
-                # Update existing records to have 'db' as source
-                cursor.execute('UPDATE questions SET source = "db" WHERE source IS NULL')
-                conn.commit()
-            except sqlite3.OperationalError:
-                # Column already exists
-                pass
-            
-            # Update question_type from 'ai' to 'test'
-            try:
-                cursor.execute('UPDATE questions SET question_type = "test" WHERE question_type = "ai"')
-                conn.commit()
-            except sqlite3.OperationalError as e:
-                logging.error(f"Error updating question_type: {e}")
-            
-            # Add language column if it doesn't exist
-            try:
-                cursor.execute('ALTER TABLE users ADD COLUMN language TEXT DEFAULT "ru"')
-                # Update existing records to have 'ru' as default language
-                cursor.execute('UPDATE users SET language = "ru" WHERE language IS NULL')
-                conn.commit()
-            except sqlite3.OperationalError:
-                # Column already exists
-                pass
-            
-            # Add language column to main_topics if it doesn't exist
-            try:
-                # Проверяем, существует ли уже поле language
-                cursor.execute("PRAGMA table_info(main_topics)")
-                columns = [column[1] for column in cursor.fetchall()]
-                
-                if 'language' not in columns:
-                    cursor.execute('ALTER TABLE main_topics ADD COLUMN language TEXT DEFAULT "ru"')
-                    # Update existing records to have 'ru' as default language
-                    cursor.execute('UPDATE main_topics SET language = "ru" WHERE language IS NULL')
-                    conn.commit()
-                    print("[LOG] Добавлено поле language в таблицу main_topics")
-            except sqlite3.OperationalError:
-                # Column already exists
-                pass
-            
-            # Update main_topics UNIQUE constraint to support (name, language)
-            try:
-                # Проверяем, существует ли уже индекс
-                cursor.execute('''
-                    SELECT name FROM sqlite_master 
-                    WHERE type='index' AND name='idx_main_topics_name_language'
-                ''')
-                index_exists = cursor.fetchone() is not None
-                
-                if not index_exists:
-                    cursor.execute('''
-                        CREATE UNIQUE INDEX idx_main_topics_name_language 
-                        ON main_topics(name, language)
-                    ''')
-                    conn.commit()
-                    print("[LOG] Обновлен UNIQUE constraint для main_topics")
-            except sqlite3.OperationalError:
-                # Index already exists or other error
-                pass
-            
-            # Admins table - для управления администраторами
+            # Create admins table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS admins (
                     user_id INTEGER PRIMARY KEY,
                     username TEXT,
                     full_name TEXT,
                     is_super_admin BOOLEAN DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     created_by INTEGER,
-                    FOREIGN KEY (created_by) REFERENCES admins(user_id)
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
             
-            # Allowed users table - whitelist учеников
+            # Create allowed_users table with all necessary fields
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS allowed_users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,237 +46,149 @@ class Database:
                     added_by INTEGER,
                     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_active BOOLEAN DEFAULT 1,
+                    user_id INTEGER,
+                    language TEXT DEFAULT "ru",
+                    current_topic TEXT,
+                    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (added_by) REFERENCES admins(user_id)
                 )
             ''')
             
-            # Add user_id column for users without username
-            try:
-                cursor.execute('ALTER TABLE allowed_users ADD COLUMN user_id INTEGER')
-                conn.commit()
-            except sqlite3.OperationalError:
-                # Column already exists
-                pass
+            # Create unique index for user_id
+            cursor.execute('''
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_allowed_users_user_id 
+                ON allowed_users(user_id) WHERE user_id IS NOT NULL
+            ''')
             
-            # Add phone_number column for contact information
-            try:
-                cursor.execute('ALTER TABLE allowed_users ADD COLUMN phone_number TEXT')
-                conn.commit()
-            except sqlite3.OperationalError:
-                # Column already exists
-                pass
-            
-            # Add language column to allowed_users
-            try:
-                # Проверяем, существует ли уже поле language
-                cursor.execute("PRAGMA table_info(allowed_users)")
-                columns = [column[1] for column in cursor.fetchall()]
-                
-                if 'language' not in columns:
-                    cursor.execute('ALTER TABLE allowed_users ADD COLUMN language TEXT DEFAULT "ru"')
-                    # Update existing records to have 'ru' as default language
-                    cursor.execute('UPDATE allowed_users SET language = "ru" WHERE language IS NULL')
-                    conn.commit()
-                    print("[LOG] Добавлено поле language в таблицу allowed_users")
-            except sqlite3.OperationalError:
-                # Column already exists
-                pass
-            
-            # Add unique constraint for user_id to prevent duplicates
-            try:
-                cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_allowed_users_user_id ON allowed_users(user_id) WHERE user_id IS NOT NULL')
-                conn.commit()
-            except sqlite3.OperationalError:
-                # Index already exists
-                pass
-            
-            # Main topics table - основные разделы
+            # Create main_topics table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS main_topics (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT UNIQUE NOT NULL,
+                    name TEXT NOT NULL,
+                    language TEXT DEFAULT 'ru',
                     order_index INTEGER DEFAULT 0,
                     is_active BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_by INTEGER,
+                    UNIQUE(name, language),
+                    FOREIGN KEY (created_by) REFERENCES admins(user_id)
+                )
+            ''')
+            
+            # Create subtopics table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS subtopics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    main_topic TEXT NOT NULL,
+                    language TEXT DEFAULT 'ru',
+                    order_index INTEGER DEFAULT 0,
+                    is_active BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_by INTEGER,
+                    UNIQUE(name, main_topic, language),
+                    FOREIGN KEY (created_by) REFERENCES admins(user_id)
+                )
+            ''')
+            
+            # Create questions table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS questions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    question TEXT NOT NULL,
+                    answer TEXT NOT NULL,
+                    incorrect_options TEXT,
+                    explanation TEXT,
+                    topic TEXT NOT NULL,
+                    source TEXT DEFAULT 'manual',
+                    image_path TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     created_by INTEGER,
                     FOREIGN KEY (created_by) REFERENCES admins(user_id)
                 )
             ''')
             
-            # Subtopics table - подтемы
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS subtopics (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    main_topic_id INTEGER NOT NULL,
-                    name TEXT NOT NULL,
-                    order_index INTEGER DEFAULT 0,
-                    is_active BOOLEAN DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(main_topic_id, name),
-                    FOREIGN KEY (main_topic_id) REFERENCES main_topics(id) ON DELETE CASCADE
-                )
-            ''')
-            
-            # Users table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id INTEGER PRIMARY KEY,
-                    username TEXT,
-                    full_name TEXT,
-                    grade INTEGER,
-                    language TEXT DEFAULT 'ru',
-                    is_active BOOLEAN DEFAULT 0,
-                    current_topic TEXT,
-                    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            # Add phone_number column to users table if it doesn't exist
-            try:
-                # Проверяем, существует ли уже поле phone_number
-                cursor.execute("PRAGMA table_info(users)")
-                columns = [column[1] for column in cursor.fetchall()]
-                
-                if 'phone_number' not in columns:
-                    cursor.execute('ALTER TABLE users ADD COLUMN phone_number TEXT')
-                    conn.commit()
-                    print("[LOG] Добавлено поле phone_number в таблицу users")
-            except sqlite3.OperationalError:
-                # Column already exists
-                pass
-            
-            # Test results table
+            # Create test_results table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS test_results (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER,
-                    topic TEXT,
-                    percentage REAL,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                    user_id INTEGER NOT NULL,
+                    topic TEXT NOT NULL,
+                    percentage REAL NOT NULL,
+                    date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES allowed_users(user_id)
                 )
             ''')
             
-            # Questions table
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS questions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    topic TEXT,
-                    question TEXT,
-                    answer TEXT,
-                    explanation TEXT,
-                    incorrect_options TEXT,
-                    question_type TEXT DEFAULT 'standard',
-                    source TEXT DEFAULT 'db',
-                    image_path TEXT
-                )
-            ''')
-            
-            # User errors table
+            # Create user_errors table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS user_errors (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER,
-                    topic TEXT,
-                    question_text TEXT,
-                    user_answer TEXT,
-                    correct_answer TEXT,
+                    user_id INTEGER NOT NULL,
+                    topic TEXT NOT NULL,
+                    question TEXT NOT NULL,
+                    user_answer TEXT NOT NULL,
+                    correct_answer TEXT NOT NULL,
                     explanation TEXT,
                     error_count INTEGER DEFAULT 1,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                    first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES allowed_users(user_id)
                 )
             ''')
             
-            # Инициализация нормализованной структуры из constants.py если таблицы пустые
-            cursor.execute('SELECT COUNT(*) FROM main_topics')
-            if cursor.fetchone()[0] == 0:
-                try:
-                    # Инициализируем русские темы
-                    from config.constants import TOPIC_HIERARCHY
-                    # Добавляем русские основные разделы
-                    for order_index, main_topic in enumerate(TOPIC_HIERARCHY.keys()):
-                        cursor.execute('''
-                            INSERT INTO main_topics (name, order_index, language, is_active)
-                            VALUES (?, ?, "ru", 1)
-                        ''', (main_topic, order_index))
-                    
-                    # Получаем ID русских основных тем и добавляем подтемы
-                    cursor.execute('SELECT id, name FROM main_topics WHERE language = "ru"')
-                    main_topics_map = {name: id for id, name in cursor.fetchall()}
-                    
-                    for main_topic, subtopics in TOPIC_HIERARCHY.items():
-                        main_topic_id = main_topics_map[main_topic]
-                        for subtopic_order, subtopic in enumerate(subtopics):
-                            cursor.execute('''
-                                INSERT INTO subtopics (main_topic_id, name, order_index, is_active)
-                                VALUES (?, ?, ?, 1)
-                            ''', (main_topic_id, subtopic, subtopic_order))
-                    
-                    print(f"[LOG] Инициализированы русские темы: {len(TOPIC_HIERARCHY)} основных разделов")
-                    
-                    # Инициализируем казахские темы
-                    try:
-                        from config.constants_kk import TOPIC_HIERARCHY_KK
-                        # Добавляем казахские основные разделы
-                        for order_index, main_topic_kk in enumerate(TOPIC_HIERARCHY_KK.keys()):
-                            cursor.execute('''
-                                INSERT INTO main_topics (name, order_index, language, is_active)
-                                VALUES (?, ?, "kk", 1)
-                            ''', (main_topic_kk, order_index))
-                        
-                        # Получаем ID казахских основных тем и добавляем подтемы
-                        cursor.execute('SELECT id, name FROM main_topics WHERE language = "kk"')
-                        main_topics_kk_map = {name: id for id, name in cursor.fetchall()}
-                        
-                        for main_topic_kk, subtopics_kk in TOPIC_HIERARCHY_KK.items():
-                            main_topic_id = main_topics_kk_map[main_topic_kk]
-                            for subtopic_order, subtopic_kk in enumerate(subtopics_kk):
-                                cursor.execute('''
-                                    INSERT INTO subtopics (main_topic_id, name, order_index, is_active)
-                                    VALUES (?, ?, ?, 1)
-                                ''', (main_topic_id, subtopic_kk, subtopic_order))
-                        
-                        print(f"[LOG] Инициализированы казахские темы: {len(TOPIC_HIERARCHY_KK)} основных разделов")
-                        
-                    except ImportError:
-                        print("[LOG] config.constants_kk не найден, пропускаем инициализацию казахских тем")
-                    
-                except ImportError:
-                    print("[LOG] config.constants не найден, пропускаем инициализацию тем")
+            # Add missing columns to existing tables if they don't exist
+            try:
+                cursor.execute('ALTER TABLE allowed_users ADD COLUMN current_topic TEXT')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+                
+            try:
+                cursor.execute('ALTER TABLE allowed_users ADD COLUMN last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
             
             conn.commit()
+            
+            # Initialize base topic structure if empty
+            cursor.execute('SELECT COUNT(*) FROM main_topics')
+            if cursor.fetchone()[0] == 0:
+                self._initialize_base_topics()
+                
+            # Create Kazakh main topics if they don't exist
+            self.create_kazakh_main_topics()
 
     def _get_connection(self):
         """Get database connection context manager."""
         return sqlite3.connect(self.db_path)
 
     def set_user_active(self, user_id: int, topic: str) -> None:
-        """Set user as active and update their current topic."""
+        """Set user as active with current topic."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT OR REPLACE INTO users (user_id, is_active, current_topic, last_activity)
-                VALUES (?, 1, ?, CURRENT_TIMESTAMP)
-            ''', (user_id, topic))
+                UPDATE allowed_users 
+                SET is_active = 1, current_topic = ?, last_activity = CURRENT_TIMESTAMP 
+                WHERE user_id = ?
+            ''', (topic, user_id))
             conn.commit()
 
     def set_user_inactive(self, user_id: int) -> None:
-        """Set user as inactive."""
+        """Set user as inactive and clear current topic."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                UPDATE users 
-                SET is_active = 0, current_topic = NULL 
+                UPDATE allowed_users 
+                SET is_active = 0, current_topic = NULL, last_activity = CURRENT_TIMESTAMP 
                 WHERE user_id = ?
             ''', (user_id,))
             conn.commit()
 
     def is_user_active(self, user_id: int) -> bool:
-        """Check if user is currently active."""
+        """Check if user is currently active (taking a test)."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT is_active FROM users WHERE user_id = ?', (user_id,))
+            cursor.execute('SELECT is_active FROM allowed_users WHERE user_id = ?', (user_id,))
             result = cursor.fetchone()
             return bool(result and result[0])
 
@@ -349,7 +197,7 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                UPDATE users 
+                UPDATE allowed_users 
                 SET last_activity = CURRENT_TIMESTAMP 
                 WHERE user_id = ?
             ''', (user_id,))
@@ -549,7 +397,13 @@ class Database:
                 cursor = conn.cursor()
                 cursor.execute('DELETE FROM test_results WHERE user_id = ?', (user_id,))
                 cursor.execute('DELETE FROM user_errors WHERE user_id = ?', (user_id,))
-                cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
+                # Note: We don't delete from allowed_users as it's the main user table
+                # Just clear activity and reset user state
+                cursor.execute('''
+                    UPDATE allowed_users 
+                    SET is_active = 0, current_topic = NULL, last_activity = CURRENT_TIMESTAMP 
+                    WHERE user_id = ?
+                ''', (user_id,))
                 conn.commit()
             return True
         except Exception as e:
@@ -557,9 +411,10 @@ class Database:
             return False
 
     def set_all_users_inactive(self):
+        """Set all users as inactive."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute('UPDATE users SET is_active = 0, current_topic = NULL')
+            cursor.execute('UPDATE allowed_users SET is_active = 0, current_topic = NULL')
             conn.commit()
 
     def clear_user_activity(self, user_id: int) -> None:
@@ -567,37 +422,28 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                UPDATE users 
+                UPDATE allowed_users 
                 SET is_active = 0, current_topic = NULL, last_activity = CURRENT_TIMESTAMP 
                 WHERE user_id = ?
             ''', (user_id,))
             conn.commit()
 
     def register_user(self, user_id: int, username: str) -> None:
-        """Register a new user and sync with whitelist data."""
+        """Register user if they don't exist in allowed_users."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            # Получаем данные из whitelist если есть
+            # Check if user already exists
+            cursor.execute('SELECT user_id FROM allowed_users WHERE user_id = ?', (user_id,))
+            if cursor.fetchone():
+                return  # User already exists
+            
+            # Only register if user is in whitelist (this should not happen normally)
+            # This method is kept for backward compatibility
             cursor.execute('''
-                SELECT full_name, grade 
-                FROM allowed_users 
-                WHERE user_id = ? OR username = ?
+                INSERT OR IGNORE INTO allowed_users (user_id, username, last_activity)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
             ''', (user_id, username))
-            whitelist_data = cursor.fetchone()
-            
-            if whitelist_data:
-                full_name, grade = whitelist_data
-                cursor.execute('''
-                    INSERT OR REPLACE INTO users (user_id, username, full_name, grade, last_activity)
-                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ''', (user_id, username, full_name, grade))
-            else:
-                cursor.execute('''
-                    INSERT OR REPLACE INTO users (user_id, username, last_activity)
-                    VALUES (?, ?, CURRENT_TIMESTAMP)
-                ''', (user_id, username))
-            
             conn.commit()
 
     def add_question(self, question: dict) -> None:
@@ -672,47 +518,41 @@ class Database:
             return [(topic, topic_counts[topic]) for topic in topic_order[:unique_limit]]
 
     def update_user_info(self, user_id: int, full_name: str, grade: int) -> None:
-        """Update user's full name and grade."""
+        """Update user information."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                UPDATE users SET full_name = ?, grade = ? WHERE user_id = ?
+                UPDATE allowed_users 
+                SET full_name = ?, grade = ?, last_activity = CURRENT_TIMESTAMP 
+                WHERE user_id = ?
             ''', (full_name, grade, user_id))
             conn.commit()
 
     def get_user_info(self, user_id: int):
-        """Get user's full name, grade and language."""
+        """Get user information."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                SELECT full_name, grade, language FROM users WHERE user_id = ?
-            ''', (user_id,))
+            cursor.execute('SELECT full_name, grade, language FROM allowed_users WHERE user_id = ?', (user_id,))
             return cursor.fetchone()
 
     def set_user_info(self, user_id: int, full_name: str, grade: int) -> None:
-        """Set user's full name and grade (insert or update)."""
+        """Set user information (create or update)."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                UPDATE users SET full_name = ?, grade = ? WHERE user_id = ?
-            ''', (full_name, grade, user_id))
-            if cursor.rowcount == 0:
-                cursor.execute('''
-                    INSERT INTO users (user_id, full_name, grade) VALUES (?, ?, ?)
-                ''', (user_id, full_name, grade))
+                INSERT OR REPLACE INTO allowed_users (user_id, full_name, grade, last_activity)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (user_id, full_name, grade))
             conn.commit()
 
     def set_user_info_with_language(self, user_id: int, full_name: str, grade: int, language: str) -> None:
-        """Set user's full name, grade and language (insert or update)."""
+        """Set user information with language (create or update)."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                UPDATE users SET full_name = ?, grade = ?, language = ? WHERE user_id = ?
-            ''', (full_name, grade, language, user_id))
-            if cursor.rowcount == 0:
-                cursor.execute('''
-                    INSERT INTO users (user_id, full_name, grade, language) VALUES (?, ?, ?, ?)
-                ''', (user_id, full_name, grade, language))
+                INSERT OR REPLACE INTO allowed_users (user_id, full_name, grade, language, last_activity)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ''', (user_id, full_name, grade, language))
             conn.commit()
 
     def update_user_language(self, user_id: int, language: str) -> None:
@@ -721,18 +561,13 @@ class Database:
             cursor = conn.cursor()
             
             # Получаем текущий язык пользователя
-            cursor.execute('SELECT language FROM users WHERE user_id = ?', (user_id,))
+            cursor.execute('SELECT language FROM allowed_users WHERE user_id = ?', (user_id,))
             result = cursor.fetchone()
             current_language = result[0] if result else 'ru'
             
-            # Обновляем язык в таблице users
-            cursor.execute('''
-                UPDATE users SET language = ? WHERE user_id = ?
-            ''', (language, user_id))
-            
             # Обновляем язык в таблице allowed_users
             cursor.execute('''
-                UPDATE allowed_users SET language = ? WHERE user_id = ?
+                UPDATE allowed_users SET language = ?, last_activity = CURRENT_TIMESTAMP WHERE user_id = ?
             ''', (language, user_id))
             
             conn.commit()
@@ -747,7 +582,7 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT language FROM users WHERE user_id = ?
+                SELECT language FROM allowed_users WHERE user_id = ?
             ''', (user_id,))
             result = cursor.fetchone()
             return result[0] if result else 'ru'
@@ -972,7 +807,7 @@ class Database:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT user_id, username, full_name, grade, is_active, added_at, added_by
+                    SELECT user_id, username, full_name, grade, is_active, added_at, added_by, language
                     FROM allowed_users
                     WHERE user_id = ?
                 ''', (user_id,))
@@ -1809,60 +1644,12 @@ class Database:
         except Exception:
             return False
 
-    def add_allowed_user_with_phone(self, user_id: int = None, username: str = None, 
-                                   full_name: str = None, grade: int = None, 
-                                   phone_number: str = None, added_by: int = None) -> bool:
-        """Добавить пользователя в whitelist с поддержкой номера телефона."""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Проверяем, что есть хотя бы один идентификатор
-                if not user_id and not username:
-                    return False
-                
-                cursor.execute('''
-                    INSERT INTO allowed_users (user_id, username, full_name, grade, phone_number, added_by)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (user_id, username, full_name, grade, phone_number, added_by))
-                conn.commit()
-                return True
-        except sqlite3.IntegrityError:
-            return False
-
-    def update_allowed_user_phone(self, user_id: int = None, username: str = None, 
-                                 phone_number: str = None) -> bool:
-        """Обновить номер телефона пользователя."""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                if user_id:
-                    cursor.execute('''
-                        UPDATE allowed_users 
-                        SET phone_number = ?
-                        WHERE user_id = ?
-                    ''', (phone_number, user_id))
-                elif username:
-                    cursor.execute('''
-                        UPDATE allowed_users 
-                        SET phone_number = ?
-                        WHERE username = ?
-                    ''', (phone_number, username))
-                else:
-                    return False
-                
-                conn.commit()
-                return cursor.rowcount > 0
-        except Exception:
-            return False
-
     def get_student_contact_info(self, user_id: int) -> Dict[str, Any]:
         """Получить контактную информацию ученика."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT au.user_id, au.username, au.full_name, au.grade, au.phone_number,
+                SELECT au.user_id, au.username, au.full_name, au.grade,
                        u.username as current_username, u.full_name as current_full_name
                 FROM allowed_users au
                 LEFT JOIN users u ON au.user_id = u.user_id
@@ -1878,11 +1665,10 @@ class Database:
                     'whitelist_username': result[1],
                     'whitelist_full_name': result[2],
                     'grade': result[3],
-                    'phone_number': result[4],
-                    'current_username': result[5],
-                    'current_full_name': result[6],
-                    'display_name': result[6] or result[2] or 'Неизвестен',
-                    'display_username': result[5] or result[1] or 'не указан'
+                    'current_username': result[4],
+                    'current_full_name': result[5],
+                    'display_name': result[5] or result[2] or 'Неизвестен',
+                    'display_username': result[4] or result[1] or 'не указан'
                 }
             return None
 
@@ -1986,59 +1772,6 @@ class Database:
                 'needs_sync': whitelist_by_id and whitelist_by_username and whitelist_by_id['user_id'] != whitelist_by_username['user_id']
             }
 
-    def update_user_phone(self, user_id: int, phone_number: str) -> bool:
-        """Обновить номер телефона пользователя."""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE users 
-                    SET phone_number = ?
-                    WHERE user_id = ?
-                ''', (phone_number, user_id))
-                
-                # Также обновляем в allowed_users если есть
-                cursor.execute('''
-                    UPDATE allowed_users 
-                    SET phone_number = ?
-                    WHERE user_id = ?
-                ''', (phone_number, user_id))
-                
-                conn.commit()
-                return cursor.rowcount > 0
-        except Exception as e:
-            print(f"[ERROR] Ошибка обновления номера телефона: {e}")
-            return False
-    
-    def get_user_phone(self, user_id: int) -> Optional[str]:
-        """Получить номер телефона пользователя."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT phone_number FROM users WHERE user_id = ?', (user_id,))
-            result = cursor.fetchone()
-            return result[0] if result else None
-    
-    def find_user_by_phone(self, phone_number: str) -> Optional[Dict[str, Any]]:
-        """Найти пользователя по номеру телефона."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT user_id, username, full_name, grade, phone_number
-                FROM users 
-                WHERE phone_number = ?
-            ''', (phone_number,))
-            result = cursor.fetchone()
-            
-            if result:
-                return {
-                    'user_id': result[0],
-                    'username': result[1],
-                    'full_name': result[2],
-                    'grade': result[3],
-                    'phone_number': result[4]
-                }
-            return None
-
     def auto_setup_user_from_whitelist(self, user_id: int, username: str) -> Dict[str, Any]:
         """
         Автоматическая настройка пользователя из whitelist при первом входе.
@@ -2050,7 +1783,7 @@ class Database:
                 
                 # Ищем пользователя в whitelist по user_id или username
                 cursor.execute('''
-                    SELECT user_id, username, full_name, grade, phone_number, is_active, added_at
+                    SELECT user_id, username, full_name, grade, is_active, added_at
                     FROM allowed_users 
                     WHERE (user_id = ? OR username = ?) AND is_active = 1
                     ORDER BY user_id IS NOT NULL DESC, added_at DESC
@@ -2066,10 +1799,10 @@ class Database:
                         'message': 'Пользователь не найден в списке разрешенных'
                     }
                 
-                wl_user_id, wl_username, wl_full_name, wl_grade, wl_phone, wl_active, wl_added_at = whitelist_data
+                wl_user_id, wl_username, wl_full_name, wl_grade, wl_active, wl_added_at = whitelist_data
                 
                 # Проверяем, есть ли уже запись в users
-                cursor.execute('SELECT user_id, full_name, grade, phone_number FROM users WHERE user_id = ?', (user_id,))
+                cursor.execute('SELECT user_id, full_name, grade FROM users WHERE user_id = ?', (user_id,))
                 existing_user = cursor.fetchone()
                 
                 # Определяем, что нужно обновить
@@ -2077,7 +1810,7 @@ class Database:
                 
                 if existing_user:
                     # Обновляем существующую запись
-                    current_name, current_grade, current_phone = existing_user[1], existing_user[2], existing_user[3]
+                    current_name, current_grade = existing_user[1], existing_user[2]
                     
                     update_fields = []
                     update_params = []
@@ -2091,11 +1824,6 @@ class Database:
                         update_fields.append("grade = ?")
                         update_params.append(wl_grade)
                         updates_made.append(f"Класс: {wl_grade}")
-                    
-                    if wl_phone and wl_phone != current_phone:
-                        update_fields.append("phone_number = ?")
-                        update_params.append(wl_phone)
-                        updates_made.append(f"Телефон: {wl_phone}")
                     
                     # Всегда обновляем username и last_activity
                     update_fields.extend(["username = ?", "last_activity = CURRENT_TIMESTAMP"])
@@ -2111,16 +1839,14 @@ class Database:
                 else:
                     # Создаем новую запись
                     cursor.execute('''
-                        INSERT INTO users (user_id, username, full_name, grade, phone_number, last_activity)
-                        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    ''', (user_id, username, wl_full_name, wl_grade, wl_phone))
+                        INSERT INTO users (user_id, username, full_name, grade, last_activity)
+                        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ''', (user_id, username, wl_full_name, wl_grade))
                     
                     if wl_full_name:
                         updates_made.append(f"ФИО: {wl_full_name}")
                     if wl_grade:
                         updates_made.append(f"Класс: {wl_grade}")
-                    if wl_phone:
-                        updates_made.append(f"Телефон: {wl_phone}")
                 
                 # Обновляем user_id в whitelist если его не было
                 if not wl_user_id or wl_user_id != user_id:
@@ -2140,7 +1866,6 @@ class Database:
                     'user_data': {
                         'full_name': wl_full_name,
                         'grade': wl_grade,
-                        'phone_number': wl_phone,
                         'username': wl_username or username
                     },
                     'message': f"Автоматически настроено: {', '.join(updates_made)}" if updates_made else "Данные уже актуальны"
@@ -2648,14 +2373,14 @@ class Database:
             
             # Получаем данные из users
             cursor.execute('''
-                SELECT username, full_name, grade, phone_number, language
+                SELECT username, full_name, grade, language
                 FROM users WHERE user_id = ?
             ''', (user_id,))
             user_data = cursor.fetchone()
             
             # Получаем данные из allowed_users
             cursor.execute('''
-                SELECT username, full_name, grade, phone_number
+                SELECT username, full_name, grade
                 FROM allowed_users WHERE user_id = ?
             ''', (user_id,))
             whitelist_data = cursor.fetchone()
@@ -2666,7 +2391,6 @@ class Database:
                 'username': None,
                 'full_name': None,
                 'grade': None,
-                'phone_number': None,
                 'language': 'ru',
                 'has_complete_info': False
             }
@@ -2677,8 +2401,7 @@ class Database:
                     'username': user_data[0],
                     'full_name': user_data[1],
                     'grade': user_data[2],
-                    'phone_number': user_data[3],
-                    'language': user_data[4] or 'ru'
+                    'language': user_data[3] or 'ru'
                 })
             
             # Дополняем данными из whitelist если чего-то не хватает
@@ -2689,8 +2412,6 @@ class Database:
                     result['full_name'] = whitelist_data[1]
                 if not result['grade'] and whitelist_data[2]:
                     result['grade'] = whitelist_data[2]
-                if not result['phone_number'] and whitelist_data[3]:
-                    result['phone_number'] = whitelist_data[3]
             
             # Проверяем полноту информации
             result['has_complete_info'] = bool(

@@ -105,9 +105,9 @@ class AdminHandlers(AdminBaseHandler):
     # Дополнительные методы студентов
     async def _add_student_to_database(self, update: Update, context: ContextTypes.DEFAULT_TYPE,
                                      student_user_id: int, username: str, fullname: str, 
-                                     grade: int, admin_id: int, phone_number: str = "") -> bool:
+                                     grade: int, admin_id: int) -> bool:
         """Добавление ученика в базу данных."""
-        return await self.students._add_student_to_database(update, context, student_user_id, username, fullname, grade, admin_id, phone_number)
+        return await self.students._add_student_to_database(update, context, student_user_id, username, fullname, grade, admin_id)
 
     # === ДЕЛЕГИРОВАНИЕ МЕТОДОВ УПРАВЛЕНИЯ ТЕМАМИ ===
     
@@ -286,12 +286,6 @@ class AdminHandlers(AdminBaseHandler):
             return True
         elif action == 'student_by_id_fullname':
             await self.students.handle_student_by_id_fullname(update, context, text)
-            return True
-        elif action == 'student_phone':
-            await self.students.handle_student_phone(update, context, text)
-            return True
-        elif action == 'student_by_id_phone':
-            await self.students.handle_student_by_id_phone(update, context, text)
             return True
         elif action == 'student_grade':
             await self.students.handle_student_grade(update, context, text)

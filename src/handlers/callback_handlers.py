@@ -818,7 +818,7 @@ class CallbackHandlers(BaseHandler):
         self.clear_user_data(context)
         
         # Show preparing message
-        preparing_text = "🎯 Подготавливаю тест на основе ваших ошибок..." if user_language == 'ru' else "🎯 Сіздің қателеріңіз негізінде тест дайындап жатырмын..."
+        preparing_text = get_message('preparing_retry_test', user_language)
         
         try:
             await query.message.edit_text(preparing_text)
@@ -831,7 +831,7 @@ class CallbackHandlers(BaseHandler):
         questions_data = random_test_service.generate_retry_test(user_id, 10)
         
         if not questions_data:
-            error_text = "❌ Не удалось создать тест повторения. Попробуйте позже." if user_language == 'ru' else "❌ Қайталау тестін жасау мүмкін болмады. Кейінірек қайталап көріңіз."
+            error_text = get_message('retry_test_error', user_language)
             try:
                 await query.message.edit_text(
                     error_text,
@@ -847,20 +847,40 @@ class CallbackHandlers(BaseHandler):
         # Convert questions data to the format expected by the test system
         questions = []
         for q_data in questions_data:
+            # Формируем список вариантов ответов как в handle_random_test
+            options = [q_data.get('answer', '')]  # Сначала правильный ответ
+            
+            # Добавляем неправильные варианты
+            incorrect_options = q_data.get('incorrect_options', '')
+            if incorrect_options:
+                if isinstance(incorrect_options, str):
+                    incorrect_opts = [opt.strip() for opt in incorrect_options.split('\n') if opt.strip()]
+                    options.extend(incorrect_opts)
+            
+            # Убеждаемся, что есть минимум 2 варианта
+            if len(options) < 2:
+                default_option = "Вариант" if user_language == 'ru' else "Нұсқа"
+                options.extend([f"{default_option} {i}" for i in range(len(options), 4)])
+            
+            # Перемешиваем варианты
+            import random
+            random.shuffle(options)
+            
             # Format: (question_text, correct_answer, options, options_list, source, image_path)
             question_tuple = (
-                q_data.get('question_text', ''),
-                q_data.get('correct_answer', ''),
-                q_data.get('options', ''),
-                q_data.get('options_list', []),
+                q_data.get('question', ''),  # Исправлено: 'question' вместо 'question_text'
+                q_data.get('answer', ''),    # Исправлено: 'answer' вместо 'correct_answer'
+                q_data.get('incorrect_options', ''),  # Исправлено: 'incorrect_options' вместо 'options'
+                options,  # Правильно сформированный список вариантов
                 'retry_test',  # source
                 q_data.get('image_path', None)
             )
             questions.append(question_tuple)
         
         # Set user as active for retry test
-        self.db.set_user_active(user_id, "Повторение ошибок")
-        self.set_user_data(context, 'current_topic', "Повторение ошибок")
+        retry_topic_name = get_message('retry_topic_name', user_language)
+        self.db.set_user_active(user_id, retry_topic_name)
+        self.set_user_data(context, 'current_topic', retry_topic_name)
         self.set_user_data(context, 'current_question_index', 0)
         self.set_user_data(context, 'questions', questions)
         self.set_user_data(context, 'answers', [q[1] for q in questions])
@@ -896,7 +916,7 @@ class CallbackHandlers(BaseHandler):
                     )
             except Exception as e:
                 logging.error(f"Error displaying retry test question: {e}")
-                error_text = "❌ Ошибка при отображении вопроса." if user_language == 'ru' else "❌ Сұрақты көрсетуде қате."
+                error_text = get_message('question_display_error', user_language)
                 try:
                     await query.message.edit_text(
                         error_text,
@@ -908,7 +928,7 @@ class CallbackHandlers(BaseHandler):
                         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
                     )
         else:
-            error_text = "❌ Не удалось загрузить вопросы для теста." if user_language == 'ru' else "❌ Тест үшін сұрақтарды жүктеу мүмкін болмады."
+            error_text = get_message('questions_load_error', user_language)
             try:
                 await query.message.edit_text(
                     error_text,

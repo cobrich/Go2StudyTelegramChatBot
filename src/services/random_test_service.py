@@ -7,6 +7,7 @@ import random
 from typing import List, Dict, Any, Optional
 from .database import Database
 import logging
+from utils.translations import get_message
 
 logger = logging.getLogger(__name__)
 
@@ -257,7 +258,9 @@ class RandomTestService:
         try:
             # Получаем язык пользователя для правильного названия теста
             user_language = self.db.get_user_language(user_id)
-            random_test_topic_name = "Случайный тест" if user_language == 'ru' else "Кездейсоқ тест"
+            
+            # Импортируем функцию перевода
+            random_test_topic_name = get_message('random_test_topic_name', user_language)
             
             # Сохраняем общий результат теста
             self.db.add_test_result(user_id, random_test_topic_name, score_percentage)
@@ -265,9 +268,10 @@ class RandomTestService:
             # Сохраняем ошибки по темам
             for question_data in questions_data:
                 if not question_data.get('is_correct', True):  # Если ответ неправильный
+                    unknown_topic = "Неизвестная тема" if user_language == 'ru' else "Белгісіз тақырып"
                     self.db.add_user_error(
                         user_id=user_id,
-                        topic=question_data.get('topic', 'Неизвестная тема'),
+                        topic=question_data.get('topic', unknown_topic),
                         question_text=question_data.get('question_text', ''),
                         user_answer_text=question_data.get('user_answer', ''),
                         correct_answer_text=question_data.get('correct_answer', ''),

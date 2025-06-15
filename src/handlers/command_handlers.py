@@ -116,7 +116,7 @@ class CommandHandlers(BaseHandler):
         except Exception as e:
             logging.error(f"Error sending welcome message with main_menu_markup during /start for chat {chat_id}: {e}")
             try:
-                error_text = "Произошла ошибка при загрузке меню. Пожалуйста, попробуйте еще раз немного позже или введите /start снова." if user_language == 'ru' else "Мәзірді жүктеуде қате орын алды. Сәл кейін қайталап көріңіз немесе /start енгізіңіз."
+                error_text = get_message('menu_load_error', user_language)
                 await update.message.reply_text(error_text)
             except Exception as e_fallback:
                 logging.error(f"Error sending fallback error message during /start for chat {chat_id}: {e_fallback}")
@@ -133,7 +133,7 @@ class CommandHandlers(BaseHandler):
         # Clear context data
         context.user_data.clear()
         
-        stop_text = "🛑 Бот остановлен. Все данные очищены.\n\nДля нового старта используйте /start" if user_language == 'ru' else "🛑 Бот тоқтатылды. Барлық деректер тазаланды.\n\nЖаңа бастау үшін /start пайдаланыңыз"
+        stop_text = get_message('bot_stopped', user_language)
         await update.message.reply_text(
             stop_text,
             reply_markup=ReplyKeyboardRemove()
@@ -159,7 +159,7 @@ class CommandHandlers(BaseHandler):
         # Clear context data
         context.user_data.clear()
         
-        reset_text = "🔄 Состояние сброшено. Можете начать заново." if user_language == 'ru' else "🔄 Күй қалпына келтірілді. Қайта бастай аласыз."
+        reset_text = get_message('state_reset', user_language)
         await update.message.reply_text(
             reset_text,
             reply_markup=get_main_menu_markup(user_id)
@@ -169,16 +169,14 @@ class CommandHandlers(BaseHandler):
         """Показать user_id пользователя (временная команда для настройки админа)."""
         user_id = update.effective_user.id
         user_language = self.db.get_user_language(user_id)
-        username = update.effective_user.username or "не указан"
-        first_name = update.effective_user.first_name or "не указано"
+        username = update.effective_user.username or get_message('not_specified', user_language)
+        first_name = update.effective_user.first_name or get_message('not_specified', user_language)
         last_name = update.effective_user.last_name or ""
         
         full_name = f"{first_name} {last_name}".strip()
         
-        if user_language == 'kk':
-            id_text = f"🆔 **Сіздің деректеріңіз:**\n\n**User ID:** `{user_id}`\n**Username:** @{username}\n**Аты:** {full_name}\n\nӘкімші ретінде қосу үшін User ID `{user_id}` пайдаланыңыз."
-        else:
-            id_text = f"🆔 **Ваши данные:**\n\n**User ID:** `{user_id}`\n**Username:** @{username}\n**Имя:** {full_name}\n\nИспользуйте User ID `{user_id}` для добавления в качестве админа."
+        id_text = get_message('user_id_info', user_language, 
+                            user_id=user_id, username=username, full_name=full_name)
         
         await update.message.reply_text(id_text, parse_mode='Markdown')
 
@@ -405,7 +403,7 @@ class CommandHandlers(BaseHandler):
         self.clear_user_data(context)
         
         # Show preparing message
-        preparing_text = "🎯 Подготавливаю случайный тест из 10 вопросов..." if user_language == 'ru' else "🎯 10 сұрақтан тұратын кездейсоқ тестті дайындап жатырмын..."
+        preparing_text = get_message('preparing_random_test', user_language)
         preparing_msg = await update.message.reply_text(preparing_text)
         
         # Generate random test using RandomTestService
@@ -413,7 +411,7 @@ class CommandHandlers(BaseHandler):
         questions_data = random_test_service.generate_random_test(user_id, 10)
         
         if not questions_data:
-            error_text = "❌ Не удалось создать случайный тест. Попробуйте позже." if user_language == 'ru' else "❌ Кездейсоқ тест жасау мүмкін болмады. Кейінірек қайталап көріңіз."
+            error_text = get_message('random_test_error', user_language)
             await preparing_msg.edit_text(
                 error_text,
                 reply_markup=get_main_menu_markup(user_id)
@@ -430,12 +428,13 @@ class CommandHandlers(BaseHandler):
             incorrect_options = q_data.get('incorrect_options', '')
             if incorrect_options:
                 if isinstance(incorrect_options, str):
-                    incorrect_opts = [opt.strip() for opt in incorrect_options.split('|') if opt.strip()]
+                    incorrect_opts = [opt.strip() for opt in incorrect_options.split('\n') if opt.strip()]
                     options.extend(incorrect_opts)
             
             # Убеждаемся, что есть минимум 2 варианта
             if len(options) < 2:
-                options.extend([f"Вариант {i}" for i in range(len(options), 4)])
+                default_option = "Вариант" if user_language == 'ru' else "Нұсқа"
+                options.extend([f"{default_option} {i}" for i in range(len(options), 4)])
             
             # Перемешиваем варианты
             random.shuffle(options)
@@ -452,7 +451,7 @@ class CommandHandlers(BaseHandler):
             questions.append(question_tuple)
         
         # Set user as active for random test
-        random_test_topic_name = "Случайный тест" if user_language == 'ru' else "Кездейсоқ тест"
+        random_test_topic_name = get_message('random_test_topic_name', user_language)
         self.db.set_user_active(user_id, random_test_topic_name)
         self.set_user_data(context, 'current_topic', random_test_topic_name)
         self.set_user_data(context, 'current_question_index', 0)
@@ -490,13 +489,13 @@ class CommandHandlers(BaseHandler):
                     )
             except Exception as e:
                 logging.error(f"Error displaying random test question: {e}")
-                error_text = "❌ Ошибка при отображении вопроса." if user_language == 'ru' else "❌ Сұрақты көрсетуде қате."
+                error_text = get_message('question_display_error', user_language)
                 await preparing_msg.edit_text(
                     error_text,
                     reply_markup=get_main_menu_markup(user_id)
                 )
         else:
-            error_text = "❌ Не удалось загрузить вопросы для теста." if user_language == 'ru' else "❌ Тест үшін сұрақтарды жүктеу мүмкін болмады."
+            error_text = get_message('questions_load_error', user_language)
             await preparing_msg.edit_text(
                 error_text,
                 reply_markup=get_main_menu_markup(user_id)
