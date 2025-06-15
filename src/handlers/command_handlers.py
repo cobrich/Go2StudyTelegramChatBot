@@ -155,15 +155,12 @@ class CommandHandlers(BaseHandler):
             )
             return
         
-        # Проверяем, находится ли пользователь в активном тесте
-        if self.db.is_user_active(user_id):
-            # Пользователь в активном тесте, даем инструкции
-            test_instruction = get_message('in_active_test_help', user_language)
-            await update.message.reply_text(test_instruction)
-            return
-        
-        # Clear user activity
+        # ПРИНУДИТЕЛЬНО очищаем состояние пользователя (даже если он в тесте)
+        # Clear user activity (is_active status)
         self.db.set_user_inactive(user_id)
+        
+        # Clear current test topic
+        self.db.clear_user_test_activity(user_id)
         
         # Clear context data
         context.user_data.clear()
