@@ -2464,3 +2464,24 @@ def clear_user_test_activity(self, user_id: int) -> None:
         WHERE user_id = ?
     ''', (user_id,))
 ```
+
+#### 📝 Финальное исправление (Январь 2025):
+**✅ ПОЛНОСТЬЮ ИСПРАВЛЕНО: Удалены все оставшиеся обращения к таблице `users`**
+
+**Дополнительные исправления:**
+- `get_student_detailed_statistics()` - убран JOIN с таблицей users, используется только allowed_users
+- `show_user_history()` в stats.py - убран JOIN с таблицей users
+- `remove_student_execute()` в students.py - убрано удаление из таблицы users
+
+**Проверка:**
+```bash
+# Поиск обращений к таблице users
+grep -r "FROM users\|JOIN users\|UPDATE users\|INSERT INTO users\|DELETE FROM users" src/
+# Результат: No matches found ✅
+```
+
+**Тестирование:**
+- ✅ `get_student_detailed_statistics()` работает корректно
+- ✅ `get_all_students_summary()` возвращает данные студентов
+- ✅ Админ-панель полностью функциональна
+- ✅ Все SQL запросы используют только существующие таблицы
