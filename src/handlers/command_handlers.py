@@ -237,12 +237,12 @@ class CommandHandlers(BaseHandler):
                 
                 warning_msg = await update.message.reply_text(warning_text)
                 
-                # Асинхронно удаляем предупреждение через 4 секунды
+                # Асинхронно удаляем предупреждение через 5 секунды
                 asyncio.create_task(self._delete_message_after_delay(
                     context.bot, 
                     warning_msg.chat_id, 
                     warning_msg.message_id, 
-                    4
+                    5
                 ))
                 return
 
@@ -257,15 +257,15 @@ class CommandHandlers(BaseHandler):
             except Exception:
                 pass  # Игнорируем ошибки удаления
             
-            # Отправляем инструкцию и удаляем её через 4 секунды (чуть дольше, так как текст больше)
+            # Отправляем инструкцию и удаляем её через 5 секунды (чуть дольше, так как текст больше)
             instruction_msg = await update.message.reply_text(test_instruction)
             
-            # Асинхронно удаляем сообщение через 4 секунды
+            # Асинхронно удаляем сообщение через 5 секунды
             asyncio.create_task(self._delete_message_after_delay(
                 context.bot, 
                 instruction_msg.chat_id, 
                 instruction_msg.message_id, 
-                4
+                5
             ))
             return
 
@@ -365,16 +365,140 @@ class CommandHandlers(BaseHandler):
         admin_panel_text_kk = "🔧 Әкімші панелі"
         
         if text in [select_topic_text_ru, select_topic_text_kk]:
+            # Проверяем, не находится ли пользователь уже в активном тесте
+            if self.db.is_user_active(user_id):
+                # Удаляем сообщение пользователя
+                try:
+                    await update.message.delete()
+                except Exception:
+                    pass
+                
+                # Показываем инструкцию и удаляем через 4 секунды
+                instruction_text = get_message('in_active_test_help', user_language)
+                instruction_msg = await update.message.reply_text(instruction_text)
+                
+                asyncio.create_task(self._delete_message_after_delay(
+                    context.bot, 
+                    instruction_msg.chat_id, 
+                    instruction_msg.message_id, 
+                    4
+                ))
+                return
+            
             await self.handle_topic_selection(update, context)
         elif text in [random_test_text_ru, random_test_text_kk]:
+            # Проверяем состояние пользователя
+            if self.db.is_user_active(user_id) or context.user_data.get('in_topic_selection'):
+                # Удаляем сообщение пользователя
+                try:
+                    await update.message.delete()
+                except Exception:
+                    pass
+                
+                # Определяем тип инструкции
+                if self.db.is_user_active(user_id):
+                    instruction_text = get_message('in_active_test_help', user_language)
+                    delay = 4
+                else:
+                    instruction_text = get_message('in_topic_selection_help', user_language)
+                    delay = 3
+                
+                instruction_msg = await update.message.reply_text(instruction_text)
+                
+                asyncio.create_task(self._delete_message_after_delay(
+                    context.bot, 
+                    instruction_msg.chat_id, 
+                    instruction_msg.message_id, 
+                    delay
+                ))
+                return
+            
             await self.handle_random_test(update, context)
         elif text in [my_progress_text_ru, my_progress_text_kk]:
+            # Проверяем состояние пользователя
+            if self.db.is_user_active(user_id) or context.user_data.get('in_topic_selection'):
+                # Удаляем сообщение пользователя
+                try:
+                    await update.message.delete()
+                except Exception:
+                    pass
+                
+                # Определяем тип инструкции
+                if self.db.is_user_active(user_id):
+                    instruction_text = get_message('in_active_test_help', user_language)
+                    delay = 4
+                else:
+                    instruction_text = get_message('in_topic_selection_help', user_language)
+                    delay = 3
+                
+                instruction_msg = await update.message.reply_text(instruction_text)
+                
+                asyncio.create_task(self._delete_message_after_delay(
+                    context.bot, 
+                    instruction_msg.chat_id, 
+                    instruction_msg.message_id, 
+                    delay
+                ))
+                return
+            
             await self.handle_progress(update, context)
         elif text in [help_text_ru, help_text_kk]:
+            # Проверяем состояние пользователя
+            if self.db.is_user_active(user_id) or context.user_data.get('in_topic_selection'):
+                # Удаляем сообщение пользователя
+                try:
+                    await update.message.delete()
+                except Exception:
+                    pass
+                
+                # Определяем тип инструкции
+                if self.db.is_user_active(user_id):
+                    instruction_text = get_message('in_active_test_help', user_language)
+                    delay = 4
+                else:
+                    instruction_text = get_message('in_topic_selection_help', user_language)
+                    delay = 3
+                
+                instruction_msg = await update.message.reply_text(instruction_text)
+                
+                asyncio.create_task(self._delete_message_after_delay(
+                    context.bot, 
+                    instruction_msg.chat_id, 
+                    instruction_msg.message_id, 
+                    delay
+                ))
+                return
+            
             await self.handle_help(update, context)
         elif text in [admin_panel_text_ru, admin_panel_text_kk]:
             # Проверяем, является ли пользователь админом
             if self.db.is_admin(user_id):
+                # Проверяем состояние пользователя (админы тоже не должны иметь доступ во время теста/выбора)
+                if self.db.is_user_active(user_id) or context.user_data.get('in_topic_selection'):
+                    # Удаляем сообщение пользователя
+                    try:
+                        await update.message.delete()
+                    except Exception:
+                        pass
+                    
+                    # Определяем тип инструкции
+                    if self.db.is_user_active(user_id):
+                        instruction_text = get_message('in_active_test_help', user_language)
+                        delay = 4
+                    else:
+                        instruction_text = get_message('in_topic_selection_help', user_language)
+                        delay = 3
+                    
+                    instruction_msg = await update.message.reply_text(instruction_text)
+                    
+                    asyncio.create_task(self._delete_message_after_delay(
+                        context.bot, 
+                        instruction_msg.chat_id, 
+                        instruction_msg.message_id, 
+                        delay
+                    ))
+                    return
+                
                 # Импортируем админ-хендлеры
                 from handlers.admin import AdminHandlers
                 from services.question_service import QuestionService
