@@ -400,7 +400,7 @@ class SectionsHandler(BaseHandler):
         # Подсчитываем вопросы
         total_questions = 0
         for subtopic in subtopics:
-            questions = self.db.get_tasks_for_topic(subtopic['name'])
+            questions = self.db.get_tasks_for_topic(subtopic)
             total_questions += len(questions)
         
         lang_flag = "🇷🇺" if section_info['language'] == 'ru' else "🇰🇿"

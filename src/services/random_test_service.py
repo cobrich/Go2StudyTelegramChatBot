@@ -1,5 +1,5 @@
 """
-Сервис для генерации случайных тестов из 30 вопросов.
+Сервис для генерации случайных тестов из 10 вопросов.
 Поддерживает фильтрацию по языку пользователя и равномерное распределение вопросов по темам.
 """
 
@@ -14,14 +14,14 @@ class RandomTestService:
     def __init__(self, db: Database):
         self.db = db
     
-    def generate_random_test(self, user_id: int, question_count: int = 30) -> List[Dict[str, Any]]:
+    def generate_random_test(self, user_id: int, question_count: int = 10) -> List[Dict[str, Any]]:
         """
         Генерирует случайный тест из указанного количества вопросов.
         Вопросы равномерно распределяются по доступным темам на языке пользователя.
         
         Args:
             user_id: ID пользователя
-            question_count: Количество вопросов в тесте (по умолчанию 30)
+            question_count: Количество вопросов в тесте (по умолчанию 10)
             
         Returns:
             Список вопросов для теста
@@ -68,7 +68,7 @@ class RandomTestService:
             logger.error(f"Error generating random test for user {user_id}: {e}")
             return []
     
-    def generate_retry_test(self, user_id: int, question_count: int = 30) -> List[Dict[str, Any]]:
+    def generate_retry_test(self, user_id: int, question_count: int = 10) -> List[Dict[str, Any]]:
         """
         Генерирует тест на основе ошибок пользователя.
         Если ошибок недостаточно, добавляет случайные вопросы.

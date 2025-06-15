@@ -15,6 +15,7 @@ MESSAGES_KK = {
     
     # Тест сұрақтары
     'topic_question': "Тақырып: {topic}\nСұрақ {current} / {total}:\n\n{question}",
+    'random_test_question': "🎯 Кездейсоқ тест\nСұрақ {current} / {total}:\n\n{question}",
     'correct_answer': "✅ Дұрыс!",
     'incorrect_answer': "❌ Қате!\n\nДұрыс жауап: {correct}",
     'test_completed': "Тест аяқталды! Толық талдауды көру үшін 'Нәтижелерді көрсету' басыңыз.",
@@ -83,6 +84,7 @@ MESSAGES_KK = {
 # Негізгі мәзір
 MAIN_MENU_KK = [
     ["📚 Тақырыпты таңдап, бастау"],
+    ["🎯 Кездейсоқ тестті бастау"],
     ["📊 Менің прогресім"],
     ["❓ Көмек"]
 ]

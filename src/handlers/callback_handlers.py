@@ -378,8 +378,17 @@ class CallbackHandlers(BaseHandler):
                 )
             ])
         
-        # Добавляем кнопки навигации
-        buttons.append([InlineKeyboardButton(get_message('retake_topic', user_language), callback_data=f"retake_{self.db.get_topic_names(active_only=True).index(topic)}")])
+        # Проверяем, является ли это случайным тестом
+        is_random_test = self.get_user_data(context).get('is_random_test', False)
+        
+        if is_random_test:
+            # Для случайного теста добавляем кнопку "Пройти еще раз" (повторение ошибок)
+            retry_text = "🔄 Пройти еще раз" if user_language == 'ru' else "🔄 Қайта өту"
+            buttons.append([InlineKeyboardButton(retry_text, callback_data="retry_random_test")])
+        else:
+            # Для обычных тестов добавляем кнопку повторения темы
+            buttons.append([InlineKeyboardButton(get_message('retake_topic', user_language), callback_data=f"retake_{self.db.get_topic_names(active_only=True).index(topic)}")])
+        
         buttons.append([InlineKeyboardButton(get_message('back_to_topics', user_language), callback_data="back_to_topics")])
         
         keyboard = InlineKeyboardMarkup(buttons)
@@ -483,13 +492,36 @@ class CallbackHandlers(BaseHandler):
                     callback_data=f"show_expl_{err['q_num']}"
                 )
             ])
-        buttons.append([InlineKeyboardButton(get_message('retake_topic', user_language), callback_data=f"retake_{self.db.get_topic_names(active_only=True).index(topic)}")])
+        
+        # Проверяем, является ли это случайным тестом
+        is_random_test = self.get_user_data(context).get('is_random_test', False)
+        
+        if is_random_test:
+            # Для случайного теста добавляем кнопку "Пройти еще раз" (повторение ошибок)
+            retry_text = "🔄 Пройти еще раз" if user_language == 'ru' else "🔄 Қайта өту"
+            buttons.append([InlineKeyboardButton(retry_text, callback_data="retry_random_test")])
+        else:
+            # Для обычных тестов добавляем кнопку повторения темы
+            buttons.append([InlineKeyboardButton(get_message('retake_topic', user_language), callback_data=f"retake_{self.db.get_topic_names(active_only=True).index(topic)}")])
+        
         buttons.append([InlineKeyboardButton(get_message('back_to_topics', user_language), callback_data="back_to_topics")])
+        
         keyboard = InlineKeyboardMarkup(buttons)
+        
         try:
             await query.message.edit_text(results_text, reply_markup=keyboard)
-        except Exception:
-            pass
+        except Exception as e:
+            logging.error(f"Error editing message with results: {e}")
+            try:
+                # Fallback: send new message
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=results_text,
+                    reply_markup=keyboard
+                )
+            except Exception as e2:
+                logging.error(f"Error sending fallback results message: {e2}")
+        # user_data теперь очищается только при возврате в меню или выборе новой темы
 
     async def handle_back_to_topics(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
@@ -761,3 +793,129 @@ class CallbackHandlers(BaseHandler):
         except Exception as e:
             logging.error(f"Error returning to main topics: {e}")
             pass 
+
+    async def handle_retry_random_test(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle retry random test with focus on errors."""
+        query = update.callback_query
+        try:
+            await self.safe_answer_callback(query)
+        except Exception as e:
+            logging.error(f"Error in query.answer() (retry_random_test): {e}")
+        
+        user_id = query.from_user.id
+        user_language = self.db.get_user_language(user_id)
+        
+        # Проверяем доступ пользователя
+        if not self.db.check_user_access(user_id, query.from_user.username):
+            await query.message.edit_text(
+                get_message('no_access', user_language, 
+                          user_id=user_id, 
+                          username=query.from_user.username or 'не указан')
+            )
+            return
+        
+        # Clear previous data
+        self.clear_user_data(context)
+        
+        # Show preparing message
+        preparing_text = "🎯 Подготавливаю тест на основе ваших ошибок..." if user_language == 'ru' else "🎯 Сіздің қателеріңіз негізінде тест дайындап жатырмын..."
+        
+        try:
+            await query.message.edit_text(preparing_text)
+        except Exception:
+            preparing_msg = await query.message.reply_text(preparing_text)
+        
+        # Generate retry test using RandomTestService
+        from services.random_test_service import RandomTestService
+        random_test_service = RandomTestService(self.db)
+        questions_data = random_test_service.generate_retry_test(user_id, 10)
+        
+        if not questions_data:
+            error_text = "❌ Не удалось создать тест повторения. Попробуйте позже." if user_language == 'ru' else "❌ Қайталау тестін жасау мүмкін болмады. Кейінірек қайталап көріңіз."
+            try:
+                await query.message.edit_text(
+                    error_text,
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
+                )
+            except Exception:
+                await query.message.reply_text(
+                    error_text,
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
+                )
+            return
+        
+        # Convert questions data to the format expected by the test system
+        questions = []
+        for q_data in questions_data:
+            # Format: (question_text, correct_answer, options, options_list, source, image_path)
+            question_tuple = (
+                q_data.get('question_text', ''),
+                q_data.get('correct_answer', ''),
+                q_data.get('options', ''),
+                q_data.get('options_list', []),
+                'retry_test',  # source
+                q_data.get('image_path', None)
+            )
+            questions.append(question_tuple)
+        
+        # Set user as active for retry test
+        self.db.set_user_active(user_id, "Повторение ошибок")
+        self.set_user_data(context, 'current_topic', "Повторение ошибок")
+        self.set_user_data(context, 'current_question_index', 0)
+        self.set_user_data(context, 'questions', questions)
+        self.set_user_data(context, 'answers', [q[1] for q in questions])
+        self.set_user_data(context, 'is_random_test', True)  # Keep as random test for UI consistency
+        
+        # Display first question
+        if questions:
+            from utils.keyboards import build_question_keyboard
+            
+            question = questions[0]
+            keyboard = build_question_keyboard(question[3], 0, 0, len(questions), user_id)
+            
+            try:
+                # If question has an image, send it first
+                if len(question) > 5 and question[5]:  # question[5] is image_path
+                    await context.bot.send_photo(
+                        chat_id=query.message.chat_id,
+                        photo=open(question[5], 'rb'),
+                        caption=get_message('random_test_question', user_language, 
+                                          current=1, total=len(questions), question=question[0]),
+                        reply_markup=keyboard
+                    )
+                    # Try to delete preparing message
+                    try:
+                        await query.message.delete()
+                    except:
+                        pass
+                else:
+                    await query.message.edit_text(
+                        get_message('random_test_question', user_language, 
+                                  current=1, total=len(questions), question=question[0]),
+                        reply_markup=keyboard
+                    )
+            except Exception as e:
+                logging.error(f"Error displaying retry test question: {e}")
+                error_text = "❌ Ошибка при отображении вопроса." if user_language == 'ru' else "❌ Сұрақты көрсетуде қате."
+                try:
+                    await query.message.edit_text(
+                        error_text,
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
+                    )
+                except Exception:
+                    await query.message.reply_text(
+                        error_text,
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
+                    )
+        else:
+            error_text = "❌ Не удалось загрузить вопросы для теста." if user_language == 'ru' else "❌ Тест үшін сұрақтарды жүктеу мүмкін болмады."
+            try:
+                await query.message.edit_text(
+                    error_text,
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
+                )
+            except Exception:
+                await query.message.reply_text(
+                    error_text,
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
+                ) 

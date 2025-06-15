@@ -409,6 +409,10 @@ def main() -> None:
         callback_handlers.handle_back_to_results,
         pattern="^back_to_results$"
     ))
+    application.add_handler(CallbackQueryHandler(
+        callback_handlers.handle_retry_random_test,
+        pattern="^retry_random_test$"
+    ))
     
     # Additional topic handlers
     application.add_handler(CallbackQueryHandler(

@@ -16,6 +16,7 @@ MESSAGES_RU = {
     'no_access': "❌ Извините, у вас нет доступа к этому боту.\n\nВаш ID: {user_id}\nUsername: @{username}\n\nДля получения доступа обратитесь к администратору.",
     
     'topic_question': "Тема: {topic}\nВопрос {current} из {total}:\n\n{question}",
+    'random_test_question': "🎯 Случайный тест\nВопрос {current} из {total}:\n\n{question}",
     'correct_answer': "✅ Правильно!",
     'incorrect_answer': "❌ Неправильно!\n\nПравильный ответ: {correct}",
     'test_completed': "Тест завершен! Нажмите 'Показать результаты' для просмотра полного разбора.",

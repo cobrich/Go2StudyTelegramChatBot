@@ -281,6 +281,8 @@ class CommandHandlers(BaseHandler):
         # Handle main menu buttons
         select_topic_text_ru = "📚 Выбрать тему и начать"
         select_topic_text_kk = "📚 Тақырыпты таңдап, бастау"
+        random_test_text_ru = "🎯 Начать рандомный тест"
+        random_test_text_kk = "🎯 Кездейсоқ тестті бастау"
         my_progress_text_ru = "📊 Мой прогресс"
         my_progress_text_kk = "📊 Менің прогресім"
         help_text_ru = "❓ Помощь"
@@ -288,6 +290,8 @@ class CommandHandlers(BaseHandler):
         
         if text in [select_topic_text_ru, select_topic_text_kk]:
             await self.handle_topic_selection(update, context)
+        elif text in [random_test_text_ru, random_test_text_kk]:
+            await self.handle_random_test(update, context)
         elif text in [my_progress_text_ru, my_progress_text_kk]:
             await self.handle_progress(update, context)
         elif text in [help_text_ru, help_text_kk]:
@@ -385,4 +389,96 @@ class CommandHandlers(BaseHandler):
             get_message('help_text', user_language),
             reply_markup=get_main_menu_markup(user_id),
             parse_mode='Markdown'
-        ) 
+        )
+
+    async def handle_random_test(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle random test request from main menu."""
+        user_id = update.effective_user.id
+        user_language = self.db.get_user_language(user_id)
+        
+        # Check if user is already taking a test
+        if await self.check_user_active(update, context):
+            return
+        
+        # Clear any previous data
+        self.clear_user_data(context)
+        
+        # Show preparing message
+        preparing_text = "🎯 Подготавливаю случайный тест из 10 вопросов..." if user_language == 'ru' else "🎯 10 сұрақтан тұратын кездейсоқ тестті дайындап жатырмын..."
+        preparing_msg = await update.message.reply_text(preparing_text)
+        
+        # Generate random test using RandomTestService
+        random_test_service = RandomTestService(self.db)
+        questions_data = random_test_service.generate_random_test(user_id, 10)
+        
+        if not questions_data:
+            error_text = "❌ Не удалось создать случайный тест. Попробуйте позже." if user_language == 'ru' else "❌ Кездейсоқ тест жасау мүмкін болмады. Кейінірек қайталап көріңіз."
+            await preparing_msg.edit_text(
+                error_text,
+                reply_markup=get_main_menu_markup(user_id)
+            )
+            return
+        
+        # Convert questions data to the format expected by the test system
+        questions = []
+        for q_data in questions_data:
+            # Format: (question_text, correct_answer, options, options_list, source, image_path)
+            question_tuple = (
+                q_data.get('question_text', ''),
+                q_data.get('correct_answer', ''),
+                q_data.get('options', ''),
+                q_data.get('options_list', []),
+                'random_test',  # source
+                q_data.get('image_path', None)
+            )
+            questions.append(question_tuple)
+        
+        # Set user as active for random test
+        self.db.set_user_active(user_id, "Случайный тест")
+        self.set_user_data(context, 'current_topic', "Случайный тест")
+        self.set_user_data(context, 'current_question_index', 0)
+        self.set_user_data(context, 'questions', questions)
+        self.set_user_data(context, 'answers', [q[1] for q in questions])
+        self.set_user_data(context, 'is_random_test', True)
+        
+        # Display first question
+        if questions:
+            from utils.keyboards import build_question_keyboard
+            
+            question = questions[0]
+            keyboard = build_question_keyboard(question[3], 0, 0, len(questions), user_id)
+            
+            try:
+                # If question has an image, send it first
+                if len(question) > 5 and question[5]:  # question[5] is image_path
+                    await context.bot.send_photo(
+                        chat_id=update.effective_chat.id,
+                        photo=open(question[5], 'rb'),
+                        caption=get_message('random_test_question', user_language, 
+                                          current=1, total=len(questions), question=question[0]),
+                        reply_markup=keyboard
+                    )
+                    # Delete preparing message
+                    try:
+                        await preparing_msg.delete()
+                    except:
+                        pass
+                else:
+                    await preparing_msg.edit_text(
+                        get_message('random_test_question', user_language, 
+                                  current=1, total=len(questions), question=question[0]),
+                        reply_markup=keyboard
+                    )
+            except Exception as e:
+                logging.error(f"Error displaying random test question: {e}")
+                error_text = "❌ Ошибка при отображении вопроса." if user_language == 'ru' else "❌ Сұрақты көрсетуде қате."
+                await preparing_msg.edit_text(
+                    error_text,
+                    reply_markup=get_main_menu_markup(user_id)
+                )
+        else:
+            error_text = "❌ Не удалось загрузить вопросы для теста." if user_language == 'ru' else "❌ Тест үшін сұрақтарды жүктеу мүмкін болмады."
+            await preparing_msg.edit_text(
+                error_text,
+                reply_markup=get_main_menu_markup(user_id)
+            ) 
