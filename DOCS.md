@@ -2575,3 +2575,32 @@ ALTER TABLE allowed_users ADD COLUMN has_access BOOLEAN DEFAULT 1;
 - No orphaned records in database
 - Better privacy compliance
 - Transparent feedback to administrators
+
+---
+
+### 🔍 Database Table Usage Verification (January 2025)
+
+**✅ COMPLETED: Verified correct table usage in statistics module**
+
+#### 🎯 Task:
+- Checked usage of `users` table in `src/handlers/admin/stats.py`
+- Ensured all references use the correct `allowed_users` table
+
+#### ✅ Verification Results:
+- **✅ All queries correctly use `allowed_users` table**:
+  - Line 25: `SELECT COUNT(*) FROM allowed_users WHERE is_active = 1`
+  - Line 58: `LEFT JOIN allowed_users au ON tr.user_id = au.user_id`
+  - Line 70: `LEFT JOIN allowed_users au ON tr.user_id = au.user_id`
+  - Line 139: `LEFT JOIN allowed_users au ON tr.user_id = au.user_id`
+
+- **✅ No references to deprecated `users` table found**
+- **✅ Statistics module fully compatible with unified table architecture**
+- **✅ All user data properly joined from `allowed_users` table**
+
+#### 📊 Statistics Features Working Correctly:
+- Active students count from `allowed_users`
+- User history with proper joins to `allowed_users`
+- Top users display with full names and grades
+- All user information properly retrieved from unified table
+
+**Result**: Statistics module is correctly implemented and requires no changes.
