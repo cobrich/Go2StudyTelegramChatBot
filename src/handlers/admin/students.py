@@ -258,7 +258,7 @@ class StudentsHandler(AdminBaseHandler):
             keyboard = []
             
             for i, student in enumerate(students[:15], 1):  # Показываем первых 15
-                status = "✅" if student['is_active'] else "❌"
+                status = "✅" if student['has_access'] else "❌"
                 
                 # Определяем идентификатор
                 if student.get('username'):
@@ -273,10 +273,13 @@ class StudentsHandler(AdminBaseHandler):
                 if student['unique_errors'] > 0:
                     stats += f", Ошибок: {student['unique_errors']}"
                 
+                # Добавляем индикатор активности в тесте
+                test_activity = "🔄 В тесте" if student['is_active'] else "💤 Не в тесте"
+                
                 text += f"{i}. {status} <b>{identifier}</b>\n"
                 text += f"   {student['full_name']} ({student['grade']} класс)\n"
                 text += f"   {stats}\n"
-                text += f"   Статус: {student['status']}\n\n"
+                text += f"   Статус: {student['status']} | {test_activity}\n\n"
                 
                 # Кнопка для детального просмотра
                 if student.get('user_id'):
@@ -432,7 +435,7 @@ class StudentsHandler(AdminBaseHandler):
             keyboard = []
             
             for student in students[:20]:  # Показываем первых 20
-                status = "✅" if student['is_active'] else "❌"
+                status = "✅" if student['has_access'] else "❌"
                 
                 if student.get('username'):
                     identifier = f"@{student['username']}"
@@ -573,7 +576,7 @@ class StudentsHandler(AdminBaseHandler):
             keyboard = []
             
             for student in students[:20]:  # Показываем первых 20
-                status = "✅" if student['is_active'] else "❌"
+                status = "✅" if student['has_access'] else "❌"
                 
                 if student.get('username'):
                     identifier = f"@{student['username']}"
