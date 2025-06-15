@@ -144,8 +144,44 @@ class AdminBaseHandler(BaseHandler):
             
         text = update.message.text.strip()
         
-        # Здесь будут вызываться методы из соответствующих модулей
-        # Пока оставляем заглушку
+        # Делегируем обработку в соответствующие модули
+        # Обработчики для вопросов
+        if action in ['search_questions', 'add_question_text', 'add_question_option_a', 
+                      'add_question_option_b', 'add_question_option_c', 'add_question_option_d',
+                      'add_question_correct', 'add_question_explanation', 'edit_question_search',
+                      'edit_question_id', 'edit_question_explanation', 'delete_single_question_search']:
+            from .questions import QuestionsHandler
+            questions_handler = QuestionsHandler(self.db, self.question_service)
+            
+            if action == 'search_questions':
+                await questions_handler.handle_search_questions(update, context, text)
+            elif action == 'add_question_text':
+                await questions_handler.handle_add_question_text(update, context, text)
+            elif action == 'add_question_option_a':
+                await questions_handler.handle_add_question_option_a(update, context, text)
+            elif action == 'add_question_option_b':
+                await questions_handler.handle_add_question_option_b(update, context, text)
+            elif action == 'add_question_option_c':
+                await questions_handler.handle_add_question_option_c(update, context, text)
+            elif action == 'add_question_option_d':
+                await questions_handler.handle_add_question_option_d(update, context, text)
+            elif action == 'add_question_correct':
+                await questions_handler.handle_add_question_correct(update, context, text)
+            elif action == 'add_question_explanation':
+                await questions_handler.handle_add_question_explanation(update, context, text)
+            elif action == 'edit_question_search':
+                await questions_handler.handle_edit_question_search(update, context, text)
+            elif action == 'edit_question_id':
+                await questions_handler.handle_edit_question_id(update, context, text)
+            elif action == 'edit_question_explanation':
+                await questions_handler.handle_edit_question_explanation(update, context, text)
+            elif action == 'delete_single_question_search':
+                await questions_handler.handle_delete_single_question_search(update, context, text)
+            
+            return True
+        
+        # Здесь можно добавить обработчики для других модулей (студенты, темы и т.д.)
+        
         return False
 
     async def handle_admin_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -157,8 +193,10 @@ class AdminBaseHandler(BaseHandler):
         
         # Проверяем, ожидается ли PDF файл
         if context.user_data.get('admin_action') == 'upload_pdf':
-            # Здесь должна быть обработка PDF, но пока заглушка
-            await update.message.reply_text("🚧 Обработка PDF файлов в разработке...")
+            # Импортируем модуль вопросов для обработки PDF
+            from .questions import QuestionsHandler
+            questions_handler = QuestionsHandler(self.db, self.question_service)
+            await questions_handler.process_pdf_file(update, context)
         else:
             await update.message.reply_text("❓ Неожиданный документ. Используйте команды админ-панели.")
 
