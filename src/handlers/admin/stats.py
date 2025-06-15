@@ -32,22 +32,41 @@ class StatsHandler(AdminBaseHandler):
                 cursor.execute('SELECT COUNT(DISTINCT topic) FROM questions')
                 unique_topics = cursor.fetchone()[0]
                 
-                cursor.execute('SELECT COUNT(*) FROM test_results')
+                # Общая статистика - только тесты учеников
+                cursor.execute('''
+                    SELECT COUNT(*) 
+                    FROM test_results tr 
+                    INNER JOIN allowed_users au ON tr.user_id = au.user_id
+                ''')
                 total_tests = cursor.fetchone()[0]
                 
                 cursor.execute('SELECT COUNT(*) FROM admins')
                 total_admins = cursor.fetchone()[0]
                 
-                # Статистика за последние 7 дней
+                # Статистика за последние 7 дней - только ученики
                 week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-                cursor.execute('SELECT COUNT(*) FROM test_results WHERE timestamp >= ?', (week_ago,))
+                cursor.execute('''
+                    SELECT COUNT(*) 
+                    FROM test_results tr 
+                    INNER JOIN allowed_users au ON tr.user_id = au.user_id 
+                    WHERE tr.timestamp >= ?
+                ''', (week_ago,))
                 tests_last_week = cursor.fetchone()[0]
                 
-                cursor.execute('SELECT COUNT(DISTINCT user_id) FROM test_results WHERE timestamp >= ?', (week_ago,))
+                cursor.execute('''
+                    SELECT COUNT(DISTINCT tr.user_id) 
+                    FROM test_results tr 
+                    INNER JOIN allowed_users au ON tr.user_id = au.user_id 
+                    WHERE tr.timestamp >= ?
+                ''', (week_ago,))
                 active_users_week = cursor.fetchone()[0]
                 
-                # Средний балл (используем percentage вместо score)
-                cursor.execute('SELECT AVG(percentage) FROM test_results')
+                # Средний балл - только ученики
+                cursor.execute('''
+                    SELECT AVG(tr.percentage) 
+                    FROM test_results tr 
+                    INNER JOIN allowed_users au ON tr.user_id = au.user_id
+                ''')
                 avg_score_result = cursor.fetchone()[0]
                 avg_score = round(avg_score_result, 1) if avg_score_result else 0
                 
@@ -85,11 +104,11 @@ class StatsHandler(AdminBaseHandler):
                 text += f"• Всего вопросов: {total_questions}\n"
                 text += f"• Уникальных тем: {unique_topics}\n\n"
                 
-                text += f"📈 <b>Активность:</b>\n"
-                text += f"• Всего тестов: {total_tests}\n"
+                text += f"📈 <b>Активность учеников:</b>\n"
+                text += f"• Всего тестов учеников: {total_tests}\n"
                 text += f"• Тестов за неделю: {tests_last_week}\n"
-                text += f"• Активных за неделю: {active_users_week}\n"
-                text += f"• Средний балл: {avg_score}%\n\n"
+                text += f"• Активных учеников за неделю: {active_users_week}\n"
+                text += f"• Средний балл учеников: {avg_score}%\n\n"
                 
                 if top_topics:
                     text += f"🏆 <b>Топ-5 тем:</b>\n"

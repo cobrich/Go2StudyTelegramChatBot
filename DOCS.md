@@ -2627,14 +2627,20 @@ ALTER TABLE allowed_users ADD COLUMN has_access BOOLEAN DEFAULT 1;
 1. **Top topics statistics** - now shows only student activity
 2. **Top active students** - now guaranteed to have names from `allowed_users`
 3. **User history** - now shows "Last 20 student tests" instead of all tests
+4. **Activity statistics** - total tests, weekly tests, active users, average score - all now count only students
 
 #### 🎯 Result:
 - ✅ **No more "None" names** in statistics
-- ✅ **Students only** - admins excluded from student statistics
+- ✅ **Students only** - admins excluded from all student statistics
 - ✅ **Proper data integrity** - all displayed users have complete information
 - ✅ **Clear separation** - admin and student data properly separated
+- ✅ **Accurate metrics** - all activity counters now reflect only student activity
 
 #### 📊 What changed:
+- **Activity section**: Now labeled as "Student Activity" with student-specific counters
+- **Total tests**: Now counts only tests taken by students
+- **Weekly activity**: Shows only student tests and active students
+- **Average score**: Calculated only from student test results
 - **Top 5 active students**: Now shows only actual students with names
 - **User history**: Now labeled as "Last 20 student tests"
 - **Data consistency**: All displayed users guaranteed to be in `allowed_users`
