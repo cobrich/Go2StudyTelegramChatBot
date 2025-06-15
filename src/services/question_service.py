@@ -1,15 +1,128 @@
 import logging
 import asyncio
 import random
-from typing import List, Dict, Any, Set, Optional
+from typing import List, Dict, Any, Set, Optional, Tuple
 from services.database import Database
 from services.ai_service import AIService
 from config.constants import DEFAULT_QUESTIONS_PER_TEST, MAX_OPTION_LENGTH
+import re
 
 class QuestionService:
     def __init__(self, db: Database, ai_service: AIService):
         self.db = db
         self.ai_service = ai_service
+
+    def _validate_ai_question(self, question: str, correct_answer: str, explanation: str, topic: str) -> Tuple[bool, str]:
+        """
+        Строгая валидация AI-вопросов для предотвращения сохранения некачественных вопросов.
+        
+        Returns:
+            Tuple[bool, str]: (is_valid, error_message)
+        """
+        if not question or not correct_answer or not explanation:
+            return False, "Пустые обязательные поля"
+        
+        # 1. Проверка длины полей
+        if len(question) < 20:
+            return False, "Вопрос слишком короткий (менее 20 символов)"
+        
+        if len(question) > 1000:
+            return False, "Вопрос слишком длинный (более 1000 символов)"
+        
+        if len(explanation) < 10:
+            return False, "Объяснение слишком короткое (менее 10 символов)"
+        
+        # 2. Проверка на признаки ошибок в объяснении
+        error_indicators = [
+            "что-то не так",
+            "ошибка в условии",
+            "задача поставлена некорректно",
+            "снова ошибка",
+            "нужно изменить условие",
+            "противоречие",
+            "новый вопрос:",
+            "правильный ответ:",
+            "неправильный ответ",
+            "объяснение:"
+        ]
+        
+        explanation_lower = explanation.lower()
+        for indicator in error_indicators:
+            if indicator in explanation_lower:
+                return False, f"Объяснение содержит признак ошибки: '{indicator}'"
+        
+        # 3. Проверка на слишком длинное объяснение (возможно содержит несколько задач)
+        if len(explanation) > 2000:
+            return False, "Объяснение слишком длинное (возможно содержит несколько задач)"
+        
+        # 4. Проверка на соответствие вопроса и ответа
+        question_lower = question.lower()
+        answer_lower = correct_answer.lower()
+        
+        # Проверяем, что вопрос и ответ логически связаны
+        if "сколько" in question_lower and not any(char.isdigit() for char in correct_answer):
+            # Если вопрос спрашивает "сколько", ответ должен содержать число
+            if not re.search(r'\d+', correct_answer):
+                return False, "Вопрос спрашивает количество, но ответ не содержит чисел"
+        
+        # 5. Проверка на противоречия в тексте
+        if "экономи" in question_lower and ("не получится" in explanation_lower or "экономии не было" in explanation_lower):
+            return False, "Противоречие: вопрос об экономии, но объяснение говорит об отсутствии экономии"
+        
+        # 6. Проверка на дублирование контента в объяснении
+        sentences = explanation.split('.')
+        if len(sentences) > 10:  # Слишком много предложений может указывать на проблему
+            return False, "Объяснение содержит слишком много предложений (возможно несколько задач)"
+        
+        # 7. Проверка на наличие мета-информации в объяснении
+        meta_indicators = [
+            "правильный ответ:",
+            "неправильный ответ",
+            "вариант ответа",
+            "ответ 1:",
+            "ответ 2:",
+            "ответ 3:"
+        ]
+        
+        for indicator in meta_indicators:
+            if indicator in explanation_lower:
+                return False, f"Объяснение содержит мета-информацию: '{indicator}'"
+        
+        return True, ""
+
+    def cleanup_invalid_ai_questions(self) -> int:
+        """
+        Очищает базу данных от некачественных AI-вопросов.
+        
+        Returns:
+            int: Количество удаленных вопросов
+        """
+        logging.info("[cleanup_invalid_ai_questions] Начинаем очистку некачественных AI-вопросов...")
+        
+        # Получаем все AI-вопросы
+        ai_questions = self.db.get_all_ai_questions()
+        deleted_count = 0
+        
+        for question_data in ai_questions:
+            question_id = question_data.get('id')
+            question = question_data.get('question', '')
+            answer = question_data.get('answer', '')
+            explanation = question_data.get('explanation', '')
+            topic = question_data.get('topic', '')
+            
+            # Валидируем вопрос
+            is_valid, error_msg = self._validate_ai_question(question, answer, explanation, topic)
+            
+            if not is_valid:
+                logging.info(f"[cleanup_invalid_ai_questions] Удаляем некачественный вопрос ID {question_id}: {error_msg}")
+                logging.info(f"[cleanup_invalid_ai_questions] Вопрос: {question[:100]}...")
+                
+                # Удаляем вопрос из базы данных
+                self.db.delete_question_by_id(question_id)
+                deleted_count += 1
+        
+        logging.info(f"[cleanup_invalid_ai_questions] Очистка завершена. Удалено {deleted_count} некачественных вопросов.")
+        return deleted_count
 
     def _get_main_topic_for_subtopic(self, subtopic: str) -> tuple[Optional[str], str]:
         """Получить главную тему и язык для подтемы."""
@@ -121,6 +234,13 @@ class QuestionService:
                         if not question or not correct_answer or not explanation:
                             logging.warning(f"[get_or_generate_tasks][retake][AI generation] Skipping result with None fields: question={question}, answer={correct_answer}, explanation={explanation}")
                             continue
+                        
+                        # Строгая валидация AI-вопроса
+                        is_valid, error_msg = self._validate_ai_question(question, correct_answer, explanation, topic)
+                        if not is_valid:
+                            logging.warning(f"[get_or_generate_tasks][retake][AI generation] Skipping invalid AI question: {error_msg}. Question: {question[:100]}...")
+                            continue
+                        
                         if question not in existing_question_texts_to_exclude:
                             # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
                             if not self.db.get_explanation_by_question_text(question):
@@ -235,6 +355,13 @@ class QuestionService:
                 if not question or not correct_answer or not explanation:
                     logging.warning(f"[get_or_generate_tasks][final AI generation] Skipping result with None fields: question={question}, answer={correct_answer}, explanation={explanation}")
                     continue
+                
+                # Строгая валидация AI-вопроса
+                is_valid, error_msg = self._validate_ai_question(question, correct_answer, explanation, topic)
+                if not is_valid:
+                    logging.warning(f"[get_or_generate_tasks][final AI generation] Skipping invalid AI question: {error_msg}. Question: {question[:100]}...")
+                    continue
+                
                 if question not in existing_question_texts_to_exclude:
                     # Сохраняем сгенерированный ИИ вопрос в базу, если его там нет
                     if not self.db.get_explanation_by_question_text(question):
@@ -302,7 +429,6 @@ class QuestionService:
     @staticmethod
     def generate_universal_options(correct_answer_str: str) -> List[str]:
         """Generate universal options for a given correct answer."""
-        import re
         correct_answer_str = str(correct_answer_str).strip()
         options = set()
         

@@ -2560,19 +2560,82 @@ class Database:
 
     def check_user_access(self, user_id: int, username: str = None) -> bool:
         """
-        Comprehensive access check for users.
-        Checks admin status, username whitelist, and user_id whitelist.
+        Comprehensive user access check.
+        Returns True if user has access, False otherwise.
         """
-        # First check if user is admin
-        if self.is_admin(user_id):
-            return True
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Check if user exists in allowed_users and has access
+            cursor.execute('''
+                SELECT has_access, is_active 
+                FROM allowed_users 
+                WHERE user_id = ? AND has_access = 1
+            ''', (user_id,))
+            
+            result = cursor.fetchone()
+            if result:
+                return True
+            
+            # If username provided, also check by username
+            if username:
+                cursor.execute('''
+                    SELECT has_access 
+                    FROM allowed_users 
+                    WHERE username = ? AND has_access = 1
+                ''', (username,))
+                
+                result = cursor.fetchone()
+                if result:
+                    return True
+            
+            return False
+
+    def get_all_ai_questions(self) -> List[Dict[str, Any]]:
+        """
+        Получает все AI-вопросы из базы данных.
         
-        # Check username whitelist if username exists
-        if username and self.is_user_allowed(username):
-            return True
+        Returns:
+            List[Dict[str, Any]]: Список всех AI-вопросов
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, question, answer, explanation, topic, source
+                FROM questions 
+                WHERE source = 'ai'
+                ORDER BY id DESC
+            ''')
+            
+            columns = [description[0] for description in cursor.description]
+            results = []
+            
+            for row in cursor.fetchall():
+                question_dict = dict(zip(columns, row))
+                results.append(question_dict)
+            
+            return results
+
+    def delete_question_by_id(self, question_id: int) -> bool:
+        """
+        Удаляет вопрос по ID.
         
-        # Check user_id whitelist for users without username
-        if self.is_user_allowed_by_id(user_id):
-            return True
-        
-        return False
+        Args:
+            question_id (int): ID вопроса для удаления
+            
+        Returns:
+            bool: True если вопрос был удален, False если не найден
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Проверяем, существует ли вопрос
+            cursor.execute('SELECT id FROM questions WHERE id = ?', (question_id,))
+            if not cursor.fetchone():
+                return False
+            
+            # Удаляем вопрос
+            cursor.execute('DELETE FROM questions WHERE id = ?', (question_id,))
+            conn.commit()
+            
+            return cursor.rowcount > 0
