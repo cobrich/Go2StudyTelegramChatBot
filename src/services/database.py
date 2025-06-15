@@ -36,7 +36,7 @@ class Database:
                 )
             ''')
             
-            # Create allowed_users table with all necessary fields
+            # Create allowed_users table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS allowed_users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,11 +45,11 @@ class Database:
                     grade INTEGER,
                     added_by INTEGER,
                     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    is_active BOOLEAN DEFAULT 1,
+                    is_active BOOLEAN DEFAULT 0,
                     user_id INTEGER,
                     language TEXT DEFAULT "ru",
                     current_topic TEXT,
-                    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_activity TIMESTAMP,
                     FOREIGN KEY (added_by) REFERENCES admins(user_id)
                 )
             ''')
@@ -709,8 +709,8 @@ class Database:
                     return False
                 
                 cursor.execute('''
-                    INSERT INTO allowed_users (username, full_name, grade, user_id, added_by, language)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO allowed_users (username, full_name, grade, user_id, added_by, language, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, 0)
                 ''', (username, full_name, grade, user_id, added_by, language))
                 conn.commit()
                 return True
@@ -728,8 +728,8 @@ class Database:
                     return False
                 
                 cursor.execute('''
-                    INSERT INTO allowed_users (user_id, username, full_name, grade, added_by, language)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO allowed_users (user_id, username, full_name, grade, added_by, language, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, 0)
                 ''', (user_id, username, full_name, grade, added_by, language))
                 conn.commit()
                 return True

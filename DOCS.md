@@ -3048,3 +3048,83 @@ question_tuple = (
 - ✅ Исправлена путаница для пользователей при первом запуске бота
 
 ---
+
+### 🔧 Bug Fix: is_active Automatically Set to 1 for New Students (January 2025)
+
+**✅ FIXED: New students now created with is_active = 0 (inactive) by default**
+
+#### 🐛 Problem:
+- When creating new students through admin panel, `is_active` field was automatically set to `1` (active)
+- This caused new students to appear as "active in test" even though they never started any test
+- Students got "Вы проходите тест!" message on `/start` command without actually taking any test
+
+#### 🔍 Root Cause Analysis:
+
+**1. Database Schema Issue:**
+```sql
+-- Old schema (problematic):
+is_active BOOLEAN DEFAULT 1,  -- ❌ New users created as active
+
+-- New schema (fixed):
+is_active BOOLEAN DEFAULT 0,  -- ✅ New users created as inactive
+```
+
+**2. Function Implementation:**
+- Functions `add_allowed_user()` and `add_allowed_user_by_id()` didn't specify `is_active` value explicitly
+- Database used `DEFAULT 1` value automatically
+- Result: New students created with `is_active = 1`
+
+#### ✅ Solution Implemented:
+
+**1. Updated Database Schema:**
+- Changed `is_active BOOLEAN DEFAULT 1` → `is_active BOOLEAN DEFAULT 0`
+- Added migration to update existing database structure
+- Preserves existing user data while fixing schema
+
+**2. Updated Add User Functions:**
+```python
+# Before (implicit default):
+INSERT INTO allowed_users (username, full_name, grade, user_id, added_by, language)
+VALUES (?, ?, ?, ?, ?, ?)
+
+# After (explicit inactive):
+INSERT INTO allowed_users (username, full_name, grade, user_id, added_by, language, is_active)
+VALUES (?, ?, ?, ?, ?, ?, 0)
+```
+
+**3. Database Migration:**
+- Automatic migration on bot startup
+- Creates new table with correct schema
+- Copies all existing data
+- Replaces old table seamlessly
+- No data loss during migration
+
+#### 🔧 Technical Changes:
+
+**Files Modified:**
+- `src/services/database.py` - Updated schema and add user functions
+- Database migration - Automatic schema update
+
+**Migration Process:**
+1. Check if migration needed (looks for `allowed_users_new` table)
+2. Create new table with `is_active DEFAULT 0`
+3. Copy all data from old table to new table
+4. Drop old table and rename new table
+5. Log successful migration
+
+#### ✅ Result:
+- ✅ **New students created inactive**: `is_active = 0` by default
+- ✅ **No false "active test" messages**: Students only marked active when actually starting tests
+- ✅ **Existing data preserved**: Migration maintains all current user information
+- ✅ **Consistent behavior**: `/start` command works correctly for new students
+- ✅ **Admin panel works correctly**: New students can be added without activation issues
+
+#### 📝 Usage:
+- **Admin creates student** → Student has `is_active = 0` (inactive)
+- **Student runs `/start`** → No "Вы проходите тест!" message
+- **Student selects topic** → `is_active` set to `1` (active) when test starts
+- **Student completes/exits test** → `is_active` set back to `0` (inactive)
+
+**Status**: ✅ **is_active DEFAULT VALUE ISSUE RESOLVED** - New students created inactive by default
+
+---
