@@ -600,6 +600,25 @@ class CommandHandlers(BaseHandler):
         confirm_text = "\n\nОтветьте 'да' для подтверждения или любое другое сообщение для отмены." if current_language == 'ru' else "\n\nРастау үшін 'иә' деп жауап беріңіз немесе болдырмау үшін басқа хабарлама жіберіңіз."
         await update.message.reply_text(warning_text + confirm_text)
 
+    async def _delete_previous_bot_message(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Удаляет предыдущее сообщение бота, если оно сохранено в контексте."""
+        try:
+            last_bot_message_id = context.user_data.get('last_bot_message_id')
+            chat_id = context.user_data.get('chat_id')
+            
+            if last_bot_message_id and chat_id:
+                await context.bot.delete_message(chat_id=chat_id, message_id=last_bot_message_id)
+                # Очищаем сохраненный ID после удаления
+                context.user_data.pop('last_bot_message_id', None)
+        except Exception as e:
+            # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
+            logging.debug(f"Could not delete previous bot message: {e}")
+
+    async def _save_bot_message_id(self, context: ContextTypes.DEFAULT_TYPE, message, chat_id: int) -> None:
+        """Сохраняет ID сообщения бота для последующего удаления."""
+        context.user_data['last_bot_message_id'] = message.message_id
+        context.user_data['chat_id'] = chat_id
+
     async def handle_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle topic selection from main menu."""
         user_id = update.effective_user.id
@@ -608,6 +627,9 @@ class CommandHandlers(BaseHandler):
         # Check if user is already taking a test
         if await self.check_user_active(update, context):
             return
+        
+        # Удаляем предыдущее сообщение бота (если есть)
+        await self._delete_previous_bot_message(context)
         
         # Clear any previous data
         self.clear_user_data(context)
@@ -621,12 +643,15 @@ class CommandHandlers(BaseHandler):
             pass  # Игнорируем ошибки удаления
         
         # Отправляем новое сообщение с выбором тем
-        await context.bot.send_message(
+        new_message = await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=get_message('select_topic', user_language),
             reply_markup=build_topic_selection_keyboard(user_id),
             parse_mode='Markdown'
         )
+        
+        # Сохраняем ID нового сообщения бота
+        await self._save_bot_message_id(context, new_message, update.effective_chat.id)
 
     async def handle_progress(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle progress request from main menu."""
@@ -677,6 +702,9 @@ class CommandHandlers(BaseHandler):
         if await self.check_user_active(update, context):
             return
         
+        # Удаляем предыдущее сообщение бота (если есть)
+        await self._delete_previous_bot_message(context)
+        
         # Clear any previous data
         self.clear_user_data(context)
         
@@ -703,6 +731,8 @@ class CommandHandlers(BaseHandler):
                 error_text,
                 reply_markup=get_main_menu_markup(user_id)
             )
+            # Сохраняем ID сообщения с ошибкой
+            await self._save_bot_message_id(context, preparing_msg, update.effective_chat.id)
             return
         
         # Convert questions data to the format expected by the test system
@@ -756,7 +786,7 @@ class CommandHandlers(BaseHandler):
             try:
                 # If question has an image, send it first
                 if len(question) > 5 and question[5]:  # question[5] is image_path
-                    await context.bot.send_photo(
+                    question_msg = await context.bot.send_photo(
                         chat_id=update.effective_chat.id,
                         photo=open(question[5], 'rb'),
                         caption=get_message('random_test_question', user_language, 
@@ -768,12 +798,16 @@ class CommandHandlers(BaseHandler):
                         await preparing_msg.delete()
                     except:
                         pass
+                    # Сохраняем ID сообщения с вопросом
+                    await self._save_bot_message_id(context, question_msg, update.effective_chat.id)
                 else:
                     await preparing_msg.edit_text(
                         get_message('random_test_question', user_language, 
                                   current=1, total=len(questions), question=question[0]),
                         reply_markup=keyboard
                     )
+                    # Сохраняем ID отредактированного сообщения
+                    await self._save_bot_message_id(context, preparing_msg, update.effective_chat.id)
             except Exception as e:
                 logging.error(f"Error displaying random test question: {e}")
                 error_text = get_message('question_display_error', user_language)
@@ -781,12 +815,16 @@ class CommandHandlers(BaseHandler):
                     error_text,
                     reply_markup=get_main_menu_markup(user_id)
                 )
+                # Сохраняем ID сообщения с ошибкой
+                await self._save_bot_message_id(context, preparing_msg, update.effective_chat.id)
         else:
             error_text = get_message('questions_load_error', user_language)
             await preparing_msg.edit_text(
                 error_text,
                 reply_markup=get_main_menu_markup(user_id)
-            ) 
+            )
+            # Сохраняем ID сообщения с ошибкой
+            await self._save_bot_message_id(context, preparing_msg, update.effective_chat.id)
 
     async def _delete_message_after_delay(self, bot, chat_id: int, message_id: int, delay_seconds: int) -> None:
         """Удаляет сообщение через указанное количество секунд."""

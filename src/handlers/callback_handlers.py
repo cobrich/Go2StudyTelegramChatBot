@@ -10,6 +10,25 @@ from services.topic_manager import TopicManager
 import sqlite3
 
 class CallbackHandlers(BaseHandler):
+    async def _delete_previous_bot_message(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Удаляет предыдущее сообщение бота, если оно сохранено в контексте."""
+        try:
+            last_bot_message_id = context.user_data.get('last_bot_message_id')
+            chat_id = context.user_data.get('chat_id')
+            
+            if last_bot_message_id and chat_id:
+                await context.bot.delete_message(chat_id=chat_id, message_id=last_bot_message_id)
+                # Очищаем сохраненный ID после удаления
+                context.user_data.pop('last_bot_message_id', None)
+        except Exception as e:
+            # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
+            logging.debug(f"Could not delete previous bot message: {e}")
+
+    async def _save_bot_message_id(self, context: ContextTypes.DEFAULT_TYPE, message, chat_id: int) -> None:
+        """Сохраняет ID сообщения бота для последующего удаления."""
+        context.user_data['last_bot_message_id'] = message.message_id
+        context.user_data['chat_id'] = chat_id
+
     async def handle_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle topic selection callback."""
         query = update.callback_query
@@ -135,13 +154,15 @@ class CallbackHandlers(BaseHandler):
         try:
             # If question has an image, send it first
             if len(question) > 5 and question[5]:  # question[5] is image_path
-                await context.bot.send_photo(
+                question_msg = await context.bot.send_photo(
                     chat_id=query.message.chat_id,
                     photo=open(question[5], 'rb'),
                     caption=get_message('topic_question', user_language, 
                                       topic=topic, current=1, total=len(questions), question=question[0]),
                     reply_markup=keyboard
                 )
+                # Сохраняем ID сообщения с вопросом
+                await self._save_bot_message_id(context, question_msg, query.message.chat_id)
                 return
             else:
                 await query.message.edit_text(
@@ -149,6 +170,8 @@ class CallbackHandlers(BaseHandler):
                               topic=topic, current=1, total=len(questions), question=question[0]),
                     reply_markup=keyboard
                 )
+                # Сохраняем ID отредактированного сообщения
+                await self._save_bot_message_id(context, query.message, query.message.chat_id)
         except Exception as e:
             logging.error(f"Error displaying question: {e}")
             pass
@@ -422,6 +445,8 @@ class CallbackHandlers(BaseHandler):
                           topic=topic, current=current_index + 1, total=len(questions), question=question[0]),
                 reply_markup=keyboard
             )
+            # Сохраняем ID отредактированного сообщения
+            await self._save_bot_message_id(context, query.message, query.message.chat_id)
         except Exception as e:
             logging.error(f"[handle_continue] Exception in edit_text: {e}")
 
@@ -1021,24 +1046,24 @@ class CallbackHandlers(BaseHandler):
             try:
                 # If question has an image, send it first
                 if len(question) > 5 and question[5]:  # question[5] is image_path
-                    await context.bot.send_photo(
+                    question_msg = await context.bot.send_photo(
                         chat_id=query.message.chat_id,
                         photo=open(question[5], 'rb'),
                         caption=get_message('random_test_question', user_language, 
                                           current=1, total=len(questions), question=question[0]),
                         reply_markup=keyboard
                     )
-                    # Try to delete preparing message
-                    try:
-                        await query.message.delete()
-                    except:
-                        pass
+                    # Сохраняем ID сообщения с вопросом
+                    await self._save_bot_message_id(context, question_msg, query.message.chat_id)
+                    return
                 else:
                     await query.message.edit_text(
                         get_message('random_test_question', user_language, 
                                   current=1, total=len(questions), question=question[0]),
                         reply_markup=keyboard
                     )
+                    # Сохраняем ID отредактированного сообщения
+                    await self._save_bot_message_id(context, query.message, query.message.chat_id)
             except Exception as e:
                 logging.error(f"Error displaying retry test question: {e}")
                 error_text = get_message('question_display_error', user_language)
