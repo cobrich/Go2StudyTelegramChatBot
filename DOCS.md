@@ -2335,3 +2335,53 @@ UPDATE allowed_users SET is_active = 1 WHERE user_id = 1117916124;
 - **Таблица проверки доступа**: `allowed_users`
 - **Ключевые поля**: `user_id`, `username`, `is_active`
 - **Методы проверки**: `check_user_access()`, `is_user_allowed()`, `is_user_allowed_by_id()`
+
+---
+
+### 🔧 Bug Fix: Замена обращений к таблице users на allowed_users (Январь 2025)
+
+**✅ ИСПРАВЛЕНО: Заменены все обращения к удаленной таблице `users` на `allowed_users`**
+
+#### 🐛 Проблема:
+- После удаления таблицы `users` код продолжал обращаться к ней в нескольких методах
+- Ошибка `sqlite3.OperationalError: no such table: users` при попытке редактировать студентов
+- Админ-панель не могла получить список студентов
+
+#### 🔧 Исправления:
+
+**Файл `src/services/database.py`:**
+- `get_user_full_profile()` - убраны JOIN с таблицей users
+- `sync_user_with_whitelist()` - обновление только в allowed_users
+- `get_user_historical_stats()` - получение данных из allowed_users
+- `get_all_users_with_history()` - работа только с allowed_users
+- `get_all_students_summary()` - убраны JOIN с users
+- `get_class_statistics()` - убраны JOIN с users
+- `get_student_contact_info()` - работа только с allowed_users
+- `auto_setup_user_from_whitelist()` - убрана логика создания записей в users
+- `auto_update_username_from_telegram()` - обновление только в allowed_users
+- `get_user_display_info()` - получение данных только из allowed_users
+
+**Файл `src/handlers/admin/students.py`:**
+- Исправлен метод удаления студента - удаление из allowed_users вместо users
+
+**Файл `src/handlers/admin/stats.py`:**
+- Исправлены SQL запросы статистики - JOIN с allowed_users вместо users
+
+#### ✅ Результат:
+- ✅ Админ-панель снова работает корректно
+- ✅ Редактирование студентов работает без ошибок
+- ✅ Статистика отображается правильно
+- ✅ Все пользовательские данные сохранены в таблице allowed_users
+- ✅ Упрощена архитектура - один источник данных о пользователях
+
+#### 📝 Техническая информация:
+- **Основная таблица пользователей**: `allowed_users`
+- **Поля таблицы**: user_id, username, full_name, grade, language, is_active, current_topic, last_activity
+- **Связанные таблицы**: test_results, user_errors (связь по user_id)
+- **Методы проверки доступа**: `check_user_access()`, `is_user_allowed()`, `is_user_allowed_by_id()`
+
+#### 🎯 Влияние на пользователей:
+- Админы могут снова управлять студентами через админ-панель
+- Статистика отображается корректно
+- Все функции бота работают стабильно
+- Данные пользователей не потеряны

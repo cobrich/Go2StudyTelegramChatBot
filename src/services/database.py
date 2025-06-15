@@ -1143,27 +1143,22 @@ class Database:
     # === USER DATA MANAGEMENT ===
     
     def get_user_full_profile(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """Get complete user profile combining users and allowed_users data."""
+        """Get complete user profile from allowed_users data."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT 
-                    u.user_id,
-                    u.username as current_username,
-                    u.full_name as current_full_name,
-                    u.grade as current_grade,
-                    u.language,
-                    u.is_active,
-                    u.current_topic,
-                    u.last_activity,
-                    au.username as whitelist_username,
-                    au.full_name as whitelist_full_name,
-                    au.grade as whitelist_grade,
-                    au.is_active as whitelist_active,
-                    au.added_at as whitelist_added_at
-                FROM users u
-                LEFT JOIN allowed_users au ON u.username = au.username
-                WHERE u.user_id = ?
+                    user_id,
+                    username,
+                    full_name,
+                    grade,
+                    language,
+                    is_active,
+                    current_topic,
+                    last_activity,
+                    added_at
+                FROM allowed_users
+                WHERE user_id = ?
             ''', (user_id,))
             
             result = cursor.fetchone()
@@ -1172,161 +1167,116 @@ class Database:
                 
             return {
                 'user_id': result[0],
-                'current_username': result[1],
-                'current_full_name': result[2],
-                'current_grade': result[3],
+                'username': result[1],
+                'full_name': result[2],
+                'grade': result[3],
                 'language': result[4],
                 'is_active': bool(result[5]),
                 'current_topic': result[6],
                 'last_activity': result[7],
-                'whitelist_username': result[8],
-                'whitelist_full_name': result[9],
-                'whitelist_grade': result[10],
-                'whitelist_active': bool(result[11]) if result[11] is not None else False,
-                'whitelist_added_at': result[12],
-                'has_whitelist_access': result[11] is not None and bool(result[11])
+                'added_at': result[8]
             }
     
     def sync_user_with_whitelist(self, user_id: int, username: str) -> bool:
-        """Синхронизировать данные пользователя с whitelist."""
+        """Синхронизировать данные пользователя в allowed_users."""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Получаем данные из allowed_users
-                cursor.execute('''
-                    SELECT full_name, grade, is_active
-                    FROM allowed_users 
-                    WHERE user_id = ? OR username = ?
-                    ORDER BY user_id IS NOT NULL DESC
-                    LIMIT 1
-                ''', (user_id, username))
-                
-                whitelist_data = cursor.fetchone()
-                if not whitelist_data:
-                    return False
-                
-                full_name, grade, is_whitelist_active = whitelist_data
-                
-                # Обновляем данные в users
-                cursor.execute('''
-                    INSERT OR REPLACE INTO users 
-                    (user_id, username, full_name, grade, last_activity)
-                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ''', (user_id, username, full_name, grade))
-                
-                # Обновляем данные в users
-                cursor.execute('''
-                    INSERT OR REPLACE INTO users 
-                    (user_id, username, full_name, grade, last_activity)
-                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ''', (user_id, username, full_name, grade))
-                
-                # Обновляем user_id в allowed_users если его не было
+                # Обновляем данные в allowed_users
                 cursor.execute('''
                     UPDATE allowed_users 
-                    SET user_id = ?, username = ?
-                    WHERE (user_id IS NULL OR user_id = 0) AND username = ?
-                ''', (user_id, username, username))
+                    SET username = ?, last_activity = CURRENT_TIMESTAMP
+                    WHERE user_id = ?
+                ''', (username, user_id))
                 
                 conn.commit()
-                return True
+                return cursor.rowcount > 0
                 
         except Exception as e:
             print(f"[ERROR] Ошибка синхронизации пользователя {user_id}: {e}")
             return False
-    
+
     def get_user_historical_stats(self, user_id: int) -> Dict[str, Any]:
-        """Get historical statistics for a user, even if they're not in whitelist."""
+        """Get user historical statistics."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            # Test results
+            # Получаем базовую информацию пользователя
             cursor.execute('''
-                SELECT COUNT(*), AVG(percentage), MIN(timestamp), MAX(timestamp)
+                SELECT full_name, grade, language, last_activity
+                FROM allowed_users WHERE user_id = ?
+            ''', (user_id,))
+            user_info = cursor.fetchone()
+            
+            if not user_info:
+                return {}
+            
+            # Получаем статистику тестов
+            cursor.execute('''
+                SELECT COUNT(*) as total_tests, AVG(percentage) as avg_score,
+                       MAX(timestamp) as last_test_date
                 FROM test_results WHERE user_id = ?
             ''', (user_id,))
             test_stats = cursor.fetchone()
             
-            # Error count
+            # Получаем количество ошибок
             cursor.execute('''
-                SELECT COUNT(DISTINCT question_text), SUM(error_count)
+                SELECT COUNT(DISTINCT question_text) as unique_errors,
+                       SUM(error_count) as total_errors
                 FROM user_errors WHERE user_id = ?
             ''', (user_id,))
             error_stats = cursor.fetchone()
             
-            # User info
-            cursor.execute('''
-                SELECT username, full_name, grade, language, last_activity
-                FROM users WHERE user_id = ?
-            ''', (user_id,))
-            user_info = cursor.fetchone()
-            
             return {
                 'user_id': user_id,
-                'username': user_info[0] if user_info else None,
-                'full_name': user_info[1] if user_info else None,
-                'grade': user_info[2] if user_info else None,
-                'language': user_info[3] if user_info else 'ru',
-                'last_activity': user_info[4] if user_info else None,
-                'total_tests': test_stats[0] if test_stats else 0,
-                'avg_percentage': test_stats[1] if test_stats else 0,
-                'first_test': test_stats[2] if test_stats else None,
-                'last_test': test_stats[3] if test_stats else None,
-                'unique_errors': error_stats[0] if error_stats else 0,
-                'total_error_count': error_stats[1] if error_stats else 0
+                'full_name': user_info[0],
+                'grade': user_info[1],
+                'language': user_info[2],
+                'last_activity': user_info[3],
+                'total_tests': test_stats[0] or 0,
+                'avg_score': round(test_stats[1] or 0, 1),
+                'last_test_date': test_stats[2],
+                'unique_errors': error_stats[0] or 0,
+                'total_errors': error_stats[1] or 0
             }
-    
+
     def get_all_users_with_history(self) -> List[Dict[str, Any]]:
-        """Get all users with their test history and statistics."""
-        with self._get_connection() as conn:
+        """Get all users with their test history."""
+        with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            
-            # Get all users
             cursor.execute('''
-                SELECT u.user_id, u.username, u.full_name, u.grade, u.language, u.last_activity
-                FROM users u
-                ORDER BY u.last_activity DESC
+                SELECT au.user_id, au.username, au.full_name, au.grade, au.language,
+                       au.last_activity, au.is_active,
+                       COUNT(tr.id) as total_tests,
+                       AVG(tr.percentage) as avg_score,
+                       MAX(tr.timestamp) as last_test,
+                       COUNT(DISTINCT ue.question_text) as unique_errors
+                FROM allowed_users au
+                LEFT JOIN test_results tr ON au.user_id = tr.user_id
+                LEFT JOIN user_errors ue ON au.user_id = ue.user_id
+                WHERE au.is_active = 1
+                GROUP BY au.user_id, au.username, au.full_name, au.grade, au.language, au.last_activity, au.is_active
+                ORDER BY au.last_activity DESC
             ''')
-            users = cursor.fetchall()
             
-            result = []
-            for user in users:
-                user_id, username, full_name, grade, language, last_activity = user
-                
-                # Get test statistics
-                cursor.execute('''
-                    SELECT COUNT(*) as total_tests, AVG(percentage) as avg_score
-                    FROM test_results 
-                    WHERE user_id = ?
-                ''', (user_id,))
-                stats = cursor.fetchone()
-                total_tests, avg_score = stats if stats else (0, 0.0)
-                
-                # Get recent topics
-                cursor.execute('''
-                    SELECT topic, COUNT(*) as count
-                    FROM test_results 
-                    WHERE user_id = ?
-                    GROUP BY topic
-                    ORDER BY MAX(timestamp) DESC
-                    LIMIT 3
-                ''', (user_id,))
-                recent_topics = cursor.fetchall()
-                
-                result.append({
-                    'user_id': user_id,
-                    'username': username or 'не указан',
-                    'full_name': full_name or 'не указано',
-                    'grade': grade,
-                    'language': language,
-                    'last_activity': last_activity,
-                    'total_tests': total_tests,
-                    'avg_score': round(avg_score or 0.0, 1),
-                    'recent_topics': recent_topics
+            results = []
+            for row in cursor.fetchall():
+                results.append({
+                    'user_id': row[0],
+                    'username': row[1],
+                    'full_name': row[2],
+                    'grade': row[3],
+                    'language': row[4],
+                    'last_activity': row[5],
+                    'is_active': bool(row[6]),
+                    'total_tests': row[7] or 0,
+                    'avg_score': round(row[8] or 0, 1),
+                    'last_test': row[9],
+                    'unique_errors': row[10] or 0
                 })
             
-            return result
+            return results
 
     def get_topic_question_counts(self) -> Dict[str, int]:
         """Get question count for each topic."""
@@ -1524,23 +1474,22 @@ class Database:
             }
 
     def get_all_students_summary(self) -> List[Dict[str, Any]]:
-        """Получить краткую сводку по всем ученикам для админов."""
+        """Получить краткую сводку всех учеников для админ-панели."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
             # Получаем всех учеников из whitelist с их статистикой
             cursor.execute('''
                 SELECT au.user_id, au.username, au.full_name, au.grade, au.is_active, au.added_at,
-                       u.last_activity,
+                       au.last_activity,
                        COUNT(tr.id) as total_tests,
                        AVG(tr.percentage) as avg_score,
                        COUNT(DISTINCT ue.question_text) as unique_errors,
                        MAX(tr.timestamp) as last_test
                 FROM allowed_users au
-                LEFT JOIN users u ON (au.user_id = u.user_id OR au.username = u.username)
-                LEFT JOIN test_results tr ON u.user_id = tr.user_id
-                LEFT JOIN user_errors ue ON u.user_id = ue.user_id
-                GROUP BY au.id, au.user_id, au.username, au.full_name, au.grade, au.is_active, au.added_at, u.last_activity
+                LEFT JOIN test_results tr ON au.user_id = tr.user_id
+                LEFT JOIN user_errors ue ON au.user_id = ue.user_id
+                GROUP BY au.id, au.user_id, au.username, au.full_name, au.grade, au.is_active, au.added_at, au.last_activity
                 ORDER BY au.added_at DESC
             ''')
             
@@ -1577,8 +1526,7 @@ class Database:
                            COUNT(tr.id) as total_tests,
                            AVG(tr.percentage) as avg_score
                     FROM allowed_users au
-                    LEFT JOIN users u ON (au.user_id = u.user_id OR au.username = u.username)
-                    LEFT JOIN test_results tr ON u.user_id = tr.user_id
+                    LEFT JOIN test_results tr ON au.user_id = tr.user_id
                     WHERE au.grade = ? AND au.is_active = 1
                     GROUP BY au.grade
                 ''', (grade,))
@@ -1591,8 +1539,7 @@ class Database:
                            COUNT(tr.id) as total_tests,
                            AVG(tr.percentage) as avg_score
                     FROM allowed_users au
-                    LEFT JOIN users u ON (au.user_id = u.user_id OR au.username = u.username)
-                    LEFT JOIN test_results tr ON u.user_id = tr.user_id
+                    LEFT JOIN test_results tr ON au.user_id = tr.user_id
                     WHERE au.is_active = 1
                     GROUP BY au.grade
                     ORDER BY au.grade
@@ -1649,26 +1596,20 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT au.user_id, au.username, au.full_name, au.grade,
-                       u.username as current_username, u.full_name as current_full_name
-                FROM allowed_users au
-                LEFT JOIN users u ON au.user_id = u.user_id
-                WHERE au.user_id = ? OR au.username = (
-                    SELECT username FROM users WHERE user_id = ?
-                )
-            ''', (user_id, user_id))
+                SELECT user_id, username, full_name, grade
+                FROM allowed_users
+                WHERE user_id = ?
+            ''', (user_id,))
             
             result = cursor.fetchone()
             if result:
                 return {
                     'user_id': result[0],
-                    'whitelist_username': result[1],
-                    'whitelist_full_name': result[2],
+                    'username': result[1],
+                    'full_name': result[2],
                     'grade': result[3],
-                    'current_username': result[4],
-                    'current_full_name': result[5],
-                    'display_name': result[5] or result[2] or 'Неизвестен',
-                    'display_username': result[4] or result[1] or 'не указан'
+                    'display_name': result[2] or 'Неизвестен',
+                    'display_username': result[1] or 'не указан'
                 }
             return None
 
@@ -1801,60 +1742,16 @@ class Database:
                 
                 wl_user_id, wl_username, wl_full_name, wl_grade, wl_active, wl_added_at = whitelist_data
                 
-                # Проверяем, есть ли уже запись в users
-                cursor.execute('SELECT user_id, full_name, grade FROM users WHERE user_id = ?', (user_id,))
-                existing_user = cursor.fetchone()
-                
                 # Определяем, что нужно обновить
                 updates_made = []
                 
-                if existing_user:
-                    # Обновляем существующую запись
-                    current_name, current_grade = existing_user[1], existing_user[2]
-                    
-                    update_fields = []
-                    update_params = []
-                    
-                    if wl_full_name and wl_full_name != current_name:
-                        update_fields.append("full_name = ?")
-                        update_params.append(wl_full_name)
-                        updates_made.append(f"ФИО: {wl_full_name}")
-                    
-                    if wl_grade and wl_grade != current_grade:
-                        update_fields.append("grade = ?")
-                        update_params.append(wl_grade)
-                        updates_made.append(f"Класс: {wl_grade}")
-                    
-                    # Всегда обновляем username и last_activity
-                    update_fields.extend(["username = ?", "last_activity = CURRENT_TIMESTAMP"])
-                    update_params.extend([username])
-                    
-                    if update_fields:
-                        update_params.append(user_id)
-                        cursor.execute(f'''
-                            UPDATE users 
-                            SET {", ".join(update_fields)}
-                            WHERE user_id = ?
-                        ''', update_params)
-                else:
-                    # Создаем новую запись
-                    cursor.execute('''
-                        INSERT INTO users (user_id, username, full_name, grade, last_activity)
-                        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    ''', (user_id, username, wl_full_name, wl_grade))
-                    
-                    if wl_full_name:
-                        updates_made.append(f"ФИО: {wl_full_name}")
-                    if wl_grade:
-                        updates_made.append(f"Класс: {wl_grade}")
-                
-                # Обновляем user_id в whitelist если его не было
+                # Обновляем user_id и username в allowed_users если нужно
                 if not wl_user_id or wl_user_id != user_id:
                     cursor.execute('''
                         UPDATE allowed_users 
-                        SET user_id = ?
+                        SET user_id = ?, username = ?, last_activity = CURRENT_TIMESTAMP
                         WHERE username = ? AND (user_id IS NULL OR user_id != ?)
-                    ''', (user_id, username, user_id))
+                    ''', (user_id, username, username, user_id))
                     updates_made.append("Синхронизирован user_id в whitelist")
                 
                 conn.commit()
@@ -1872,12 +1769,11 @@ class Database:
                 }
                 
         except Exception as e:
-            print(f"[ERROR] Ошибка автоматической настройки пользователя {user_id}: {e}")
             return {
                 'success': False,
                 'reason': 'database_error',
                 'message': f'Ошибка базы данных: {str(e)}'
-            } 
+            }
 
     def get_admin_info(self, user_id: int) -> Optional[Dict[str, Any]]:
         """Get admin information by user_id."""
@@ -2337,17 +2233,10 @@ class Database:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Обновляем username в таблице users
-                cursor.execute('''
-                    UPDATE users 
-                    SET username = ?, last_activity = CURRENT_TIMESTAMP
-                    WHERE user_id = ?
-                ''', (username, user_id))
-                
-                # Обновляем username в allowed_users если запись существует
+                # Обновляем username в allowed_users
                 cursor.execute('''
                     UPDATE allowed_users 
-                    SET username = ?
+                    SET username = ?, last_activity = CURRENT_TIMESTAMP
                     WHERE user_id = ? AND (username IS NULL OR username != ?)
                 ''', (username, user_id, username))
                 
@@ -2365,27 +2254,19 @@ class Database:
 
     def get_user_display_info(self, user_id: int) -> Dict[str, Any]:
         """
-        Получает отображаемую информацию о пользователе из всех источников.
-        Приоритет: текущие данные users -> whitelist -> базовые данные Telegram.
+        Получает отображаемую информацию о пользователе из allowed_users.
         """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            # Получаем данные из users
+            # Получаем данные из allowed_users
             cursor.execute('''
                 SELECT username, full_name, grade, language
-                FROM users WHERE user_id = ?
+                FROM allowed_users WHERE user_id = ?
             ''', (user_id,))
             user_data = cursor.fetchone()
             
-            # Получаем данные из allowed_users
-            cursor.execute('''
-                SELECT username, full_name, grade
-                FROM allowed_users WHERE user_id = ?
-            ''', (user_id,))
-            whitelist_data = cursor.fetchone()
-            
-            # Формируем итоговую информацию с приоритетами
+            # Формируем итоговую информацию
             result = {
                 'user_id': user_id,
                 'username': None,
@@ -2395,7 +2276,7 @@ class Database:
                 'has_complete_info': False
             }
             
-            # Заполняем данными из users (высший приоритет)
+            # Заполняем данными из allowed_users
             if user_data:
                 result.update({
                     'username': user_data[0],
@@ -2403,22 +2284,13 @@ class Database:
                     'grade': user_data[2],
                     'language': user_data[3] or 'ru'
                 })
-            
-            # Дополняем данными из whitelist если чего-то не хватает
-            if whitelist_data:
-                if not result['username'] and whitelist_data[0]:
-                    result['username'] = whitelist_data[0]
-                if not result['full_name'] and whitelist_data[1]:
-                    result['full_name'] = whitelist_data[1]
-                if not result['grade'] and whitelist_data[2]:
-                    result['grade'] = whitelist_data[2]
-            
-            # Проверяем полноту информации
-            result['has_complete_info'] = bool(
-                result['full_name'] and 
-                result['grade'] and 
-                result['username']
-            )
+                
+                # Проверяем полноту информации
+                result['has_complete_info'] = bool(
+                    result['full_name'] and 
+                    result['grade'] and 
+                    result['grade'] > 0
+                )
             
             return result
 

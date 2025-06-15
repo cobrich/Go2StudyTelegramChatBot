@@ -53,19 +53,27 @@ class StatsHandler(AdminBaseHandler):
                 
                 # Топ-5 активных пользователей
                 cursor.execute('''
-                    SELECT 
-                        COALESCE(au.full_name, u.full_name) as full_name,
-                        COALESCE(au.username, u.username) as username,
-                        tr.user_id,
-                        COUNT(tr.id) as test_count, 
-                        AVG(tr.percentage) as avg_percentage
+                    SELECT tr.topic, COUNT(*) as test_count, AVG(tr.percentage) as avg_score,
+                           au.full_name, au.grade
                     FROM test_results tr
-                    LEFT JOIN users u ON tr.user_id = u.user_id
                     LEFT JOIN allowed_users au ON tr.user_id = au.user_id
-                    GROUP BY tr.user_id
+                    WHERE tr.timestamp >= ?
+                    GROUP BY tr.topic, au.full_name, au.grade
                     ORDER BY test_count DESC
-                    LIMIT 5
-                ''')
+                    LIMIT 10
+                ''', (week_ago,))
+                top_topics = cursor.fetchall()
+                
+                cursor.execute('''
+                    SELECT tr.user_id, au.full_name, au.grade, COUNT(*) as test_count, 
+                           AVG(tr.percentage) as avg_score
+                    FROM test_results tr
+                    LEFT JOIN allowed_users au ON tr.user_id = au.user_id
+                    WHERE tr.timestamp >= ?
+                    GROUP BY tr.user_id, au.full_name, au.grade
+                    ORDER BY test_count DESC
+                    LIMIT 10
+                ''', (week_ago,))
                 top_users = cursor.fetchall()
                 
                 text = f"📊 <b>Общая статистика системы</b>\n\n"
@@ -83,16 +91,19 @@ class StatsHandler(AdminBaseHandler):
                 text += f"• Активных за неделю: {active_users_week}\n"
                 text += f"• Средний балл: {avg_score}%\n\n"
                 
+                if top_topics:
+                    text += f"🏆 <b>Топ-5 тем:</b>\n"
+                    for i, (topic, test_count, avg_score, full_name, grade) in enumerate(top_topics, 1):
+                        text += f"{i}. <b>{topic}</b>\n"
+                        text += f"   📅 {grade}\n"
+                        text += f"   �� {avg_score}%\n\n"
+                
                 if top_users:
                     text += f"🏆 <b>Топ-5 активных учеников:</b>\n"
-                    for i, (full_name, username, user_id, test_count, user_avg_percentage) in enumerate(top_users, 1):
-                        if full_name:
-                            name = full_name
-                        elif username:
-                            name = f"@{username}"
-                        else:
-                            name = f"Пользователь {user_id}"
-                        text += f"{i}. {name}: {test_count} тестов, {round(user_avg_percentage, 1)}%\n"
+                    for i, (user_id, full_name, grade, test_count, avg_score) in enumerate(top_users, 1):
+                        text += f"{i}. <b>{full_name}</b>\n"
+                        text += f"   📅 {grade}\n"
+                        text += f"   📊 {avg_score}%\n\n"
                 
         except Exception as e:
             logging.error(f"Error getting general stats: {e}")

@@ -533,7 +533,7 @@ class StudentsHandler(AdminBaseHandler):
                 
                 username, full_name = student
                 
-                # Удаляем из allowed_users
+                # Удаляем пользователя из allowed_users
                 cursor.execute('DELETE FROM allowed_users WHERE user_id = ?', (user_id,))
                 
                 # Удаляем из users (если есть)
