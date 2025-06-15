@@ -110,7 +110,17 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, us
 def get_main_menu_markup(user_id: int = None) -> ReplyKeyboardMarkup:
     """Get the main menu keyboard markup with language support."""
     user_language = _db.get_user_language(user_id) if user_id else 'ru'
+    is_admin = user_id and _db.is_admin(user_id)
+    
+    # Получаем базовую клавиатуру для языка
     menu_keyboard = get_main_menu_keyboard(user_language)
+    
+    # Если пользователь админ, добавляем админские кнопки
+    if is_admin:
+        admin_button_text = "🔧 Админ-панель" if user_language == 'ru' else "🔧 Әкімші панелі"
+        # Добавляем кнопку админ-панели в отдельной строке
+        menu_keyboard = menu_keyboard + [[admin_button_text]]
+    
     return ReplyKeyboardMarkup(
         menu_keyboard,
         resize_keyboard=True,

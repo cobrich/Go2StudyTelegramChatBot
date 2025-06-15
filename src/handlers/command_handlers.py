@@ -155,6 +155,13 @@ class CommandHandlers(BaseHandler):
             )
             return
         
+        # Проверяем, находится ли пользователь в активном тесте
+        if self.db.is_user_active(user_id):
+            # Пользователь в активном тесте, даем инструкции
+            test_instruction = get_message('in_active_test_help', user_language)
+            await update.message.reply_text(test_instruction)
+            return
+        
         # Clear user activity
         self.db.set_user_inactive(user_id)
         
@@ -194,6 +201,13 @@ class CommandHandlers(BaseHandler):
                           user_id=user_id, 
                           username=update.effective_user.username or 'не указан')
             )
+            return
+
+        # Проверяем, находится ли пользователь в активном тесте
+        if self.db.is_user_active(user_id):
+            # Пользователь в активном тесте, даем инструкции
+            test_instruction = get_message('in_active_test_help', user_language)
+            await update.message.reply_text(test_instruction)
             return
 
         # Handle language change confirmation
@@ -288,6 +302,8 @@ class CommandHandlers(BaseHandler):
         my_progress_text_kk = "📊 Менің прогресім"
         help_text_ru = "❓ Помощь"
         help_text_kk = "❓ Көмек"
+        admin_panel_text_ru = "🔧 Админ-панель"
+        admin_panel_text_kk = "🔧 Әкімші панелі"
         
         if text in [select_topic_text_ru, select_topic_text_kk]:
             await self.handle_topic_selection(update, context)
@@ -297,15 +313,33 @@ class CommandHandlers(BaseHandler):
             await self.handle_progress(update, context)
         elif text in [help_text_ru, help_text_kk]:
             await self.handle_help(update, context)
+        elif text in [admin_panel_text_ru, admin_panel_text_kk]:
+            # Проверяем, является ли пользователь админом
+            if self.db.is_admin(user_id):
+                # Импортируем админ-хендлеры
+                from handlers.admin import AdminHandlers
+                from services.question_service import QuestionService
+                
+                admin_handlers = AdminHandlers(self.db, QuestionService(self.db))
+                await admin_handlers.admin_panel(update, context)
+            else:
+                no_admin_text = "❌ У вас нет прав администратора." if user_language == 'ru' else "❌ Сізде әкімші құқығы жоқ."
+                await update.message.reply_text(no_admin_text, reply_markup=get_main_menu_markup(user_id))
         elif text in ["🇷🇺 Русский", "🇰🇿 Қазақша"]:
             await self.handle_language_change(update, context, text)
         else:
-            # Unknown command
-            unknown_text = get_message('topic_not_selected', user_language)
-            await update.message.reply_text(
-                unknown_text,
-                reply_markup=get_main_menu_markup(user_id)
-            )
+            # Проверяем, находится ли пользователь в процессе выбора темы
+            if context.user_data.get('in_topic_selection'):
+                # Пользователь в процессе выбора темы, даем понятные инструкции
+                instruction_text = get_message('in_topic_selection_help', user_language)
+                await update.message.reply_text(instruction_text)
+            else:
+                # Unknown command
+                unknown_text = get_message('topic_not_selected', user_language)
+                await update.message.reply_text(
+                    unknown_text,
+                    reply_markup=get_main_menu_markup(user_id)
+                )
 
     async def handle_language_change(self, update: Update, context: ContextTypes.DEFAULT_TYPE, language_text: str) -> None:
         """Handle language change request."""
