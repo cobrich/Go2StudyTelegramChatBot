@@ -162,11 +162,11 @@ def setup_handlers(application):
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.delete_questions_confirm,
-        pattern="^delete_questions_topic_"
+        pattern="^delete_questions_idx_"
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.delete_questions_execute,
-        pattern="^delete_questions_execute_"
+        pattern="^delete_questions_execute_confirmed$"
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.delete_single_question_start,

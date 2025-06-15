@@ -3362,3 +3362,35 @@ if q_num == 0:
 This enhancement improves user experience by ensuring all users have appropriate navigation options regardless of test type.
 
 ---
+
+### 🐛 **Исправленные ошибки**
+
+### 🔧 **Button_data_invalid при удалении вопросов по теме** (2025-01-15)
+
+**Проблема**: При нажатии на кнопку "Удалить вопросы по теме" возникала ошибка `telegram.error.BadRequest: Button_data_invalid`.
+
+**Причина**: 
+- Telegram имеет ограничение на `callback_data` - максимум 64 байта
+- В коде использовалось полное название темы в `callback_data`: `f"delete_questions_topic_{topic}"`
+- Длинные названия тем превышали лимит в 64 байта
+
+**Решение**:
+1. **Изменен подход к передаче данных**: Вместо полного названия темы используется индекс
+2. **Обновлен `delete_questions_start()`**: 
+   - Сохраняет список тем в `context.user_data['delete_topics_list']`
+   - Использует `callback_data=f"delete_questions_idx_{idx}"` вместо названия темы
+   - Обрезает длинные названия для отображения: `topic[:40] + "..."`
+3. **Обновлен `delete_questions_confirm()`**:
+   - Получает тему по индексу из сохраненного списка
+   - Добавлена валидация индекса
+   - Сохраняет название темы в `context.user_data['delete_topic_name']`
+4. **Обновлен `delete_questions_execute()`**:
+   - Получает тему из контекста вместо `callback_data`
+   - Очищает временные данные после выполнения
+5. **Обновлены обработчики в `bot.py` и `bot_universal.py`**:
+   - `pattern="^delete_questions_topic_"` → `pattern="^delete_questions_idx_"`
+   - `pattern="^delete_questions_execute_"` → `pattern="^delete_questions_execute_confirmed$"`
+
+**Результат**: Исправлена ошибка `Button_data_invalid`, теперь удаление вопросов по теме работает корректно независимо от длины названия темы.
+
+// ... existing code ...

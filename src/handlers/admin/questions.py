@@ -232,10 +232,15 @@ class QuestionsHandler(AdminBaseHandler):
             text = "🗑️ <b>Удаление вопросов по теме</b>\n\nВыберите тему для удаления всех вопросов:\n\n"
             keyboard = []
             
-            for topic, count in topics_with_counts:
+            # Сохраняем список тем в контексте для последующего использования
+            context.user_data['delete_topics_list'] = [topic for topic, count in topics_with_counts]
+            
+            for idx, (topic, count) in enumerate(topics_with_counts):
+                # Обрезаем название темы для отображения, если оно слишком длинное
+                display_topic = topic[:40] + "..." if len(topic) > 40 else topic
                 keyboard.append([InlineKeyboardButton(
-                    f"🗑️ {topic} ({count} вопросов)",
-                    callback_data=f"delete_questions_topic_{topic}"
+                    f"🗑️ {display_topic} ({count} вопросов)",
+                    callback_data=f"delete_questions_idx_{idx}"
                 )])
             
             keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="admin_questions")])
@@ -469,8 +474,23 @@ class QuestionsHandler(AdminBaseHandler):
     async def delete_questions_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Подтверждение удаления вопросов."""
         query = update.callback_query
-        topic = query.data.replace('delete_questions_topic_', '')
+        topic_idx_str = query.data.replace('delete_questions_idx_', '')
         await self.safe_answer_callback(query)
+        
+        try:
+            topic_idx = int(topic_idx_str)
+            # Получаем тему по индексу из сохраненного списка
+            topics_list = context.user_data.get('delete_topics_list', [])
+            if topic_idx >= len(topics_list):
+                raise IndexError("Topic index out of range")
+            topic = topics_list[topic_idx]
+        except (ValueError, IndexError) as e:
+            logging.error(f"Error parsing topic index {topic_idx_str}: {e}")
+            text = "❌ Ошибка: неверный индекс темы. Попробуйте снова."
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="delete_questions")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            return
         
         # Получаем количество вопросов по теме
         try:
@@ -488,8 +508,11 @@ class QuestionsHandler(AdminBaseHandler):
         text += f"❗ Это действие нельзя отменить!\n"
         text += f"Вы уверены, что хотите удалить все вопросы по этой теме?"
         
+        # Сохраняем тему для следующего шага
+        context.user_data['delete_topic_name'] = topic
+        
         keyboard = [
-            [InlineKeyboardButton("✅ Да, удалить", callback_data=f"delete_questions_execute_{topic}")],
+            [InlineKeyboardButton("✅ Да, удалить", callback_data="delete_questions_execute_confirmed")],
             [InlineKeyboardButton("❌ Отмена", callback_data="delete_questions")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -499,8 +522,16 @@ class QuestionsHandler(AdminBaseHandler):
     async def delete_questions_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Выполнение удаления вопросов."""
         query = update.callback_query
-        topic = query.data.replace('delete_questions_execute_', '')
         await self.safe_answer_callback(query)
+        
+        # Получаем тему из контекста
+        topic = context.user_data.get('delete_topic_name')
+        if not topic:
+            text = "❌ Ошибка: тема не найдена. Попробуйте снова."
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="delete_questions")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            return
         
         try:
             with sqlite3.connect(self.db.db_path) as conn:
@@ -522,6 +553,10 @@ class QuestionsHandler(AdminBaseHandler):
             text = f"❌ <b>Ошибка при удалении</b>\n\n"
             text += f"Не удалось удалить вопросы по теме '{topic}'.\n"
             text += f"Ошибка: {str(e)}"
+        
+        # Очищаем контекст
+        context.user_data.pop('delete_topic_name', None)
+        context.user_data.pop('delete_topics_list', None)
         
         keyboard = [
             [InlineKeyboardButton("📊 Статистика вопросов", callback_data="questions_stats")],
