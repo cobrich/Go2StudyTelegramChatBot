@@ -136,7 +136,6 @@ class QuestionsHandler(AdminBaseHandler):
             text = "❌ Ошибка при получении статистики."
         
         keyboard = [
-            [InlineKeyboardButton("🔄 Обновить", callback_data="questions_stats")],
             [InlineKeyboardButton("🔙 Назад", callback_data="admin_questions")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
