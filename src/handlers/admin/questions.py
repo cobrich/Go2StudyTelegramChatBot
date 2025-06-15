@@ -384,12 +384,17 @@ class QuestionsHandler(AdminBaseHandler):
                 try:
                     if idx % 3 == 0:  # Обновляем сообщение каждые 3 вопроса
                         await processing_msg.edit_text(f"⏳ Генерирую объяснение для вопроса {idx}/{len(questions)}...")
+                    
+                    # Определяем язык темы
+                    topic_language = self.db.get_topic_language(topic)
+                    
                     detailed_explanation = ai_service.generate_detailed_explanation(
                         question_text, 
                         correct_answer_text, 
-                        topic
+                        topic,
+                        topic_language
                     )
-                    logging.info(f"[AI] Объяснение сгенерировано для вопроса {idx}: {detailed_explanation[:100]}...")
+                    logging.info(f"[AI] Объяснение сгенерировано для вопроса {idx} на языке {topic_language}: {detailed_explanation[:100]}...")
                 except Exception as e:
                     logging.error(f"[AI] Ошибка генерации объяснения для вопроса {idx}: {e}")
                     detailed_explanation = f"Правильный ответ: {correct_answer_letter}) {correct_answer_text}"
@@ -652,7 +657,11 @@ class QuestionsHandler(AdminBaseHandler):
             
             from services.ai_service import AIService
             ai_service = AIService()
-            explanation = ai_service.generate_detailed_explanation(question, answer, topic)
+            
+            # Определяем язык темы
+            topic_language = self.db.get_topic_language(topic)
+            
+            explanation = ai_service.generate_detailed_explanation(question, answer, topic, topic_language)
             
             # Обновляем объяснение в базе данных
             with sqlite3.connect(self.db.db_path) as conn:
@@ -810,11 +819,15 @@ class QuestionsHandler(AdminBaseHandler):
             from services.ai_service import AIService
             ai_service = AIService()
             
+            # Определяем язык темы
+            topic_language = self.db.get_topic_language(topic)
+            
             # Генерируем объяснение
             explanation = ai_service.generate_detailed_explanation(
                 question_text, 
                 correct_answer, 
-                topic
+                topic,
+                topic_language
             )
             
             # Формируем неправильные варианты
