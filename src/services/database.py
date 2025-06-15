@@ -148,6 +148,11 @@ class Database:
             except sqlite3.OperationalError:
                 pass  # Column already exists
             
+            try:
+                cursor.execute('ALTER TABLE allowed_users ADD COLUMN has_access BOOLEAN DEFAULT 1')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            
             conn.commit()
             
             # Initialize base topic structure if empty
@@ -655,22 +660,22 @@ class Database:
     # === ALLOWED USERS MANAGEMENT ===
     
     def is_user_allowed(self, username: str) -> bool:
-        """Check if user is in whitelist."""
+        """Check if user is in whitelist and has access."""
         # Проверяем, что username не None и не пустой
         if not username:
             return False
             
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT is_active FROM allowed_users WHERE username = ?', (username,))
+            cursor.execute('SELECT has_access FROM allowed_users WHERE username = ?', (username,))
             result = cursor.fetchone()
             return bool(result and result[0])
     
     def is_user_allowed_by_id(self, user_id: int) -> bool:
-        """Check if user is allowed by user_id (for users without username)."""
+        """Check if user is allowed by user_id and has access."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT is_active FROM allowed_users WHERE user_id = ?', (user_id,))
+            cursor.execute('SELECT has_access FROM allowed_users WHERE user_id = ?', (user_id,))
             result = cursor.fetchone()
             return bool(result and result[0])
     
@@ -1478,8 +1483,8 @@ class Database:
             
             # Получаем всех учеников из whitelist с их статистикой
             cursor.execute('''
-                SELECT au.user_id, au.username, au.full_name, au.grade, au.is_active, au.added_at,
-                       au.last_activity,
+                SELECT au.user_id, au.username, au.full_name, au.grade, au.has_access, au.added_at,
+                       au.last_activity, au.is_active,
                        COUNT(tr.id) as total_tests,
                        AVG(tr.percentage) as avg_score,
                        COUNT(DISTINCT ue.question_text) as unique_errors,
@@ -1487,7 +1492,7 @@ class Database:
                 FROM allowed_users au
                 LEFT JOIN test_results tr ON au.user_id = tr.user_id
                 LEFT JOIN user_errors ue ON au.user_id = ue.user_id
-                GROUP BY au.id, au.user_id, au.username, au.full_name, au.grade, au.is_active, au.added_at, au.last_activity
+                GROUP BY au.id, au.user_id, au.username, au.full_name, au.grade, au.has_access, au.added_at, au.last_activity, au.is_active
                 ORDER BY au.added_at DESC
             ''')
             
@@ -1498,14 +1503,15 @@ class Database:
                     'username': row[1],
                     'full_name': row[2],
                     'grade': row[3],
-                    'is_active': bool(row[4]),
+                    'has_access': bool(row[4]),
                     'added_at': row[5],
                     'last_activity': row[6],
-                    'total_tests': row[7] or 0,
-                    'avg_score': round(row[8] or 0, 1),
-                    'unique_errors': row[9] or 0,
-                    'last_test': row[10],
-                    'status': 'Активен' if row[6] and row[10] else 'Неактивен'
+                    'is_active': bool(row[7]),  # Активность в тесте
+                    'total_tests': row[8] or 0,
+                    'avg_score': round(row[9] or 0, 1),
+                    'unique_errors': row[10] or 0,
+                    'last_test': row[11],
+                    'status': 'Активен' if row[4] else 'Заблокирован'  # Статус доступа
                 }
                 for row in results
             ]
@@ -1558,7 +1564,7 @@ class Database:
                 ]
             }
 
-    def update_allowed_user_by_id(self, user_id: int, full_name: str = None, grade: int = None, is_active: bool = None) -> bool:
+    def update_allowed_user_by_id(self, user_id: int, full_name: str = None, grade: int = None, has_access: bool = None) -> bool:
         """Обновить информацию об ученике по user_id."""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -1572,9 +1578,9 @@ class Database:
                 if grade is not None:
                     updates.append("grade = ?")
                     params.append(grade)
-                if is_active is not None:
-                    updates.append("is_active = ?")
-                    params.append(is_active)
+                if has_access is not None:
+                    updates.append("has_access = ?")
+                    params.append(has_access)
                 
                 if updates:
                     params.append(user_id)
@@ -2520,3 +2526,53 @@ class Database:
                 WHERE user_id = ?
             ''', (user_id,))
             conn.commit()
+
+    def is_user_system_active(self, user_id: int) -> bool:
+        """Check if user is active in the system (not deactivated by admin)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT is_active FROM allowed_users WHERE user_id = ?', (user_id,))
+            result = cursor.fetchone()
+            return bool(result and result[0])
+
+    def has_user_access(self, user_id: int) -> bool:
+        """Check if user has access to the system (controlled by admin)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT has_access FROM allowed_users WHERE user_id = ?', (user_id,))
+            result = cursor.fetchone()
+            return bool(result and result[0])
+
+    def set_user_access(self, user_id: int, has_access: bool) -> bool:
+        """Set user access status (enable/disable user)."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE allowed_users 
+                    SET has_access = ?, last_activity = CURRENT_TIMESTAMP 
+                    WHERE user_id = ?
+                ''', (has_access, user_id))
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception:
+            return False
+
+    def check_user_access(self, user_id: int, username: str = None) -> bool:
+        """
+        Comprehensive access check for users.
+        Checks admin status, username whitelist, and user_id whitelist.
+        """
+        # First check if user is admin
+        if self.is_admin(user_id):
+            return True
+        
+        # Check username whitelist if username exists
+        if username and self.is_user_allowed(username):
+            return True
+        
+        # Check user_id whitelist for users without username
+        if self.is_user_allowed_by_id(user_id):
+            return True
+        
+        return False

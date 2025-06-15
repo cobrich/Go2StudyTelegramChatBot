@@ -593,7 +593,7 @@ class StudentsHandler(AdminBaseHandler):
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT username, full_name, grade, is_active, language 
+                    SELECT username, full_name, grade, has_access, language, is_active 
                     FROM allowed_users 
                     WHERE user_id = ?
                 ''', (user_id,))
@@ -605,7 +605,7 @@ class StudentsHandler(AdminBaseHandler):
                     await query.edit_message_text("❌ Ученик не найден.", reply_markup=reply_markup)
                     return
                 
-                username, full_name, grade, is_active, language = student
+                username, full_name, grade, has_access, language, is_active = student
                 
                 text = f"✏️ <b>Редактирование ученика</b>\n\n"
                 text += f"👤 <b>Текущие данные:</b>\n"
@@ -615,14 +615,15 @@ class StudentsHandler(AdminBaseHandler):
                 text += f"• ФИО: {full_name or 'не указано'}\n"
                 text += f"• Класс: {grade or 'не указан'}\n"
                 text += f"• Язык: {'Русский' if language == 'ru' else 'Қазақша' if language == 'kk' else language}\n"
-                text += f"• Статус: {'Активен' if is_active else 'Неактивен'}\n\n"
+                text += f"• Доступ: {'Разрешен' if has_access else 'Заблокирован'}\n"
+                text += f"• В тесте: {'Да' if is_active else 'Нет'}\n\n"
                 text += f"Что хотите изменить?"
                 
                 keyboard = [
                     [InlineKeyboardButton("📝 Изменить ФИО", callback_data=f"edit_student_name_{user_id}")],
                     [InlineKeyboardButton("🎓 Изменить класс", callback_data=f"edit_student_grade_{user_id}")],
                     [InlineKeyboardButton("🌐 Изменить язык", callback_data=f"edit_student_language_{user_id}")],
-                    [InlineKeyboardButton("🔄 Изменить статус", callback_data=f"edit_student_status_{user_id}")],
+                    [InlineKeyboardButton("🔄 Изменить доступ", callback_data=f"edit_student_status_{user_id}")],
                     [InlineKeyboardButton("🔙 Назад к списку", callback_data="edit_student_start")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -727,7 +728,7 @@ class StudentsHandler(AdminBaseHandler):
             await query.edit_message_text("❌ Ошибка при изменении языка.", reply_markup=reply_markup)
 
     async def edit_student_status_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Переключение статуса ученика (активен/неактивен)."""
+        """Переключение статуса доступа ученика (разрешен/заблокирован)."""
         query = update.callback_query
         await self.safe_answer_callback(query)
         
@@ -737,8 +738,8 @@ class StudentsHandler(AdminBaseHandler):
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Получаем текущий статус
-                cursor.execute('SELECT is_active, full_name FROM allowed_users WHERE user_id = ?', (user_id,))
+                # Получаем текущий статус доступа
+                cursor.execute('SELECT has_access, full_name FROM allowed_users WHERE user_id = ?', (user_id,))
                 result = cursor.fetchone()
                 
                 if not result:
@@ -747,19 +748,19 @@ class StudentsHandler(AdminBaseHandler):
                     await query.edit_message_text("❌ Ученик не найден.", reply_markup=reply_markup)
                     return
                 
-                current_status, full_name = result
-                new_status = not current_status
+                current_access, full_name = result
+                new_access = not current_access
                 
-                # Обновляем статус
-                cursor.execute('UPDATE allowed_users SET is_active = ? WHERE user_id = ?', (new_status, user_id))
+                # Обновляем статус доступа
+                cursor.execute('UPDATE allowed_users SET has_access = ? WHERE user_id = ?', (new_access, user_id))
                 conn.commit()
                 
-                status_text = "активирован" if new_status else "деактивирован"
-                status_emoji = "✅" if new_status else "❌"
+                status_text = "разрешен доступ" if new_access else "заблокирован доступ"
+                status_emoji = "✅" if new_access else "🚫"
                 
-                text = f"{status_emoji} <b>Статус изменен</b>\n\n"
-                text += f"Ученик {full_name} {status_text}.\n\n"
-                if new_status:
+                text = f"{status_emoji} <b>Доступ изменен</b>\n\n"
+                text += f"Ученику {full_name} {status_text}.\n\n"
+                if new_access:
                     text += f"Ученик теперь может пользоваться ботом."
                 else:
                     text += f"Ученик больше не может пользоваться ботом."
@@ -773,10 +774,10 @@ class StudentsHandler(AdminBaseHandler):
                 await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
                 
         except Exception as e:
-            logging.error(f"Error toggling student status: {e}")
+            logging.error(f"Error toggling student access: {e}")
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_student_select_{user_id}")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text("❌ Ошибка при изменении статуса.", reply_markup=reply_markup)
+            await query.edit_message_text("❌ Ошибка при изменении доступа.", reply_markup=reply_markup)
 
     # === ОБРАБОТЧИКИ ТЕКСТА ДЛЯ РЕДАКТИРОВАНИЯ ===
 
