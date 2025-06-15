@@ -255,8 +255,12 @@ class RandomTestService:
             questions_data: Данные о вопросах и ответах
         """
         try:
-            # Сохраняем общий результат теста как "Случайный тест"
-            self.db.add_test_result(user_id, "Случайный тест", score_percentage)
+            # Получаем язык пользователя для правильного названия теста
+            user_language = self.db.get_user_language(user_id)
+            random_test_topic_name = "Случайный тест" if user_language == 'ru' else "Кездейсоқ тест"
+            
+            # Сохраняем общий результат теста
+            self.db.add_test_result(user_id, random_test_topic_name, score_percentage)
             
             # Сохраняем ошибки по темам
             for question_data in questions_data:

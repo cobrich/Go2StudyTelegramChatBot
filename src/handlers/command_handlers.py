@@ -452,8 +452,9 @@ class CommandHandlers(BaseHandler):
             questions.append(question_tuple)
         
         # Set user as active for random test
-        self.db.set_user_active(user_id, "Случайный тест")
-        self.set_user_data(context, 'current_topic', "Случайный тест")
+        random_test_topic_name = "Случайный тест" if user_language == 'ru' else "Кездейсоқ тест"
+        self.db.set_user_active(user_id, random_test_topic_name)
+        self.set_user_data(context, 'current_topic', random_test_topic_name)
         self.set_user_data(context, 'current_question_index', 0)
         self.set_user_data(context, 'questions', questions)
         self.set_user_data(context, 'answers', [q[1] for q in questions])
