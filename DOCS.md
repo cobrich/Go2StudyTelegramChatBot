@@ -77,7 +77,24 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 ---
 
-## �� Changelog
+## 📋 Changelog
+
+### 2025-01-15: Очистка структуры проекта от ненужных файлов
+
+**Удаленные файлы:**
+- `cleanup_log.txt` - временный лог файл очистки (задача выполнена)
+- `cleanup_invalid_questions.py` - одноразовый скрипт очистки (использован)
+- `added_questions.log` - временный лог добавления вопросов
+- `files/requirements.docx` - старый файл требований (заменен на README.md)
+- `files/file1.pdf` и `files/file2.pdf` - тестовые PDF файлы
+- `src/question_images/` - пустая дублирующая директория
+- `question_images/` - пустая директория в корне
+
+**Результат:**
+- ✅ Структура проекта очищена от временных и тестовых файлов
+- ✅ Удалены дублирующие пустые директории
+- ✅ Оставлены только необходимые файлы для продакшена
+- ✅ Размер проекта уменьшен на ~500KB
 
 ### 2025-01-15: Удаление файла IMPLEMENTATION_PLAN.md
 
