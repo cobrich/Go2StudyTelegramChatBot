@@ -787,7 +787,8 @@ class CommandHandlers(BaseHandler):
                         photo=open(question[5], 'rb'),
                         caption=get_message('random_test_question', user_language, 
                                           current=1, total=len(questions), question=question[0]),
-                        reply_markup=keyboard
+                        reply_markup=keyboard,
+                        parse_mode='HTML'
                     )
                     # Delete preparing message
                     try:
@@ -800,7 +801,8 @@ class CommandHandlers(BaseHandler):
                     await preparing_msg.edit_text(
                         get_message('random_test_question', user_language, 
                                   current=1, total=len(questions), question=question[0]),
-                        reply_markup=keyboard
+                        reply_markup=keyboard,
+                        parse_mode='HTML'
                     )
                     # Сохраняем ID отредактированного сообщения
                     await self._save_bot_message_id(context, preparing_msg, update.effective_chat.id)

@@ -159,7 +159,8 @@ class CallbackHandlers(BaseHandler):
                     photo=open(question[5], 'rb'),
                     caption=get_message('topic_question', user_language, 
                                       topic=topic, current=1, total=len(questions), question=question[0]),
-                    reply_markup=keyboard
+                    reply_markup=keyboard,
+                    parse_mode='HTML'
                 )
                 # Сохраняем ID сообщения с вопросом
                 await self._save_bot_message_id(context, question_msg, query.message.chat_id)
@@ -168,7 +169,8 @@ class CallbackHandlers(BaseHandler):
                 await query.message.edit_text(
                     get_message('topic_question', user_language, 
                               topic=topic, current=1, total=len(questions), question=question[0]),
-                    reply_markup=keyboard
+                    reply_markup=keyboard,
+                    parse_mode='HTML'
                 )
                 # Сохраняем ID отредактированного сообщения
                 await self._save_bot_message_id(context, query.message, query.message.chat_id)
@@ -498,7 +500,8 @@ class CallbackHandlers(BaseHandler):
             await query.message.edit_text(
                 get_message('topic_question', user_language, 
                           topic=topic, current=current_index + 1, total=len(questions), question=question[0]),
-                reply_markup=keyboard
+                reply_markup=keyboard,
+                parse_mode='HTML'
             )
             # Сохраняем ID отредактированного сообщения
             await self._save_bot_message_id(context, query.message, query.message.chat_id)
@@ -823,7 +826,7 @@ class CallbackHandlers(BaseHandler):
             is_random_test = self.get_user_data(context).get('is_random_test', False)
             keyboard = build_question_keyboard(question[3], prev_index, max(prev_index, current_index), len(questions), user_id, is_random_test=is_random_test)
         try:
-            await query.message.edit_text(question_text, reply_markup=keyboard)
+            await query.message.edit_text(question_text, reply_markup=keyboard, parse_mode='HTML')
         except Exception:
             pass
 
@@ -884,7 +887,7 @@ class CallbackHandlers(BaseHandler):
             is_random_test = self.get_user_data(context).get('is_random_test', False)
             keyboard = build_question_keyboard(question[3], next_index, next_index, len(questions), user_id, is_random_test=is_random_test)
         try:
-            await query.message.edit_text(question_text, reply_markup=keyboard)
+            await query.message.edit_text(question_text, reply_markup=keyboard, parse_mode='HTML')
         except Exception:
             pass
 
@@ -1122,7 +1125,8 @@ class CallbackHandlers(BaseHandler):
                         photo=open(question[5], 'rb'),
                         caption=get_message('random_test_question', user_language, 
                                           current=1, total=len(questions), question=question[0]),
-                        reply_markup=keyboard
+                        reply_markup=keyboard,
+                        parse_mode='HTML'
                     )
                     # Сохраняем ID сообщения с вопросом
                     await self._save_bot_message_id(context, question_msg, query.message.chat_id)
