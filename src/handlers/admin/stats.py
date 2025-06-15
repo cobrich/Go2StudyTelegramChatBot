@@ -131,13 +131,12 @@ class StatsHandler(AdminBaseHandler):
                 cursor.execute('''
                     SELECT 
                         tr.timestamp, 
-                        COALESCE(au.full_name, u.full_name) as full_name,
-                        COALESCE(au.username, u.username) as username,
+                        au.full_name,
+                        au.username,
                         tr.user_id,
                         tr.topic, 
                         tr.percentage
                     FROM test_results tr
-                    LEFT JOIN users u ON tr.user_id = u.user_id
                     LEFT JOIN allowed_users au ON tr.user_id = au.user_id
                     ORDER BY tr.timestamp DESC
                     LIMIT 20

@@ -199,20 +199,8 @@ class StudentsHandler(AdminBaseHandler):
         )
         
         if success:
-            # Синхронизируем данные в таблице users
-            try:
-                with sqlite3.connect(self.db.db_path) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        INSERT OR REPLACE INTO users (user_id, username, full_name, grade, last_activity)
-                        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                    ''', (student_user_id, username, fullname, grade))
-                    conn.commit()
-                    logging.info(f"Synced user data for user_id {student_user_id}")
-            except Exception as e:
-                logging.error(f"Error syncing user data: {e}")
-            
             # Формируем сообщение об успехе
+            identifier = f"@{username}" if username else f"ID: {student_user_id}"
             success_text = f"✅ <b>Ученик успешно добавлен!</b>\n\n"
             success_text += f"🆔 <b>ID:</b> {student_user_id}\n"
             success_text += f"👤 <b>ФИО:</b> {fullname}\n"
@@ -536,14 +524,10 @@ class StudentsHandler(AdminBaseHandler):
                 # Удаляем пользователя из allowed_users
                 cursor.execute('DELETE FROM allowed_users WHERE user_id = ?', (user_id,))
                 
-                # Удаляем из users (если есть)
-                cursor.execute('DELETE FROM users WHERE user_id = ?', (user_id,))
-                
-                conn.commit()
-                
+                # Формируем сообщение об успехе
                 identifier = f"@{username}" if username else f"ID: {user_id}"
-                text = f"✅ <b>Ученик удален</b>\n\n"
-                text += f"Ученик {identifier} ({full_name}) успешно удален из системы."
+                success_text = f"✅ <b>Ученик удален</b>\n\n"
+                success_text += f"Ученик {identifier} ({full_name}) успешно удален из системы."
                 
                 keyboard = [
                     [InlineKeyboardButton("🗑️ Удалить еще", callback_data="remove_student")],
@@ -552,7 +536,7 @@ class StudentsHandler(AdminBaseHandler):
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+                await query.edit_message_text(success_text, reply_markup=reply_markup, parse_mode='HTML')
                 
         except Exception as e:
             logging.error(f"Error removing student {user_id}: {e}")

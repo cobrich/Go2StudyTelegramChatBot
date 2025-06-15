@@ -1344,13 +1344,11 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            # Основная информация об ученике
+            # Основная информация об ученике из allowed_users
             cursor.execute('''
-                SELECT u.user_id, u.username, u.full_name, u.grade, u.language, u.last_activity,
-                       au.full_name as whitelist_name, au.grade as whitelist_grade, au.added_at
-                FROM users u
-                LEFT JOIN allowed_users au ON (u.user_id = au.user_id OR u.username = au.username)
-                WHERE u.user_id = ?
+                SELECT user_id, username, full_name, grade, language, last_activity, added_at
+                FROM allowed_users
+                WHERE user_id = ?
             ''', (user_id,))
             user_info = cursor.fetchone()
             
@@ -1422,11 +1420,11 @@ class Database:
                 'user_info': {
                     'user_id': user_info[0],
                     'username': user_info[1],
-                    'full_name': user_info[2] or user_info[6],  # Приоритет текущему имени
-                    'grade': user_info[3] or user_info[7],      # Приоритет текущему классу
+                    'full_name': user_info[2],
+                    'grade': user_info[3],
                     'language': user_info[4],
                     'last_activity': user_info[5],
-                    'added_to_whitelist': user_info[8]
+                    'added_to_whitelist': user_info[6]
                 },
                 'test_statistics': {
                     'total_tests': test_stats[0] if test_stats else 0,
