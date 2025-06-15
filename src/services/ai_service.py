@@ -214,38 +214,60 @@ class AIService:
             logging.error(f"Gemini normalization error: {e}")
             return None 
 
-    def generate_similar_task(self, topic: str, similar_to_question: str, main_topic: str = None) -> Optional[tuple]:
+    def generate_similar_task(self, topic: str, similar_to_question: str, main_topic: str = None, language: str = 'ru') -> Optional[tuple]:
         """Generate a question similar to the given question."""
         try:
             # Формируем контекст темы
             if main_topic:
                 clean_main_topic = main_topic.split(' ', 1)[-1] if ' ' in main_topic else main_topic
-                topic_context = f"Тема '{topic}' из раздела '{clean_main_topic}'"
-                specific_requirements = self._get_topic_specific_requirements(topic, clean_main_topic)
+                topic_context = f"Тема '{topic}' из раздела '{clean_main_topic}'" if language == 'ru' else f"'{topic}' тақырыбы '{clean_main_topic}' бөлімінен"
+                specific_requirements = self._get_topic_specific_requirements(topic, clean_main_topic, language)
             else:
-                topic_context = f"Тема '{topic}'"
+                topic_context = f"Тема '{topic}'" if language == 'ru' else f"'{topic}' тақырыбы"
                 specific_requirements = ""
             
-            prompt = f"""Сгенерируй вопрос по теме '{topic_context}', который похож на следующий вопрос, но с другими числами/переменными:
-            {similar_to_question}
-            
-            {specific_requirements}
-            
-            В ответе должен быть JSON в формате:
-            {{
-                "question": "текст вопроса",
-                "correct_answer": "правильный ответ",
-                "incorrect_options": ["вариант1", "вариант2", "вариант3"],
-                "explanation": "объяснение решения"
-            }}
-            
-            Вопрос должен быть:
-            1. По той же теме и того же типа
-            2. С похожей структурой и сложностью
-            3. С другими числами/переменными
-            4. С понятным объяснением решения
-            5. Строго соответствовать указанной теме и разделу
-            """
+            if language == 'kk':
+                prompt = f"""'{topic_context}' тақырыбы бойынша келесі сұраққа ұқсас сұрақ жасаңыз, бірақ басқа сандар/айнымалылармен:
+                {similar_to_question}
+                
+                {specific_requirements}
+                
+                Жауапта JSON форматында болуы керек:
+                {{
+                    "question": "сұрақ мәтіні",
+                    "correct_answer": "дұрыс жауап",
+                    "incorrect_options": ["нұсқа1", "нұсқа2", "нұсқа3"],
+                    "explanation": "шешімнің түсіндірмесі"
+                }}
+                
+                Сұрақ мынадай болуы керек:
+                1. Сол тақырып пен сол типте
+                2. Ұқсас құрылым мен күрделілікте
+                3. Басқа сандар/айнымалылармен
+                4. Шешімнің түсінікті түсіндірмесімен
+                5. Көрсетілген тақырып пен бөлімге қатаң сәйкес
+                """
+            else:
+                prompt = f"""Сгенерируй вопрос по теме '{topic_context}', который похож на следующий вопрос, но с другими числами/переменными:
+                {similar_to_question}
+                
+                {specific_requirements}
+                
+                В ответе должен быть JSON в формате:
+                {{
+                    "question": "текст вопроса",
+                    "correct_answer": "правильный ответ",
+                    "incorrect_options": ["вариант1", "вариант2", "вариант3"],
+                    "explanation": "объяснение решения"
+                }}
+                
+                Вопрос должен быть:
+                1. По той же теме и того же типа
+                2. С похожей структурой и сложностью
+                3. С другими числами/переменными
+                4. С понятным объяснением решения
+                5. Строго соответствовать указанной теме и разделу
+                """
             
             response = self.model.generate_content(prompt)
             response_text = response.text
@@ -262,7 +284,7 @@ class AIService:
             )
         except Exception as e:
             logging.error(f"Error generating similar task: {e}")
-            return None 
+            return None
 
     def validate_question_answer(self, question: str, answer: str, explanation: str) -> Optional[tuple]:
         """Validate a question's answer and explanation using AI."""
@@ -299,45 +321,79 @@ class AIService:
             logging.error(f"Error validating question: {e}")
             return None 
 
-    def generate_detailed_explanation(self, question: str, correct_answer: str, topic: str) -> str:
+    def generate_detailed_explanation(self, question: str, correct_answer: str, topic: str, language: str = 'ru') -> str:
         """Генерирует подробное объяснение решения математической задачи."""
         try:
-            prompt = f"""Ты - опытный учитель математики для учеников 5-6 классов. 
-            Тебе нужно объяснить решение задачи простым и понятным языком.
+            if language == 'kk':
+                prompt = f"""Сіз 5-6 сынып оқушыларына арналған тәжірибелі математика мұғалімісіз. 
+                Сізге есептің шешімін қарапайым және түсінікті тілмен түсіндіру керек.
 
-            Тема: {topic}
-            Вопрос: {question}
-            Правильный ответ: {correct_answer}
+                Тақырып: {topic}
+                Сұрақ: {question}
+                Дұрыс жауап: {correct_answer}
 
-            Создай подробное объяснение, которое поможет ученику понять:
-            1. Что дано в задаче
-            2. Что нужно найти
-            3. Какие формулы или правила использовать
-            4. Пошаговое решение
-            5. Почему именно такой ответ
+                Оқушыға мыналарды түсінуге көмектесетін толық түсіндірме жасаңыз:
+                1. Есепте не берілген
+                2. Нені табу керек
+                3. Қандай формулалар немесе ережелерді қолдану керек
+                4. Қадамдық шешім
+                5. Неліктен дәл осындай жауап
 
-            Требования к объяснению:
-            - Используй простой язык, понятный ученику 5-6 класса
-            - Покажи все шаги решения
-            - Объясни логику каждого шага
-            - Если есть формулы, объясни их применение
-            - Длина объяснения: 3-5 предложений
-            - Избегай сложных математических терминов
+                Түсіндірмеге қойылатын талаптар:
+                - 5-6 сынып оқушысына түсінікті қарапайым тіл қолданыңыз
+                - Шешімнің барлық қадамдарын көрсетіңіз
+                - Әрбір қадамның логикасын түсіндіріңіз
+                - Егер формулалар болса, олардың қолданылуын түсіндіріңіз
+                - Түсіндірме ұзындығы: 3-5 сөйлем
+                - Күрделі математикалық терминдерден аулақ болыңыз
 
-            Пример хорошего объяснения:
-            "Сначала найдем общий знаменатель для дробей 2/7 и 3/5. Затем вычислим, сколько теста использовали утром и вечером. После этого определим, какая часть осталась, и найдем изначальное количество."
+                Жақсы түсіндірменің мысалы:
+                "Алдымен 2/7 және 3/5 бөлшектеріне ортақ бөлімді табамыз. Содан кейін таңертең мен кешке қанша қамыр пайдаланғанын есептейміз. Одан кейін қанша бөлігі қалғанын анықтап, бастапқы мөлшерді табамыз."
 
-            Объяснение:"""
+                Түсіндірме:"""
+            else:
+                prompt = f"""Ты - опытный учитель математики для учеников 5-6 классов. 
+                Тебе нужно объяснить решение задачи простым и понятным языком.
+
+                Тема: {topic}
+                Вопрос: {question}
+                Правильный ответ: {correct_answer}
+
+                Создай подробное объяснение, которое поможет ученику понять:
+                1. Что дано в задаче
+                2. Что нужно найти
+                3. Какие формулы или правила использовать
+                4. Пошаговое решение
+                5. Почему именно такой ответ
+
+                Требования к объяснению:
+                - Используй простой язык, понятный ученику 5-6 класса
+                - Покажи все шаги решения
+                - Объясни логику каждого шага
+                - Если есть формулы, объясни их применение
+                - Длина объяснения: 3-5 предложений
+                - Избегай сложных математических терминов
+
+                Пример хорошего объяснения:
+                "Сначала найдем общий знаменатель для дробей 2/7 и 3/5. Затем вычислим, сколько теста использовали утром и вечером. После этого определим, какая часть осталась, и найдем изначальное количество."
+
+                Объяснение:"""
             
             response = self.model.generate_content(prompt)
             explanation = response.text.strip()
             
             # Очищаем объяснение от лишних фраз
-            explanation = re.sub(r'^(Объяснение:|Решение:)\s*', '', explanation, flags=re.IGNORECASE)
+            if language == 'kk':
+                explanation = re.sub(r'^(Түсіндірме:|Шешім:)\s*', '', explanation, flags=re.IGNORECASE)
+            else:
+                explanation = re.sub(r'^(Объяснение:|Решение:)\s*', '', explanation, flags=re.IGNORECASE)
             explanation = explanation.strip()
             
             return explanation
             
         except Exception as e:
             logging.error(f"Ошибка генерации объяснения: {e}")
-            return f"Правильный ответ: {correct_answer}. Для решения этой задачи нужно применить знания по теме '{topic}'." 
+            if language == 'kk':
+                return f"Дұрыс жауап: {correct_answer}. Бұл есепті шешу үшін '{topic}' тақырыбы бойынша білімді қолдану керек."
+            else:
+                return f"Правильный ответ: {correct_answer}. Для решения этой задачи нужно применить знания по теме '{topic}'."

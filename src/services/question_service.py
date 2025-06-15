@@ -11,17 +11,13 @@ class QuestionService:
         self.db = db
         self.ai_service = ai_service
 
-    def _get_main_topic_for_subtopic(self, subtopic: str) -> Optional[str]:
-        """Получить главную тему для подтемы."""
+    def _get_main_topic_for_subtopic(self, subtopic: str) -> tuple[Optional[str], str]:
+        """Получить главную тему и язык для подтемы."""
         try:
-            base_structure = self.db.get_base_topic_structure()
-            for main_topic, subtopics in base_structure.items():
-                if subtopic in subtopics:
-                    return main_topic
-            return None
+            return self.db.get_main_topic_and_language_for_subtopic(subtopic)
         except Exception as e:
-            logging.error(f"Error getting main topic for {subtopic}: {e}")
-            return None
+            logging.error(f"Error getting main topic and language for {subtopic}: {e}")
+            return None, 'ru'
 
     async def get_or_generate_tasks(
         self,
@@ -39,8 +35,8 @@ class QuestionService:
         tasks = []
         
         # Получаем главную тему для контекста AI генерации
-        main_topic = self._get_main_topic_for_subtopic(topic)
-        logging.info(f"[get_or_generate_tasks] main_topic for '{topic}': {main_topic}")
+        main_topic, language = self._get_main_topic_for_subtopic(topic)
+        logging.info(f"[get_or_generate_tasks] main_topic for '{topic}': {main_topic}, language: {language}")
         
         # 1. Сначала ошибки пользователя
         error_tasks = self.db.get_error_tasks_for_user(user_id, topic, limit=needed)
@@ -102,14 +98,15 @@ class QuestionService:
                             self.ai_service.generate_similar_task,
                             topic,
                             error_question,
-                            main_topic
+                            main_topic,
+                            language
                         )
                     )
                 # If we still need more questions, generate regular ones
                 if len(generation_tasks) < remaining:
                     logging.info(f"[get_or_generate_tasks][retake] Not enough error_questions, scheduling {remaining - len(generation_tasks)} regular AI generations")
                     generation_tasks.extend([
-                        loop.run_in_executor(None, self.ai_service.generate_task, topic, main_topic)
+                        loop.run_in_executor(None, self.ai_service.generate_task, topic, main_topic, language)
                         for _ in range(remaining - len(generation_tasks))
                     ])
                 results = await asyncio.gather(*generation_tasks, return_exceptions=True)
@@ -223,7 +220,7 @@ class QuestionService:
         new_tasks = []
         loop = asyncio.get_running_loop()
         generation_tasks = [
-            loop.run_in_executor(None, self.ai_service.generate_task, topic, main_topic)
+            loop.run_in_executor(None, self.ai_service.generate_task, topic, main_topic, language)
             for _ in range(remaining)
         ]
         results = await asyncio.gather(*generation_tasks, return_exceptions=True)

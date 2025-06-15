@@ -793,10 +793,15 @@ def add_questions_to_db(questions: List[Dict], db: Database) -> Dict[str, int]:
             # Генерируем подробное объяснение с помощью AI
             print(f"[AI][{idx}/{total}] Генерирую объяснение для вопроса...")
             try:
+                # Определяем язык темы
+                db_instance = Database()
+                topic_language = db_instance.get_topic_language(topic)
+                
                 detailed_explanation = ai_service.generate_detailed_explanation(
                     question_text, 
                     correct_answer_text, 
-                    topic
+                    topic,
+                    topic_language
                 )
                 print(f"[AI][{idx}/{total}] Объяснение сгенерировано: {detailed_explanation[:100]}...")
             except Exception as e:

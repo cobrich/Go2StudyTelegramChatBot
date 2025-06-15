@@ -2536,6 +2536,51 @@ class Database:
             print(f"[ERROR] Ошибка получения структуры тем по языку {language}: {e}")
             return {}
 
+    def get_topic_language(self, topic_name: str) -> str:
+        """Получить язык темы через связь с main_topics."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    SELECT mt.language
+                    FROM subtopics st
+                    JOIN main_topics mt ON st.main_topic_id = mt.id
+                    WHERE st.name = ? AND st.is_active = 1 AND mt.is_active = 1
+                    LIMIT 1
+                ''', (topic_name,))
+                
+                result = cursor.fetchone()
+                return result[0] if result else 'ru'  # По умолчанию русский
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения языка темы '{topic_name}': {e}")
+            return 'ru'  # По умолчанию русский
+
+    def get_main_topic_and_language_for_subtopic(self, subtopic_name: str) -> Tuple[Optional[str], str]:
+        """Получить главную тему И язык для подтемы."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    SELECT mt.name, mt.language
+                    FROM subtopics st
+                    JOIN main_topics mt ON st.main_topic_id = mt.id
+                    WHERE st.name = ? AND st.is_active = 1 AND mt.is_active = 1
+                    LIMIT 1
+                ''', (subtopic_name,))
+                
+                result = cursor.fetchone()
+                if result:
+                    return result[0], result[1]  # main_topic, language
+                else:
+                    return None, 'ru'  # По умолчанию русский
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка получения главной темы и языка для '{subtopic_name}': {e}")
+            return None, 'ru'
+
     def sync_subtopic_languages_with_main_topics(self) -> bool:
         """Синхронизирует подтемы с основными разделами (удаляет поле language из subtopics)."""
         try:
