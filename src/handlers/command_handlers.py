@@ -365,7 +365,7 @@ class CommandHandlers(BaseHandler):
         admin_panel_text_kk = "🔧 Әкімші панелі"
         
         if text in [select_topic_text_ru, select_topic_text_kk]:
-            # Проверяем, не находится ли пользователь уже в активном тесте
+            # Проверяем, не находится ли пользователь уже в активном тесте или в процессе выбора темы
             if self.db.is_user_active(user_id):
                 # Удаляем сообщение пользователя
                 try:
@@ -382,6 +382,24 @@ class CommandHandlers(BaseHandler):
                     instruction_msg.chat_id, 
                     instruction_msg.message_id, 
                     4
+                ))
+                return
+            elif context.user_data.get('in_topic_selection'):
+                # Удаляем сообщение пользователя
+                try:
+                    await update.message.delete()
+                except Exception:
+                    pass
+                
+                # Показываем инструкцию и удаляем через 3 секунды
+                instruction_text = get_message('in_topic_selection_help', user_language)
+                instruction_msg = await update.message.reply_text(instruction_text)
+                
+                asyncio.create_task(self._delete_message_after_delay(
+                    context.bot, 
+                    instruction_msg.chat_id, 
+                    instruction_msg.message_id, 
+                    3
                 ))
                 return
             
