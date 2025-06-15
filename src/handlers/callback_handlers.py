@@ -347,6 +347,8 @@ class CallbackHandlers(BaseHandler):
         if current_index == len(questions) - 1:
             # Last question - show final result and complete test
             self.db.clear_user_test_activity(user_id)  # Очищаем только тему теста
+            self.db.set_user_inactive(user_id)  # Очищаем статус активного теста
+            self.clear_user_data(context)
             # Показываем только кнопку 'Показать результаты'
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('show_results', user_language), callback_data="show_results")]])
             try:
@@ -665,6 +667,7 @@ class CallbackHandlers(BaseHandler):
             return
         
         self.db.clear_user_test_activity(user_id)  # Очищаем только тему теста
+        self.db.set_user_inactive(user_id)  # Очищаем статус активного теста
         self.clear_user_data(context)
         # Устанавливаем флаг выбора темы
         context.user_data['in_topic_selection'] = True
@@ -810,6 +813,7 @@ class CallbackHandlers(BaseHandler):
             return
         
         self.db.clear_user_test_activity(user_id)  # Очищаем только тему теста
+        self.db.set_user_inactive(user_id)  # Очищаем статус активного теста
         self.clear_user_data(context)
         # Очищаем флаг выбора темы
         context.user_data.pop('in_topic_selection', None)
