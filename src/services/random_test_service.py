@@ -8,6 +8,7 @@ from typing import List, Dict, Any, Optional
 from .database import Database
 import logging
 from utils.translations import get_message
+import sqlite3
 
 logger = logging.getLogger(__name__)
 
@@ -268,10 +269,29 @@ class RandomTestService:
             # Сохраняем ошибки по темам
             for question_data in questions_data:
                 if not question_data.get('is_correct', True):  # Если ответ неправильный
-                    unknown_topic = "Неизвестная тема" if user_language == 'ru' else "Белгісіз тақырып"
+                    # Для случайного теста сохраняем ошибку под реальной темой вопроса
+                    question_topic = question_data.get('topic')
+                    
+                    # Если тема не указана, ищем в базе данных
+                    if not question_topic:
+                        try:
+                            with sqlite3.connect(self.db.db_path) as conn:
+                                cursor = conn.cursor()
+                                cursor.execute('SELECT topic FROM questions WHERE question = ? LIMIT 1', 
+                                             (question_data.get('question_text', ''),))
+                                result = cursor.fetchone()
+                                if result:
+                                    question_topic = result[0]
+                        except Exception as e:
+                            logger.error(f"Error finding question topic: {e}")
+                    
+                    # Если все еще не нашли тему, используем "Неизвестная тема"
+                    if not question_topic:
+                        question_topic = "Неизвестная тема" if user_language == 'ru' else "Белгісіз тақырып"
+                    
                     self.db.add_user_error(
                         user_id=user_id,
-                        topic=question_data.get('topic', unknown_topic),
+                        topic=question_topic,  # Используем реальную тему вопроса
                         question_text=question_data.get('question_text', ''),
                         user_answer_text=question_data.get('user_answer', ''),
                         correct_answer_text=question_data.get('correct_answer', ''),

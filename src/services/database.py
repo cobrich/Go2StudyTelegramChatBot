@@ -2511,3 +2511,14 @@ class Database:
         except Exception as e:
             print(f"[ERROR] Ошибка обновления раздела темы: {e}")
             return False
+
+    def clear_user_test_activity(self, user_id: int) -> None:
+        """Clear user's current test topic without changing is_active status."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE allowed_users 
+                SET current_topic = NULL, last_activity = CURRENT_TIMESTAMP 
+                WHERE user_id = ?
+            ''', (user_id,))
+            conn.commit()

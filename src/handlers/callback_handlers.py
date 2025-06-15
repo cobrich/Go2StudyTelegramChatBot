@@ -7,6 +7,7 @@ from utils.translations import get_message
 from config.constants import DEFAULT_QUESTIONS_PER_TEST
 from services.ai_service import AIService
 from services.topic_manager import TopicManager
+import sqlite3
 
 class CallbackHandlers(BaseHandler):
     async def handle_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -211,25 +212,78 @@ class CallbackHandlers(BaseHandler):
         # Store result
         if 'user_results' not in context.user_data:
             context.user_data['user_results'] = []
+        
+        # Получаем объяснение - сначала из структуры вопроса, потом из БД
+        explanation = question[2] if len(question) > 2 and question[2] else None
+        
+        # Если объяснение пустое, ищем в базе данных
+        if not explanation or explanation.strip() == '':
+            try:
+                explanation = self.db.get_explanation_by_question_text(question[0])
+                if not explanation:
+                    # Пробуем нечеткий поиск
+                    explanation = self.db.get_explanation_fuzzy_by_question_text(question[0])
+                if not explanation:
+                    explanation = "Объяснение не найдено" if user_language == 'ru' else "Түсіндірме табылмады"
+            except Exception as e:
+                logging.error(f"Error getting explanation for question: {e}")
+                explanation = "Объяснение не найдено" if user_language == 'ru' else "Түсіндірме табылмады"
+        
         context.user_data['user_results'].append({
             'q_num': current_index,
             'is_correct': is_correct,
             'question': question[0],
             'user_answer': selected_answer,
             'correct_answer': correct_answer,
-            'explanation': question[2],
+            'explanation': explanation,
             'source': source
         })
         if not is_correct:
-            logging.info(f"[DEBUG] add_user_error: user_id={user_id}, topic={self.get_user_data(context).get('current_topic')}, question_text={question[0]}, user_answer_text={selected_answer}, correct_answer_text={correct_answer}, explanation_text={question[2]}, is_correct={is_correct}")
-            self.db.add_user_error(
-                user_id=user_id,
-                topic=self.get_user_data(context).get('current_topic'),
-                question_text=question[0],
-                user_answer_text=selected_answer,
-                correct_answer_text=correct_answer,
-                explanation_text=question[2]
-            )
+            # Для случайных тестов сохраняем ошибку под реальной темой вопроса
+            is_random_test = self.get_user_data(context).get('is_random_test', False)
+            if is_random_test:
+                # Извлекаем реальную тему из данных вопроса
+                # Предполагаем, что вопрос имеет структуру: (question_text, answer, explanation, options, source, image_path, topic)
+                # Или ищем тему в базе данных по тексту вопроса
+                question_topic = None
+                
+                # Пытаемся найти тему вопроса в базе данных
+                try:
+                    # Ищем вопрос в базе данных по тексту
+                    with sqlite3.connect(self.db.db_path) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute('SELECT topic FROM questions WHERE question = ? LIMIT 1', (question[0],))
+                        result = cursor.fetchone()
+                        if result:
+                            question_topic = result[0]
+                except Exception as e:
+                    logging.error(f"Error finding question topic: {e}")
+                
+                # Если не нашли тему, используем "Неизвестная тема"
+                if not question_topic:
+                    question_topic = "Неизвестная тема" if user_language == 'ru' else "Белгісіз тақырып"
+                
+                logging.info(f"[DEBUG] Random test error: user_id={user_id}, real_topic={question_topic}, question_text={question[0]}")
+                
+                self.db.add_user_error(
+                    user_id=user_id,
+                    topic=question_topic,  # Используем реальную тему вопроса
+                    question_text=question[0],
+                    user_answer_text=selected_answer,
+                    correct_answer_text=correct_answer,
+                    explanation_text=explanation
+                )
+            else:
+                # Для обычных тестов используем текущую тему
+                logging.info(f"[DEBUG] Regular test error: user_id={user_id}, topic={self.get_user_data(context).get('current_topic')}, question_text={question[0]}")
+                self.db.add_user_error(
+                    user_id=user_id,
+                    topic=self.get_user_data(context).get('current_topic'),
+                    question_text=question[0],
+                    user_answer_text=selected_answer,
+                    correct_answer_text=correct_answer,
+                    explanation_text=explanation
+                )
         else:
             # Decrement error count if this was previously an error
             self.db.decrement_error_count(user_id, question[0])
@@ -251,7 +305,7 @@ class CallbackHandlers(BaseHandler):
         
         if current_index == len(questions) - 1:
             # Last question - show final result and complete test
-            self.db.set_user_inactive(user_id)
+            self.db.clear_user_test_activity(user_id)  # Очищаем только тему теста
             # Показываем только кнопку 'Показать результаты'
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('show_results', user_language), callback_data="show_results")]])
             try:
@@ -542,7 +596,7 @@ class CallbackHandlers(BaseHandler):
             )
             return
         
-        self.db.set_user_inactive(user_id)
+        self.db.clear_user_test_activity(user_id)  # Очищаем только тему теста
         self.clear_user_data(context)
         # Устанавливаем флаг выбора темы
         context.user_data['in_topic_selection'] = True
@@ -687,7 +741,7 @@ class CallbackHandlers(BaseHandler):
             )
             return
         
-        self.db.set_user_inactive(user_id)
+        self.db.clear_user_test_activity(user_id)  # Очищаем только тему теста
         self.clear_user_data(context)
         # Очищаем флаг выбора темы
         context.user_data.pop('in_topic_selection', None)
