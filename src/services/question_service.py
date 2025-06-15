@@ -22,73 +22,108 @@ class QuestionService:
         if not question or not correct_answer or not explanation:
             return False, "Пустые обязательные поля"
         
-        # 1. Проверка длины полей
-        if len(question) < 20:
-            return False, "Вопрос слишком короткий (менее 20 символов)"
+        # Проверка длины полей
+        if len(question) < 20 or len(question) > 1000:
+            return False, f"Неправильная длина вопроса: {len(question)} символов"
         
-        if len(question) > 1000:
-            return False, "Вопрос слишком длинный (более 1000 символов)"
+        if len(explanation) < 10 or len(explanation) > 2000:
+            return False, f"Неправильная длина объяснения: {len(explanation)} символов"
         
-        if len(explanation) < 10:
-            return False, "Объяснение слишком короткое (менее 10 символов)"
-        
-        # 2. Проверка на признаки ошибок в объяснении
+        # Проверка на признаки ошибок в тексте
         error_indicators = [
-            "что-то не так",
-            "ошибка в условии",
-            "задача поставлена некорректно",
-            "снова ошибка",
-            "нужно изменить условие",
-            "противоречие",
-            "новый вопрос:",
-            "правильный ответ:",
-            "неправильный ответ",
-            "объяснение:"
+            "что-то не так", "ошибка в условии", "задача поставлена некорректно",
+            "некорректно", "неправильно", "не могу решить", "невозможно решить",
+            "ошибка в задаче", "условие неверно", "задача содержит ошибку"
         ]
         
         explanation_lower = explanation.lower()
-        for indicator in error_indicators:
-            if indicator in explanation_lower:
-                return False, f"Объяснение содержит признак ошибки: '{indicator}'"
-        
-        # 3. Проверка на слишком длинное объяснение (возможно содержит несколько задач)
-        if len(explanation) > 2000:
-            return False, "Объяснение слишком длинное (возможно содержит несколько задач)"
-        
-        # 4. Проверка на соответствие вопроса и ответа
         question_lower = question.lower()
-        answer_lower = correct_answer.lower()
         
-        # Проверяем, что вопрос и ответ логически связаны
-        if "сколько" in question_lower and not any(char.isdigit() for char in correct_answer):
-            # Если вопрос спрашивает "сколько", ответ должен содержать число
-            if not re.search(r'\d+', correct_answer):
-                return False, "Вопрос спрашивает количество, но ответ не содержит чисел"
+        for indicator in error_indicators:
+            if indicator in explanation_lower or indicator in question_lower:
+                return False, f"Обнаружен индикатор ошибки: '{indicator}'"
         
-        # 5. Проверка на противоречия в тексте
-        if "экономи" in question_lower and ("не получится" in explanation_lower or "экономии не было" in explanation_lower):
-            return False, "Противоречие: вопрос об экономии, но объяснение говорит об отсутствии экономии"
-        
-        # 6. Проверка на дублирование контента в объяснении
-        sentences = explanation.split('.')
-        if len(sentences) > 10:  # Слишком много предложений может указывать на проблему
-            return False, "Объяснение содержит слишком много предложений (возможно несколько задач)"
-        
-        # 7. Проверка на наличие мета-информации в объяснении
+        # Проверка на мета-информацию (ИИ говорит о себе)
         meta_indicators = [
-            "правильный ответ:",
-            "неправильный ответ",
-            "вариант ответа",
-            "ответ 1:",
-            "ответ 2:",
-            "ответ 3:"
+            "как ии", "как искусственный интеллект", "я не могу", "мне нужно",
+            "давайте разберем", "рассмотрим", "попробуем решить", "нужно понять"
         ]
         
         for indicator in meta_indicators:
             if indicator in explanation_lower:
-                return False, f"Объяснение содержит мета-информацию: '{indicator}'"
+                return False, f"Обнаружена мета-информация: '{indicator}'"
+        
+        # НОВАЯ ПРОВЕРКА: Соответствие ответа и объяснения
+        if not self._validate_answer_explanation_consistency(correct_answer, explanation):
+            return False, "Ответ не соответствует объяснению"
+        
+        # Проверка на слишком много предложений (возможно несколько вопросов)
+        sentence_count = len([s for s in explanation.split('.') if s.strip()])
+        if sentence_count > 10:
+            return False, f"Слишком длинное объяснение: {sentence_count} предложений"
         
         return True, ""
+    
+    def _validate_answer_explanation_consistency(self, answer: str, explanation: str) -> bool:
+        """
+        Проверяет соответствие между ответом и объяснением.
+        
+        Returns:
+            bool: True если ответ соответствует объяснению
+        """
+        import re
+        
+        # Извлекаем числовые значения из ответа
+        answer_numbers = re.findall(r'-?\d+(?:[.,]\d+)?', answer)
+        if not answer_numbers:
+            return True  # Если в ответе нет чисел, пропускаем проверку
+        
+        # Берем первое число из ответа как основное
+        try:
+            main_answer_num = float(answer_numbers[0].replace(',', '.'))
+        except ValueError:
+            return True  # Если не можем преобразовать, пропускаем
+        
+        # Ищем вычисления в объяснении
+        calculation_patterns = [
+            r'=\s*(-?\d+(?:[.,]\d+)?)',  # = 24, = 26.5
+            r'равно\s*(-?\d+(?:[.,]\d+)?)',  # равно 24
+            r'составляет\s*(-?\d+(?:[.,]\d+)?)',  # составляет 24
+            r'получается\s*(-?\d+(?:[.,]\d+)?)',  # получается 24
+            r'итого\s*(-?\d+(?:[.,]\d+)?)',  # итого 24
+            r'ответ:?\s*(-?\d+(?:[.,]\d+)?)',  # ответ: 24
+        ]
+        
+        explanation_numbers = []
+        for pattern in calculation_patterns:
+            matches = re.findall(pattern, explanation, re.IGNORECASE)
+            for match in matches:
+                try:
+                    num = float(match.replace(',', '.'))
+                    explanation_numbers.append(num)
+                except ValueError:
+                    continue
+        
+        if not explanation_numbers:
+            return True  # Если в объяснении нет явных вычислений, пропускаем
+        
+        # Проверяем, есть ли в объяснении число, соответствующее ответу
+        tolerance = 0.01  # Допустимая погрешность
+        for exp_num in explanation_numbers:
+            if abs(main_answer_num - exp_num) <= tolerance:
+                return True
+        
+        # Если основное число не найдено, проверяем все числа из ответа
+        for ans_num_str in answer_numbers:
+            try:
+                ans_num = float(ans_num_str.replace(',', '.'))
+                for exp_num in explanation_numbers:
+                    if abs(ans_num - exp_num) <= tolerance:
+                        return True
+            except ValueError:
+                continue
+        
+        return False  # Ответ не соответствует объяснению
 
     def cleanup_invalid_ai_questions(self) -> int:
         """
@@ -314,12 +349,14 @@ class QuestionService:
                     
                     # Убеждаемся, что options - это список строк
                     options = [str(opt) for opt in options if opt and str(opt).strip()]
-                    if len(options) < 2:  # Добавляем фиктивные варианты если их мало
-                        options.extend([f"Вариант {i}" for i in range(len(options), 4)])
                     
                     # КРИТИЧЕСКИ ВАЖНО: Гарантируем наличие правильного ответа в вариантах
                     if task['answer'] not in options:
                         options.append(task['answer'])
+                    
+                    # Если вариантов мало, добавляем фиктивные
+                    if len(options) < 4:
+                        options.extend([f"Вариант {i}" for i in range(len(options), 4)])
                     
                     # Удаляем дубликаты, сохраняя порядок
                     options = list(dict.fromkeys(options))

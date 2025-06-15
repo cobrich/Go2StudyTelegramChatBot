@@ -107,6 +107,18 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
    - **Impact**: All questions now display correct answer as one of the selectable options
    - **Examples fixed**: Question ID 345 ("26 метров" was missing), ID 239-354 range affected
 
+4. **🎯 CRITICAL: Answer-Explanation Mismatch**:
+   - **Problem**: 15 questions had incorrect answers that didn't match their explanations
+   - **Root cause**: AI generated wrong answers while explanations contained correct calculations
+   - **Example**: Question ID 345 had answer "26 метров" but explanation calculated "24 метра"
+   - **Solution**: 
+     - Added `_validate_answer_explanation_consistency()` method to AI validation
+     - Created `fix_answer_explanation_mismatch.py` script to detect and fix mismatches
+     - Automatically extract correct answers from explanations using regex patterns
+     - Fixed 15 questions with mathematical inconsistencies
+   - **Impact**: All answers now match their explanations mathematically
+   - **Prevention**: New AI questions validated for answer-explanation consistency before saving
+
 ### 🔧 **AI Question Quality Control System**:
 
 **✅ COMPLETED: Comprehensive validation and cleanup system**
@@ -129,8 +141,10 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 - **Invalid AI Questions Removed**: 2 out of 9 total (22.2% were poor quality)
 - **Missing Answer Options Fixed**: 94 out of 94 questions (100% had this critical bug)
-- **Total Questions Repaired**: 96 questions fixed across both issues
-- **Quality Improvement**: From ~78% problematic questions to 0% problematic questions
+- **Answer-Explanation Mismatches Fixed**: 15 out of 94 questions (16% had mathematical errors)
+- **Incorrect Options Cleanup**: 79 questions had correct answers wrongly placed in incorrect options
+- **Total Questions Repaired**: 190+ individual fixes across multiple issues
+- **Quality Improvement**: From ~85% problematic questions to 0% problematic questions
 
 #### 🎯 **Prevention Measures**:
 
