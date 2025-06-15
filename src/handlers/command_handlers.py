@@ -614,8 +614,16 @@ class CommandHandlers(BaseHandler):
         # Set flag that user is in topic selection
         context.user_data['in_topic_selection'] = True
         
-        await update.message.reply_text(
-            get_message('select_topic', user_language),
+        # Удаляем сообщение пользователя (кнопку "Выбрать тему")
+        try:
+            await update.message.delete()
+        except Exception:
+            pass  # Игнорируем ошибки удаления
+        
+        # Отправляем новое сообщение с выбором тем
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=get_message('select_topic', user_language),
             reply_markup=build_topic_selection_keyboard(user_id),
             parse_mode='Markdown'
         )
@@ -672,9 +680,18 @@ class CommandHandlers(BaseHandler):
         # Clear any previous data
         self.clear_user_data(context)
         
+        # Удаляем сообщение пользователя (кнопку "Начать рандомный тест")
+        try:
+            await update.message.delete()
+        except Exception:
+            pass  # Игнорируем ошибки удаления
+        
         # Show preparing message
         preparing_text = get_message('preparing_random_test', user_language)
-        preparing_msg = await update.message.reply_text(preparing_text)
+        preparing_msg = await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=preparing_text
+        )
         
         # Generate random test using RandomTestService
         random_test_service = RandomTestService(self.db)
