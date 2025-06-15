@@ -441,14 +441,14 @@ class CommandHandlers(BaseHandler):
             # Перемешиваем варианты
             random.shuffle(options)
             
-            # Format: (question_text, correct_answer, options, options_list, source, image_path)
+            # Format: (question_text, correct_answer, explanation, options_list, source, image_path)
             question_tuple = (
-                q_data.get('question', ''),  # Исправлено: 'question' вместо 'question_text'
-                q_data.get('answer', ''),    # Исправлено: 'answer' вместо 'correct_answer'
-                q_data.get('incorrect_options', ''),  # Исправлено: 'incorrect_options' вместо 'options'
-                options,  # Правильно сформированный список вариантов
-                'random_test',  # source
-                q_data.get('image_path', None)
+                q_data.get('question', ''),  # 0 - question_text
+                q_data.get('answer', ''),    # 1 - correct_answer  
+                q_data.get('explanation', ''),  # 2 - explanation (ИСПРАВЛЕНО!)
+                options,  # 3 - options_list
+                'random_test',  # 4 - source
+                q_data.get('image_path', None)  # 5 - image_path
             )
             questions.append(question_tuple)
         

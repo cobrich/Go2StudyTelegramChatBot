@@ -94,14 +94,14 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 2. **Enhanced Error Logging**:
    - **Real-time error tracking**: Logs each incorrect answer immediately with full context
    - **Detailed error information**: Question text, user answer, correct answer, and explanation
-   - **Topic identification**: Shows actual topic for each question (especially important for random tests)
-   - **Visual formatting**: Uses emojis and structured formatting for better readability
+   - **Topic identification**: Shows actual topic for each question in random tests
+   - **Visual formatting**: Uses emojis and structured format for better readability
 
-3. **Comprehensive Test Results Logging**:
-   - **Final test summary**: Complete overview of test performance
-   - **All errors listed**: Detailed breakdown of every incorrect answer with explanations
-   - **Perfect score recognition**: Special logging for tests with no errors
-   - **Test type context**: Clearly identifies random vs regular tests
+3. **Comprehensive Results Logging**:
+   - **Test completion summary**: Shows overall score and percentage
+   - **Detailed error breakdown**: Lists all incorrect answers with full explanations
+   - **Question numbering**: Clear identification of each question in the test
+   - **Structured format**: Easy-to-read format with clear separators
 
 #### 🔧 Technical Implementation:
 
@@ -2741,3 +2741,30 @@ ALTER TABLE allowed_users ADD COLUMN has_access BOOLEAN DEFAULT 1;
 
 **Files modified:**
 - `src/handlers/admin/stats.py` - Updated SQL queries to use INNER JOIN
+
+#### 🐛 Bug Fix: Explanation Display Issue (January 2025)
+
+**Problem**: In random tests, the explanation field was showing answer options instead of actual explanations.
+
+**Root Cause**: Incorrect tuple structure in question formation - `incorrect_options` was placed in position [2] instead of `explanation`.
+
+**Solution**: 
+- Fixed question tuple structure in both `handle_random_test` and `handle_retry_random_test`
+- Corrected position [2] to contain `explanation` instead of `incorrect_options`
+- Updated structure documentation for clarity
+
+**Files Modified**:
+- `src/handlers/command_handlers.py` - Fixed random test question structure
+- `src/handlers/callback_handlers.py` - Fixed retry test question structure
+
+**Expected Structure**:
+```python
+question_tuple = (
+    question_text,     # [0] - Question text
+    correct_answer,    # [1] - Correct answer
+    explanation,       # [2] - Explanation (FIXED!)
+    options_list,      # [3] - Answer options
+    source,           # [4] - Question source
+    image_path        # [5] - Image path (optional)
+)
+```
