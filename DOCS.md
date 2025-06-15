@@ -3128,3 +3128,161 @@ VALUES (?, ?, ?, ?, ?, ?, 0)
 **Status**: ✅ **is_active DEFAULT VALUE ISSUE RESOLVED** - New students created inactive by default
 
 ---
+
+### 🔧 Bug Fix: Disappearing Answer Buttons in Random Test (January 2025)
+
+**✅ FIXED: Answer buttons no longer disappear when user interacts with interface during random test**
+
+#### 🐛 Problem:
+- When user was taking a random test, the answer buttons (A, B, C, D) would suddenly disappear
+- The question text remained visible, but all inline keyboard buttons vanished
+- This happened when user clicked on interface elements during the test
+- Users couldn't continue the test without restarting
+
+#### 🔍 Root Cause Analysis:
+
+**1. Telegram Inline Keyboard Behavior:**
+- In Telegram, InlineKeyboard buttons are **attached to specific messages**
+- When a message is deleted or its keyboard is removed, all buttons disappear
+- The question text and buttons are **separate elements** but linked
+
+**2. The Problem Chain:**
+1. User starts random test → Question message sent with answer buttons
+2. User clicks "⬅️ Назад к темам" button (shown under first question)
+3. `handle_back_to_topics()` function executes
+4. Function calls `await query.message.edit_reply_markup(reply_markup=None)`
+5. **All buttons disappear** from the question message
+6. User sees question text but no way to answer
+
+**3. Why "Back to Topics" Button Appeared:**
+- `build_question_keyboard()` function always added this button for first question (`q_num == 0`)
+- No distinction between regular tests and random tests
+- Random tests shouldn't have "back to topics" option
+
+#### ✅ Solution Implemented:
+
+**1. Enhanced `build_question_keyboard()` Function:**
+```python
+# Before:
+def build_question_keyboard(options: list, q_num: int, max_reached: int, total_questions: int, user_id: int = None)
+
+# After:
+def build_question_keyboard(options: list, q_num: int, max_reached: int, total_questions: int, user_id: int = None, is_random_test: bool = False)
+```
+
+**2. Conditional "Back to Topics" Button:**
+```python
+# Before (always showed):
+if q_num == 0:
+    keyboard.append([InlineKeyboardButton(f"⬅️ {back_to_topics_text}", callback_data="back_to_topics")])
+
+# After (only for regular tests):
+if q_num == 0 and not is_random_test:
+    keyboard.append([InlineKeyboardButton(f"⬅️ {back_to_topics_text}", callback_data="back_to_topics")])
+```
+
+**3. Updated All Function Calls:**
+- `handle_random_test()`: `is_random_test=True`
+- `handle_retry_random_test()`: `is_random_test=True`
+- `handle_topic_selection()`: `is_random_test=False`
+- Navigation functions: Dynamic detection based on `context.user_data.get('is_random_test', False)`
+
+#### 🔧 Technical Changes:
+
+**Files Modified:**
+- `src/utils/keyboards.py` - Enhanced `build_question_keyboard()` function
+- `src/handlers/command_handlers.py` - Updated random test keyboard creation
+- `src/handlers/callback_handlers.py` - Updated all keyboard creation calls
+
+**Keyboard Behavior Changes:**
+- **Random Tests**: No "⬅️ Назад к темам" button on first question
+- **Regular Tests**: "⬅️ Назад к темам" button still available on first question
+- **Navigation**: Previous/Next buttons work normally in both test types
+- **Answer Buttons**: Always preserved during test navigation
+
+#### ✅ Result:
+- ✅ **Answer buttons stay visible**: No more disappearing buttons during random tests
+- ✅ **Clean interface**: Random tests don't show confusing "back to topics" option
+- ✅ **Proper navigation**: Users can still navigate between questions normally
+- ✅ **Consistent behavior**: Regular tests unchanged, random tests improved
+- ✅ **No interruptions**: Users can complete tests without interface issues
+
+#### 📝 User Experience:
+- **Random Test**: Clean interface with only answer options and navigation
+- **Regular Test**: Full functionality including return to topic selection
+- **Navigation**: Smooth movement between questions in both test types
+- **Completion**: No interruptions or lost progress during tests
+
+**Status**: ✅ **DISAPPEARING BUTTONS ISSUE RESOLVED** - Random tests now have stable interface
+
+---
+
+### 🔧 Navigation Enhancement for Random Tests (January 2025)
+
+**✅ COMPLETED: Added "Back to Main Menu" button for random tests**
+
+#### 🎯 What was implemented:
+
+**Problem**: In random tests, users had no way to return to the main menu from the first question. The "Back to Topics" button was only shown for regular topic tests, leaving random test users without navigation options.
+
+**Solution**: Enhanced navigation system to show appropriate buttons based on test type:
+
+1. **Enhanced Question Keyboard (`src/utils/keyboards.py`)**:
+   - Modified `build_question_keyboard()` function to handle different test types
+   - **For random tests**: Shows "🏠 Main Menu" button on first question
+   - **For regular tests**: Shows "⬅️ Back to Topics" button on first question
+   - Maintains consistent navigation experience across all test types
+
+2. **Updated Navigation Handlers (`src/handlers/callback_handlers.py`)**:
+   - Enhanced `handle_prev_question()` and `handle_next_question()` methods
+   - Added proper navigation button logic for both test types
+   - Ensures consistent behavior when navigating through answered questions
+
+#### 🔧 Technical Changes:
+
+**Before**:
+```python
+# Only showed back button for regular tests
+if q_num == 0 and not is_random_test:
+    keyboard.append([InlineKeyboardButton(f"⬅️ {back_to_topics_text}", callback_data="back_to_topics")])
+```
+
+**After**:
+```python
+# Shows appropriate button based on test type
+if q_num == 0:
+    if is_random_test:
+        # For random tests - show main menu button
+        main_menu_text = get_message('main_menu', user_language)
+        keyboard.append([InlineKeyboardButton(f"🏠 {main_menu_text}", callback_data="main_menu")])
+    else:
+        # For regular tests - show back to topics button
+        back_to_topics_text = get_message('back_to_topics', user_language)
+        keyboard.append([InlineKeyboardButton(f"⬅️ {back_to_topics_text}", callback_data="back_to_topics")])
+```
+
+#### 🎯 User Experience Improvements:
+
+1. **Better Navigation**: Random test users can now easily return to main menu
+2. **Consistent Interface**: All test types have appropriate navigation options
+3. **Clear Visual Distinction**: Different icons (🏠 vs ⬅️) help users understand context
+4. **Multilingual Support**: Navigation buttons respect user's language preference
+
+#### 📱 UI Changes:
+
+**Random Tests**:
+- First question now shows: `🏠 В главное меню` / `🏠 Басты мәзірге`
+- Provides direct path back to main menu
+
+**Regular Topic Tests**:
+- First question shows: `⬅️ Назад к темам` / `⬅️ Тақырыптарға қайту`
+- Maintains existing navigation to topic selection
+
+#### ✅ Testing:
+- Verified navigation works correctly in both test types
+- Confirmed multilingual support for navigation buttons
+- Tested navigation from answered questions (prev/next functionality)
+
+This enhancement improves user experience by ensuring all users have appropriate navigation options regardless of test type.
+
+---

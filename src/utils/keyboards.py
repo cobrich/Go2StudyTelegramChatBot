@@ -127,7 +127,7 @@ def get_main_menu_markup(user_id: int = None) -> ReplyKeyboardMarkup:
         one_time_keyboard=False
     )
 
-def build_question_keyboard(options: list, q_num: int, max_reached: int, total_questions: int, user_id: int = None) -> InlineKeyboardMarkup:
+def build_question_keyboard(options: list, q_num: int, max_reached: int, total_questions: int, user_id: int = None, is_random_test: bool = False) -> InlineKeyboardMarkup:
     """Build keyboard for question display with navigation buttons."""
     user_language = _db.get_user_language(user_id) if user_id else 'ru'
     
@@ -146,9 +146,16 @@ def build_question_keyboard(options: list, q_num: int, max_reached: int, total_q
     if navigation_buttons:
         keyboard.append(navigation_buttons)
     
+    # Добавляем кнопку навигации в зависимости от типа теста
     if q_num == 0:
-        back_to_topics_text = get_message('back_to_topics', user_language)
-        keyboard.append([InlineKeyboardButton(f"⬅️ {back_to_topics_text}", callback_data="back_to_topics")])
+        if is_random_test:
+            # Для случайных тестов показываем кнопку "В главное меню"
+            main_menu_text = get_message('main_menu', user_language)
+            keyboard.append([InlineKeyboardButton(f"🏠 {main_menu_text}", callback_data="main_menu")])
+        else:
+            # Для обычных тестов показываем кнопку "Назад к темам"
+            back_to_topics_text = get_message('back_to_topics', user_language)
+            keyboard.append([InlineKeyboardButton(f"⬅️ {back_to_topics_text}", callback_data="back_to_topics")])
     
     return InlineKeyboardMarkup(keyboard)
 

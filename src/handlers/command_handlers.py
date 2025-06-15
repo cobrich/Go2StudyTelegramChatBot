@@ -2,7 +2,7 @@ from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 import logging
 from handlers.base_handler import BaseHandler
-from utils.keyboards import get_main_menu_markup, build_topic_selection_keyboard
+from utils.keyboards import get_main_menu_markup, build_topic_selection_keyboard, build_question_keyboard
 from utils.translations import get_message, get_language_change_warning
 from config.constants import HELP_TEXT, TOPICS
 from services.random_test_service import RandomTestService
@@ -624,8 +624,9 @@ class CommandHandlers(BaseHandler):
         if await self.check_user_active(update, context):
             return
         
-        # Удаляем предыдущее сообщение бота (если есть)
-        await self._delete_previous_bot_message(context)
+        # Удаляем предыдущее сообщение бота ТОЛЬКО если пользователь НЕ в активном тесте
+        if not self.db.is_user_active(user_id):
+            await self._delete_previous_bot_message(context)
         
         # Clear any previous data
         self.clear_user_data(context)
@@ -774,10 +775,8 @@ class CommandHandlers(BaseHandler):
         
         # Display first question
         if questions:
-            from utils.keyboards import build_question_keyboard
-            
             question = questions[0]
-            keyboard = build_question_keyboard(question[3], 0, 0, len(questions), user_id)
+            keyboard = build_question_keyboard(question[3], 0, 0, len(questions), user_id, is_random_test=True)
             
             try:
                 # If question has an image, send it first

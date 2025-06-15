@@ -149,7 +149,7 @@ class CallbackHandlers(BaseHandler):
         # Убираем индикаторы источника вопросов
         logging.info(f"[DEBUG] question tuple: {question}")
         logging.info(f"[DEBUG] source: {source}")
-        keyboard = build_question_keyboard(question[3], 0, 0, len(questions), user_id)
+        keyboard = build_question_keyboard(question[3], 0, 0, len(questions), user_id, is_random_test=False)
         
         try:
             # If question has an image, send it first
@@ -437,7 +437,7 @@ class CallbackHandlers(BaseHandler):
             return
         question = questions[current_index]
         source = question[4] if len(question) > 4 else 'db'
-        keyboard = build_question_keyboard(question[3], current_index, current_index, len(questions), user_id)
+        keyboard = build_question_keyboard(question[3], current_index, current_index, len(questions), user_id, is_random_test=False)
         topic = self.get_user_data(context).get('current_topic', '')
         try:
             await query.message.edit_text(
@@ -753,12 +753,20 @@ class CallbackHandlers(BaseHandler):
                 nav_buttons.append(InlineKeyboardButton(get_message('previous', user_language), callback_data="prev_question"))
             if prev_index < len(questions) - 1:
                 nav_buttons.append(InlineKeyboardButton(get_message('next', user_language), callback_data="next_question"))
+            # Добавляем кнопку навигации в зависимости от типа теста
+            is_random_test = self.get_user_data(context).get('is_random_test', False)
             if prev_index == 0:
-                nav_buttons.append(InlineKeyboardButton(f"⬅️ {get_message('back_to_topics', user_language)}", callback_data="back_to_topics"))
+                if is_random_test:
+                    # Для случайных тестов показываем кнопку "В главное меню"
+                    nav_buttons.append(InlineKeyboardButton(f"🏠 {get_message('main_menu', user_language)}", callback_data="main_menu"))
+                else:
+                    # Для обычных тестов показываем кнопку "Назад к темам"
+                    nav_buttons.append(InlineKeyboardButton(f"⬅️ {get_message('back_to_topics', user_language)}", callback_data="back_to_topics"))
             keyboard = InlineKeyboardMarkup([nav_buttons] if nav_buttons else [])
         else:
             # Варианты ответа и навигация
-            keyboard = build_question_keyboard(question[3], prev_index, max(prev_index, current_index), len(questions), user_id)
+            is_random_test = self.get_user_data(context).get('is_random_test', False)
+            keyboard = build_question_keyboard(question[3], prev_index, max(prev_index, current_index), len(questions), user_id, is_random_test=is_random_test)
         try:
             await query.message.edit_text(question_text, reply_markup=keyboard)
         except Exception:
@@ -806,12 +814,20 @@ class CallbackHandlers(BaseHandler):
                 nav_buttons.append(InlineKeyboardButton(get_message('previous', user_language), callback_data="prev_question"))
             if next_index < len(questions) - 1:
                 nav_buttons.append(InlineKeyboardButton(get_message('next', user_language), callback_data="next_question"))
+            # Добавляем кнопку навигации в зависимости от типа теста
+            is_random_test = self.get_user_data(context).get('is_random_test', False)
             if next_index == 0:
-                nav_buttons.append(InlineKeyboardButton(f"⬅️ {get_message('back_to_topics', user_language)}", callback_data="back_to_topics"))
+                if is_random_test:
+                    # Для случайных тестов показываем кнопку "В главное меню"
+                    nav_buttons.append(InlineKeyboardButton(f"🏠 {get_message('main_menu', user_language)}", callback_data="main_menu"))
+                else:
+                    # Для обычных тестов показываем кнопку "Назад к темам"
+                    nav_buttons.append(InlineKeyboardButton(f"⬅️ {get_message('back_to_topics', user_language)}", callback_data="back_to_topics"))
             keyboard = InlineKeyboardMarkup([nav_buttons] if nav_buttons else [])
         else:
             # Варианты ответа и навигация
-            keyboard = build_question_keyboard(question[3], next_index, next_index, len(questions), user_id)
+            is_random_test = self.get_user_data(context).get('is_random_test', False)
+            keyboard = build_question_keyboard(question[3], next_index, next_index, len(questions), user_id, is_random_test=is_random_test)
         try:
             await query.message.edit_text(question_text, reply_markup=keyboard)
         except Exception:
@@ -1041,7 +1057,7 @@ class CallbackHandlers(BaseHandler):
             from utils.keyboards import build_question_keyboard
             
             question = questions[0]
-            keyboard = build_question_keyboard(question[3], 0, 0, len(questions), user_id)
+            keyboard = build_question_keyboard(question[3], 0, 0, len(questions), user_id, is_random_test=True)
             
             try:
                 # If question has an image, send it first
