@@ -801,25 +801,6 @@ class Database:
             result = cursor.fetchone()
             return bool(result and result[0])
     
-    def check_user_access(self, user_id: int, username: str = None) -> bool:
-        """
-        Comprehensive access check for users.
-        Checks admin status, username whitelist, and user_id whitelist.
-        """
-        # First check if user is admin
-        if self.is_admin(user_id):
-            return True
-        
-        # Check username whitelist if username exists
-        if username and self.is_user_allowed(username):
-            return True
-        
-        # Check user_id whitelist for users without username
-        if self.is_user_allowed_by_id(user_id):
-            return True
-        
-        return False
-    
     def add_allowed_user(self, username: str, full_name: str, grade: int, added_by: int, user_id: int = None, language: str = "ru") -> bool:
         """Add user to whitelist with language support."""
         try:
@@ -2686,6 +2667,10 @@ class Database:
         Comprehensive user access check.
         Returns True if user has access, False otherwise.
         """
+        # First check if user is admin (admins always have access)
+        if self.is_admin(user_id):
+            return True
+            
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
