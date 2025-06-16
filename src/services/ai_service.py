@@ -310,10 +310,89 @@ class AIService:
 
     @staticmethod
     def _clean_option_text(text: str) -> str:
-        """Clean option text by removing unnecessary words and extra spaces."""
-        # Remove words like "ANSWER", "CORRECT", "INCORRECT", etc. in Russian and Kazakh
-        text = re.sub(r'(ОТВЕТ|ПРАВИЛЬНЫЙ|НЕПРАВИЛЬНЫЙ|ВЕРНО|НЕВЕРНО|НЕВОЗМОЖНО ОПРЕДЕЛИТЬ|НЕВОЗМОЖНО СКАЗАТЬ|НЕ МОГУ ОПРЕДЕЛИТЬ|НЕ МОГУ СКАЗАТЬ|НЕ УВЕРЕН|НЕ ЗНАЮ|ЗАТРУДНЯЮСЬ ОТВЕТИТЬ|СЛОЖНО СКАЗАТЬ|НУЖНО ПОДУМАТЬ|ПРОВЕРЮ ЕЩЕ РАЗ|ДРУГОЙ ВАРИАНТ|ЭТО НЕВЕРНО|НЕПРАВИЛЬНЫЙ ВАРИАНТ|ПРАВИЛЬНЫЙ ВАРИАНТ|ВЕРНЫЙ ОТВЕТ|НЕВЕРНЫЙ ОТВЕТ|ЖАУАП|ДҰРЫС|ҚАТЕ|ДҰРЫС ЖАУАП|ҚАТЕ ЖАУАП|АНЫҚТАУ МҮМКІН ЕМЕС|АЙТА АЛМАЙМЫН|БІЛМЕЙМІН|СЕНІМДІ ЕМЕСПІН|\\s*\\(.*?\\))', '', text, flags=re.IGNORECASE)
-        # Remove multiple spaces
-        text = re.sub(r'\s+', ' ', text)
-        # Remove leading and trailing spaces
+        """Clean option text from unwanted characters and formatting."""
+        if not text:
+            return ""
+        
+        # Remove leading/trailing whitespace
+        text = text.strip()
+        
+        # Remove common unwanted patterns
+        text = re.sub(r'^[A-ZА-Г]\)\s*', '', text)  # Remove option letters like "A) "
+        text = re.sub(r'^\d+\.\s*', '', text)      # Remove numbering like "1. "
+        
         return text.strip()
+
+    def generate_detailed_explanation(self, question: str, correct_answer: str, topic: str, language: str = 'ru') -> str:
+        """
+        Generate detailed explanation for a question and its correct answer.
+        
+        Args:
+            question: The question text
+            correct_answer: The correct answer text
+            topic: The topic/subject of the question
+            language: Language for the explanation ('ru' or 'kk')
+            
+        Returns:
+            Detailed explanation text
+        """
+        if language == 'kk':
+            prompt = f"""Сіз математика пәнінің мұғалімісіз. Сізге 5-6 сынып оқушыларына арналған математикалық есептің толық түсіндірмесін жасау керек.
+
+ТАҚЫРЫП: {topic}
+
+СҰРАҚ: {question}
+
+ДҰРЫС ЖАУАП: {correct_answer}
+
+Сіздің міндетіңіз - осы сұрақтың дұрыс жауабын неліктен осылай шешу керектігін қысқа, нақты және түсінікті түрде түсіндіру. Түсіндірме:
+
+1. Қысқа болуы керек (2-4 сөйлем)
+2. Оқушыға неліктен осы жауап дұрыс екенін көрсетуі керек
+3. Қажет болса, қысқа есептеу қадамдарын көрсетуі керек
+4. Тақырыпқа сәйкес математикалық ұғымдарды пайдалануы керек
+
+Тек түсіндірме мәтінін жазыңыз, басқа ештеңе қоспаңыз:"""
+        else:
+            prompt = f"""Вы учитель математики. Вам нужно создать подробное объяснение для математической задачи для учеников 5-6 классов.
+
+ТЕМА: {topic}
+
+ВОПРОС: {question}
+
+ПРАВИЛЬНЫЙ ОТВЕТ: {correct_answer}
+
+Ваша задача - кратко, четко и понятно объяснить, почему именно этот ответ правильный. Объяснение должно:
+
+1. Быть кратким (2-4 предложения)
+2. Показать ученику, почему именно этот ответ верный
+3. При необходимости показать краткие шаги вычисления
+4. Использовать математические понятия, соответствующие теме
+
+Напишите только текст объяснения, ничего больше:"""
+
+        try:
+            response = self.model.generate_content(prompt)
+            explanation = response.text.strip()
+            
+            # Очищаем объяснение от лишних символов и форматирования
+            explanation = re.sub(r'^["\']|["\']$', '', explanation)  # Убираем кавычки в начале/конце
+            explanation = re.sub(r'^\s*[-•]\s*', '', explanation, flags=re.MULTILINE)  # Убираем маркеры списков
+            explanation = explanation.strip()
+            
+            # Проверяем, что объяснение не пустое
+            if not explanation:
+                if language == 'kk':
+                    explanation = f"Дұрыс жауап: {correct_answer}. Бұл тақырып бойынша негізгі ұғымдарды қолдану арқылы табылады."
+                else:
+                    explanation = f"Правильный ответ: {correct_answer}. Это решается применением основных понятий по данной теме."
+            
+            return explanation
+            
+        except Exception as e:
+            logging.error(f"Error generating detailed explanation: {e}")
+            # Возвращаем базовое объяснение в случае ошибки
+            if language == 'kk':
+                return f"Дұрыс жауап: {correct_answer}"
+            else:
+                return f"Правильный ответ: {correct_answer}"
