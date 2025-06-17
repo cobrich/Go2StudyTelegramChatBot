@@ -885,29 +885,122 @@ class Database:
             conn.commit()
 
     def add_question(self, question: dict) -> None:
-        """Add a new question to the database."""
+        """Add a new question to the database with automatic topic conversion."""
         # Validate required fields are not None or empty
-        required_fields = ['topic', 'question', 'answer', 'explanation']
+        required_fields = ['question', 'answer', 'explanation']
+        
+        # Проверяем наличие topic или topic_id
+        has_topic = question.get('topic') and question['topic'].strip()
+        has_topic_id = question.get('topic_id') is not None
+        
+        if not has_topic and not has_topic_id:
+            logging.error(f"Cannot add question: neither topic nor topic_id provided. Question data: {question}")
+            return
+            
         for field in required_fields:
             if not question.get(field):
                 logging.error(f"Cannot add question: {field} is None or empty. Question data: {question}")
                 return
-        
+
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO questions (topic, question, answer, explanation, incorrect_options, question_type, source)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                question['topic'],
-                question['question'],
-                question['answer'],
-                question['explanation'],
-                question['incorrect_options'],
-                question.get('question_type', 'standard'),
-                question.get('source', 'db')
-            ))
+            
+            # Проверяем наличие колонки topic_id в таблице questions
+            cursor.execute("PRAGMA table_info(questions)")
+            columns = [column[1] for column in cursor.fetchall()]
+            has_topic_id_column = 'topic_id' in columns
+            has_topic_column = 'topic' in columns
+            
+            if has_topic_id_column and has_topic_id:
+                # Используем topic_id напрямую (новая архитектура)
+                if has_topic_column:
+                    # Обе колонки есть - заполняем обе для совместимости
+                    topic_name = self._get_topic_name_by_id(question['topic_id'])
+                    cursor.execute('''
+                        INSERT INTO questions (topic_id, topic, question, answer, explanation, incorrect_options, question_type, source)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        question['topic_id'],
+                        topic_name,
+                        question['question'],
+                        question['answer'], 
+                        question['explanation'],
+                        question.get('incorrect_options', ''),
+                        question.get('question_type', 'standard'),
+                        question.get('source', 'db')
+                    ))
+                else:
+                    # Только topic_id колонка (полная миграция)
+                    cursor.execute('''
+                        INSERT INTO questions (topic_id, question, answer, explanation, incorrect_options, question_type, source)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        question['topic_id'],
+                        question['question'],
+                        question['answer'],
+                        question['explanation'],
+                        question.get('incorrect_options', ''),
+                        question.get('question_type', 'standard'),
+                        question.get('source', 'db')
+                    ))
+            elif has_topic_id_column and has_topic:
+                # Конвертируем topic в topic_id (основной сценарий миграции)
+                topic_id = self._get_topic_id_by_name(question['topic'])
+                if not topic_id:
+                    # Создаем недостающую подтему
+                    self.add_topic(question['topic'])
+                    topic_id = self._get_topic_id_by_name(question['topic'])
+                    
+                if topic_id:
+                    if has_topic_column:
+                        # Обе колонки есть - заполняем обе
+                        cursor.execute('''
+                            INSERT INTO questions (topic_id, topic, question, answer, explanation, incorrect_options, question_type, source)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            topic_id,
+                            question['topic'],
+                            question['question'],
+                            question['answer'],
+                            question['explanation'],
+                            question.get('incorrect_options', ''),
+                            question.get('question_type', 'standard'),
+                            question.get('source', 'db')
+                        ))
+                    else:
+                        # Только topic_id колонка
+                        cursor.execute('''
+                            INSERT INTO questions (topic_id, question, answer, explanation, incorrect_options, question_type, source)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            topic_id,
+                            question['question'],
+                            question['answer'],
+                            question['explanation'],
+                            question.get('incorrect_options', ''),
+                            question.get('question_type', 'standard'),
+                            question.get('source', 'db')
+                        ))
+                else:
+                    logging.error(f"Failed to create topic '{question['topic']}' for question")
+                    return
+            else:
+                # Только старая колонка topic (обратная совместимость)
+                cursor.execute('''
+                    INSERT INTO questions (topic, question, answer, explanation, incorrect_options, question_type, source)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    question['topic'],
+                    question['question'],
+                    question['answer'],
+                    question['explanation'],
+                    question.get('incorrect_options', ''),
+                    question.get('question_type', 'standard'),
+                    question.get('source', 'db')
+                ))
+            
             conn.commit()
+            logging.info(f"Successfully added question with topic: {question.get('topic', 'N/A')}, topic_id: {question.get('topic_id', 'N/A')}")
 
     def update_question(self, question_text: str, new_answer: str, new_explanation: str) -> None:
         """Update a question's answer and explanation."""
