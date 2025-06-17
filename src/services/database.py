@@ -462,19 +462,18 @@ class Database:
             # В SQLite нельзя просто DROP COLUMN, нужно пересоздать таблицу
             logging.info("[MIGRATE] Создаём новую таблицу questions без колонки topic...")
             
-            # 1. Создаём новую таблицу без колонки topic
+            # 1. Создаём новую таблицу без колонки topic (на основе реальной структуры)
             cursor.execute('''
                 CREATE TABLE questions_new (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    topic_id INTEGER NOT NULL,
                     question TEXT NOT NULL,
                     answer TEXT NOT NULL,
                     explanation TEXT,
                     incorrect_options TEXT,
-                    question_type TEXT DEFAULT 'multiple_choice',
+                    question_type TEXT DEFAULT 'standard',
                     source TEXT DEFAULT 'db',
                     image_path TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    topic_id INTEGER NOT NULL,
                     FOREIGN KEY (topic_id) REFERENCES subtopics(id)
                 )
             ''')
@@ -483,10 +482,10 @@ class Database:
             logging.info("[MIGRATE] Копируем данные без колонки topic...")
             cursor.execute('''
                 INSERT INTO questions_new 
-                (id, topic_id, question, answer, explanation, incorrect_options, 
-                 question_type, source, image_path, created_at)
-                SELECT id, topic_id, question, answer, explanation, incorrect_options,
-                       question_type, source, image_path, created_at
+                (id, question, answer, explanation, incorrect_options, 
+                 question_type, source, image_path, topic_id)
+                SELECT id, question, answer, explanation, incorrect_options,
+                       question_type, source, image_path, topic_id
                 FROM questions
             ''')
             
@@ -1341,10 +1340,10 @@ class Database:
                 FROM subtopics st
                 JOIN main_topics mt ON st.main_topic_id = mt.id
                 LEFT JOIN (
-                    SELECT topic, COUNT(*) as question_count
+                    SELECT topic_id, COUNT(*) as question_count
                     FROM questions
-                    GROUP BY topic
-                ) q ON st.name = q.topic
+                    GROUP BY topic_id
+                ) q ON st.id = q.topic_id
             '''
             if active_only:
                 query += ' WHERE st.is_active = 1 AND mt.is_active = 1'
@@ -3457,12 +3456,12 @@ class Database:
                 
                 name, main_topic_id, is_active = topic_info
                 
-                # Считаем связанные объекты
+                # Считаем связанные объекты (только по topic_id, так как колонка topic удалена)
                 cursor.execute('SELECT COUNT(*) FROM questions WHERE topic_id = ?', (topic_id,))
                 questions_with_topic_id = cursor.fetchone()[0]
                 
-                cursor.execute('SELECT COUNT(*) FROM questions WHERE topic = ?', (name,))
-                questions_with_topic_name = cursor.fetchone()[0]
+                # Колонка topic больше не существует, поэтому questions_with_topic_name = 0
+                questions_with_topic_name = 0
                 
                 return {
                     "topic_id": topic_id,
@@ -3477,9 +3476,9 @@ class Database:
                         "questions_stay_linked": True
                     },
                     "old_architecture_impact": {
-                        "rows_to_update": 1 + questions_with_topic_name,  # subtopics + все questions
+                        "rows_to_update": 1 + questions_with_topic_name,  # subtopics + все questions (теперь 0)
                         "affected_questions": questions_with_topic_name,
-                        "risk_level": "high" if questions_with_topic_name > 100 else "medium"
+                        "risk_level": "low"  # Теперь всегда низкий риск
                     }
                 }
                 
