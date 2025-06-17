@@ -79,6 +79,49 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 ## 📋 Changelog
 
+### 2025-01-16: Исправлена ошибка "Inline keyboard expected" при обработке ошибок рандомного теста
+
+**Проблема:**
+- При возникновении ошибок в рандомном тесте появлялась ошибка: `BadRequest: Inline keyboard expected`
+- Метод `handle_random_test()` пытался отредактировать сообщение, добавив inline keyboard
+- Telegram не позволяет добавлять inline keyboard при редактировании сообщения, которое изначально было без клавиатуры
+- Ошибка возникала в 3 местах: при ошибке генерации теста, отображения вопроса и загрузки вопросов
+
+**Решение:**
+- ✅ Заменено редактирование сообщения (`edit_text`) на удаление и отправку нового сообщения
+- ✅ Исправлены все 3 места обработки ошибок в методе `handle_random_test()`
+- ✅ Добавлена безопасная обработка исключений при удалении сообщений
+- ✅ Сохранение ID новых сообщений для корректного управления состоянием
+
+**Изменения в коде:**
+```python
+# Было (вызывало ошибку):
+await preparing_msg.edit_text(error_text, reply_markup=get_main_menu_markup(user_id))
+
+# Стало (работает корректно):
+try:
+    await preparing_msg.delete()
+except:
+    pass
+error_msg = await context.bot.send_message(
+    chat_id=update.effective_chat.id,
+    text=error_text,
+    reply_markup=get_main_menu_markup(user_id)
+)
+await self._save_bot_message_id(context, error_msg, update.effective_chat.id)
+```
+
+**Исправленные места:**
+- ✅ `random_test_error` - ошибка генерации случайного теста
+- ✅ `question_display_error` - ошибка отображения вопроса
+- ✅ `questions_load_error` - ошибка загрузки вопросов
+
+**Результат:**
+- ✅ Рандомный тест работает без ошибок типа `"Inline keyboard expected"`
+- ✅ Корректное отображение ошибок с главным меню
+- ✅ Правильное управление состоянием сообщений бота
+- ✅ Улучшенный пользовательский опыт при обработке ошибок
+
 ### 2025-01-16: Исправлена ошибка отсутствующей колонки timestamp в таблице test_results
 
 **Проблема:**

@@ -724,12 +724,18 @@ class CommandHandlers(BaseHandler):
         
         if not questions_data:
             error_text = get_message('random_test_error', user_language)
-            await preparing_msg.edit_text(
-                error_text,
+            # Удаляем preparing_msg и отправляем новое с клавиатурой
+            try:
+                await preparing_msg.delete()
+            except:
+                pass
+            error_msg = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=error_text,
                 reply_markup=get_main_menu_markup(user_id)
             )
             # Сохраняем ID сообщения с ошибкой
-            await self._save_bot_message_id(context, preparing_msg, update.effective_chat.id)
+            await self._save_bot_message_id(context, error_msg, update.effective_chat.id)
             return
         
         # Convert questions data to the format expected by the test system
@@ -809,20 +815,32 @@ class CommandHandlers(BaseHandler):
             except Exception as e:
                 logging.error(f"Error displaying random test question: {e}")
                 error_text = get_message('question_display_error', user_language)
-                await preparing_msg.edit_text(
-                    error_text,
+                # Удаляем preparing_msg и отправляем новое с клавиатурой
+                try:
+                    await preparing_msg.delete()
+                except:
+                    pass
+                error_msg = await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=error_text,
                     reply_markup=get_main_menu_markup(user_id)
                 )
                 # Сохраняем ID сообщения с ошибкой
-                await self._save_bot_message_id(context, preparing_msg, update.effective_chat.id)
+                await self._save_bot_message_id(context, error_msg, update.effective_chat.id)
         else:
             error_text = get_message('questions_load_error', user_language)
-            await preparing_msg.edit_text(
-                error_text,
+            # Удаляем preparing_msg и отправляем новое с клавиатурой
+            try:
+                await preparing_msg.delete()
+            except:
+                pass
+            error_msg = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=error_text,
                 reply_markup=get_main_menu_markup(user_id)
             )
             # Сохраняем ID сообщения с ошибкой
-            await self._save_bot_message_id(context, preparing_msg, update.effective_chat.id)
+            await self._save_bot_message_id(context, error_msg, update.effective_chat.id)
 
     async def _delete_message_after_delay(self, bot, chat_id: int, message_id: int, delay_seconds: int) -> None:
         """Удаляет сообщение через указанное количество секунд."""
