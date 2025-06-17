@@ -3206,3 +3206,132 @@ class Database:
         conn = sqlite3.connect(self.db_path)
         conn.execute("PRAGMA foreign_keys = ON")
         return conn
+
+    def rename_topic_by_id(self, topic_id: int, new_name: str) -> bool:
+        """
+        Переименовывает тему по ID (эффективно благодаря topic_id архитектуре).
+        
+        Преимущества новой архитектуры:
+        - Обновляется ТОЛЬКО одна строка в subtopics
+        - Все связанные вопросы автоматически используют новое название через JOIN
+        - Никаких массовых UPDATE в таблице questions
+        
+        Args:
+            topic_id: ID темы для переименования
+            new_name: Новое название темы
+            
+        Returns:
+            bool: True если переименование успешно
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Проверяем существование темы
+                cursor.execute('SELECT name FROM subtopics WHERE id = ?', (topic_id,))
+                result = cursor.fetchone()
+                if not result:
+                    logging.warning(f"Тема с ID {topic_id} не найдена")
+                    return False
+                
+                old_name = result[0]
+                
+                # Проверяем не занято ли новое название
+                cursor.execute('SELECT id FROM subtopics WHERE name = ? AND id != ?', 
+                              (new_name, topic_id))
+                if cursor.fetchone():
+                    logging.warning(f"Название '{new_name}' уже используется другой темой")
+                    return False
+                
+                # Получаем количество связанных вопросов ДО переименования
+                cursor.execute('SELECT COUNT(*) FROM questions WHERE topic_id = ?', (topic_id,))
+                question_count = cursor.fetchone()[0]
+                
+                # ЭФФЕКТИВНОЕ переименование: обновляем ТОЛЬКО subtopics
+                cursor.execute('UPDATE subtopics SET name = ? WHERE id = ?', 
+                              (new_name, topic_id))
+                
+                # Проверяем что переименование прошло успешно
+                if cursor.rowcount == 1:
+                    logging.info(f"✅ Тема переименована: '{old_name}' -> '{new_name}' (ID: {topic_id})")
+                    logging.info(f"📊 Связанных вопросов: {question_count} (остались автоматически связаны)")
+                    logging.info(f"🚀 Обновлена ТОЛЬКО 1 строка в subtopics, таблица questions НЕ ТРОНУТА!")
+                    return True
+                else:
+                    logging.error(f"Ошибка при переименовании темы ID {topic_id}")
+                    return False
+                    
+        except Exception as e:
+            logging.error(f"Ошибка при переименовании темы: {e}")
+            return False
+
+    def rename_topic_by_name(self, old_name: str, new_name: str) -> bool:
+        """
+        Переименовывает тему по названию (wrapper для rename_topic_by_id).
+        
+        Args:
+            old_name: Текущее название темы
+            new_name: Новое название темы
+            
+        Returns:
+            bool: True если переименование успешно
+        """
+        topic_id = self._get_topic_id_by_name(old_name)
+        if topic_id is None:
+            logging.warning(f"Тема '{old_name}' не найдена")
+            return False
+        
+        return self.rename_topic_by_id(topic_id, new_name)
+
+    def get_topic_rename_impact(self, topic_id: int) -> Dict[str, Any]:
+        """
+        Показывает влияние переименования темы (для предварительной оценки).
+        
+        Args:
+            topic_id: ID темы
+            
+        Returns:
+            Dict с информацией о влиянии переименования
+        """
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Получаем информацию о теме
+                cursor.execute('SELECT name, main_topic_id, is_active FROM subtopics WHERE id = ?', 
+                              (topic_id,))
+                topic_info = cursor.fetchone()
+                if not topic_info:
+                    return {"error": f"Тема с ID {topic_id} не найдена"}
+                
+                name, main_topic_id, is_active = topic_info
+                
+                # Считаем связанные объекты
+                cursor.execute('SELECT COUNT(*) FROM questions WHERE topic_id = ?', (topic_id,))
+                questions_with_topic_id = cursor.fetchone()[0]
+                
+                cursor.execute('SELECT COUNT(*) FROM questions WHERE topic = ?', (name,))
+                questions_with_topic_name = cursor.fetchone()[0]
+                
+                return {
+                    "topic_id": topic_id,
+                    "current_name": name,
+                    "main_topic_id": main_topic_id,
+                    "is_active": bool(is_active),
+                    "questions_linked_by_id": questions_with_topic_id,
+                    "questions_linked_by_name": questions_with_topic_name,
+                    "new_architecture_impact": {
+                        "rows_to_update": 1,  # Только subtopics
+                        "affected_questions": questions_with_topic_id,
+                        "questions_stay_linked": True
+                    },
+                    "old_architecture_impact": {
+                        "rows_to_update": 1 + questions_with_topic_name,  # subtopics + все questions
+                        "affected_questions": questions_with_topic_name,
+                        "risk_level": "high" if questions_with_topic_name > 100 else "medium"
+                    }
+                }
+                
+        except Exception as e:
+            logging.error(f"Ошибка при анализе влияния переименования: {e}")
+            return {"error": str(e)}
