@@ -688,30 +688,72 @@ class Database:
         """Get tasks for a specific topic."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            
+            # Try to use topic_id approach first (more efficient)
             cursor.execute('''
-                SELECT id, question, answer, explanation, incorrect_options, question_type, source, image_path
-                FROM questions
-                WHERE topic = ?
+                SELECT q.id, q.question, q.answer, q.explanation, q.incorrect_options, 
+                       q.question_type, q.source, q.image_path, s.name as topic_name
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE s.name = ? AND s.is_active = 1
                 ORDER BY RANDOM()
                 LIMIT ?
             ''', (topic, limit))
-            columns = ['id', 'question', 'answer', 'explanation', 'incorrect_options', 'question_type', 'source', 'image_path']
-            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+            results = cursor.fetchall()
+            
+            # If no results with topic_id, fallback to old method
+            if not results:
+                cursor.execute('''
+                    SELECT id, question, answer, explanation, incorrect_options, question_type, source, image_path
+                    FROM questions
+                    WHERE topic = ?
+                    ORDER BY RANDOM()
+                    LIMIT ?
+                ''', (topic, limit))
+                results = cursor.fetchall()
+                columns = ['id', 'question', 'answer', 'explanation', 'incorrect_options', 'question_type', 'source', 'image_path']
+            else:
+                columns = ['id', 'question', 'answer', 'explanation', 'incorrect_options', 
+                          'question_type', 'source', 'image_path', 'topic_name']
+            
+            return [dict(zip(columns, row)) for row in results]
 
     def get_error_tasks_for_user(self, user_id: int, topic: str, limit: int = 10) -> List[Dict[str, Any]]:
         """Get tasks that user previously answered incorrectly."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            
+            # Try to use topic_id approach first (more efficient)
             cursor.execute('''
-                SELECT DISTINCT q.id, q.question, q.answer, q.explanation, q.incorrect_options, ue.error_count, q.image_path
+                SELECT DISTINCT q.id, q.question, q.answer, q.explanation, q.incorrect_options, 
+                       ue.error_count, q.image_path, s.name as topic_name
                 FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
                 JOIN user_errors ue ON q.id = ue.question_id
-                WHERE ue.user_id = ? AND ue.topic = ?
+                WHERE ue.user_id = ? AND s.name = ? AND s.is_active = 1
                 ORDER BY ue.error_count DESC, ue.last_error_date DESC
                 LIMIT ?
             ''', (user_id, topic, limit))
-            columns = ['id', 'question', 'answer', 'explanation', 'incorrect_options', 'error_count', 'image_path']
-            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+            results = cursor.fetchall()
+            
+            # If no results with topic_id, fallback to old method
+            if not results:
+                cursor.execute('''
+                    SELECT DISTINCT q.id, q.question, q.answer, q.explanation, q.incorrect_options, ue.error_count, q.image_path
+                    FROM questions q
+                    JOIN user_errors ue ON q.id = ue.question_id
+                    WHERE ue.user_id = ? AND ue.topic = ?
+                    ORDER BY ue.error_count DESC, ue.last_error_date DESC
+                    LIMIT ?
+                ''', (user_id, topic, limit))
+                results = cursor.fetchall()
+                columns = ['id', 'question', 'answer', 'explanation', 'incorrect_options', 'error_count', 'image_path']
+            else:
+                columns = ['id', 'question', 'answer', 'explanation', 'incorrect_options', 'error_count', 'image_path', 'topic_name']
+            
+            return [dict(zip(columns, row)) for row in results]
 
     def get_explanation_by_question_text(self, question_text: str) -> Optional[str]:
         """Get explanation for a question by exact text match."""
@@ -3038,3 +3080,129 @@ class Database:
                 
         except Exception as e:
             logging.error(f"[DEBUG][decrement_error_count_by_question_id] Exception: {e}")
+
+    # === NEW TOPIC_ID METHODS ===
+    # These methods use topic_id instead of topic name for better performance and consistency
+    
+    def get_tasks_for_topic_id(self, topic_id: int, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get tasks for a specific topic using topic_id (new method)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT q.id, q.question, q.answer, q.explanation, q.incorrect_options, 
+                       q.question_type, q.source, q.image_path, s.name as topic_name
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE q.topic_id = ? AND s.is_active = 1
+                ORDER BY RANDOM()
+                LIMIT ?
+            ''', (topic_id, limit))
+            columns = ['id', 'question', 'answer', 'explanation', 'incorrect_options', 
+                      'question_type', 'source', 'image_path', 'topic_name']
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+    
+    def get_error_tasks_for_user_by_topic_id(self, user_id: int, topic_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get tasks that user previously answered incorrectly using topic_id (new method)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT DISTINCT q.id, q.question, q.answer, q.explanation, q.incorrect_options, 
+                       ue.error_count, q.image_path, s.name as topic_name
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                JOIN user_errors ue ON q.id = ue.question_id
+                WHERE ue.user_id = ? AND q.topic_id = ? AND s.is_active = 1
+                ORDER BY ue.error_count DESC, ue.last_error_date DESC
+                LIMIT ?
+            ''', (user_id, topic_id, limit))
+            columns = ['id', 'question', 'answer', 'explanation', 'incorrect_options', 
+                      'error_count', 'image_path', 'topic_name']
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+    
+    def add_question_with_topic_id(self, question: dict, topic_id: int) -> bool:
+        """Add a new question using topic_id (new method)."""
+        required_fields = ['question', 'answer', 'explanation']
+        for field in required_fields:
+            if not question.get(field):
+                logging.error(f"Cannot add question: {field} is None or empty. Question data: {question}")
+                return False
+        
+        # Get topic name for backward compatibility
+        topic_name = self._get_topic_name_by_id(topic_id)
+        if not topic_name:
+            logging.error(f"Cannot add question: topic_id {topic_id} not found")
+            return False
+        
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO questions (topic_id, topic, question, answer, explanation, 
+                                         incorrect_options, question_type, source)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    topic_id,
+                    topic_name,  # Keep for backward compatibility
+                    question['question'],
+                    question['answer'],
+                    question['explanation'],
+                    question.get('incorrect_options', ''),
+                    question.get('question_type', 'standard'),
+                    question.get('source', 'db')
+                ))
+                conn.commit()
+                logging.info(f"Added question with topic_id {topic_id}")
+                return True
+        except Exception as e:
+            logging.error(f"Error adding question with topic_id: {e}")
+            return False
+    
+    def get_topic_question_counts_by_id(self) -> Dict[int, Dict[str, Any]]:
+        """Get question counts for each topic using topic_id (new method)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT s.id, s.name, COUNT(q.id) as question_count,
+                       mt.name as main_topic_name, s.is_active
+                FROM subtopics s
+                LEFT JOIN questions q ON s.id = q.topic_id
+                LEFT JOIN main_topics mt ON s.main_topic_id = mt.id
+                WHERE s.is_active = 1
+                GROUP BY s.id, s.name, mt.name, s.is_active
+                ORDER BY mt.name, s.name
+            ''')
+            
+            result = {}
+            for row in cursor.fetchall():
+                topic_id, topic_name, count, main_topic, is_active = row
+                result[topic_id] = {
+                    'name': topic_name,
+                    'question_count': count,
+                    'main_topic': main_topic,
+                    'is_active': bool(is_active)
+                }
+            return result
+    
+    def _get_topic_name_by_id(self, topic_id: int) -> Optional[str]:
+        """Helper method to get topic name by ID."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT name FROM subtopics WHERE id = ?', (topic_id,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+    
+    def _get_topic_id_by_name(self, topic_name: str) -> Optional[int]:
+        """Helper method to get topic ID by name."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT id FROM subtopics WHERE name = ?', (topic_name,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+
+    # === END NEW TOPIC_ID METHODS ===
+
+    def _get_connection(self):
+        """Get database connection with foreign keys enabled."""
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("PRAGMA foreign_keys = ON")
+        return conn

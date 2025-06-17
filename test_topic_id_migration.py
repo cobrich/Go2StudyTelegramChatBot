@@ -174,10 +174,98 @@ def main():
         print("\n4️⃣ Проверка результатов миграции...")
         success = check_migration_results(test_db_path)
         
+        # Шаг 5: Тестируем новые методы с topic_id
+        print("\n5️⃣ Тестирование новых методов с topic_id...")
+        test_new_topic_id_methods(db, test_db_path)
+        
         if success:
             print("\n🎉 Миграция topic_id прошла успешно!")
         else:
             print("\n💥 Миграция topic_id завершилась с ошибками!")
+
+def test_new_topic_id_methods(db, test_db_path):
+    """Тестирует новые методы с topic_id"""
+    try:
+        # Получаем список topic_id из БД
+        with sqlite3.connect(test_db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, name FROM subtopics ORDER BY id')
+            topics = cursor.fetchall()
+        
+        print(f"📋 Найдено подтем: {len(topics)}")
+        for topic_id, topic_name in topics:
+            print(f"  • ID: {topic_id}, Название: '{topic_name}'")
+        
+        if not topics:
+            print("❌ Нет подтем для тестирования")
+            return
+        
+        # Тест 1: get_tasks_for_topic_id
+        test_topic_id = topics[0][0]  # Берем первую тему
+        print(f"\n🧪 Тест 1: get_tasks_for_topic_id(topic_id={test_topic_id})")
+        tasks = db.get_tasks_for_topic_id(test_topic_id, limit=5)
+        print(f"  Получено вопросов: {len(tasks)}")
+        if tasks:
+            print(f"  Пример вопроса: '{tasks[0]['question'][:50]}...'")
+            print(f"  Тема вопроса: '{tasks[0].get('topic_name', 'N/A')}'")
+        
+        # Тест 2: get_topic_question_counts_by_id
+        print(f"\n🧪 Тест 2: get_topic_question_counts_by_id()")
+        counts = db.get_topic_question_counts_by_id()
+        print(f"  Получено статистики по темам: {len(counts)}")
+        for tid, info in counts.items():
+            print(f"  • ID {tid}: '{info['name']}' - {info['question_count']} вопросов (Раздел: {info['main_topic']})")
+        
+        # Тест 3: add_question_with_topic_id
+        print(f"\n🧪 Тест 3: add_question_with_topic_id(topic_id={test_topic_id})")
+        test_question = {
+            'question': 'Тестовый вопрос с topic_id',
+            'answer': 'Тестовый ответ',
+            'explanation': 'Тестовое объяснение',
+            'question_type': 'standard'
+        }
+        result = db.add_question_with_topic_id(test_question, test_topic_id)
+        print(f"  Результат добавления: {'✅ Успешно' if result else '❌ Ошибка'}")
+        
+        if result:
+            # Проверяем что вопрос добавился
+            new_tasks = db.get_tasks_for_topic_id(test_topic_id, limit=10)
+            added_question = next((t for t in new_tasks if t['question'] == test_question['question']), None)
+            if added_question:
+                print(f"  ✅ Новый вопрос найден в БД")
+            else:
+                print(f"  ❌ Новый вопрос не найден в БД")
+        
+        # Тест 4: helper methods
+        print(f"\n🧪 Тест 4: Helper методы")
+        topic_name = db._get_topic_name_by_id(test_topic_id)
+        print(f"  _get_topic_name_by_id({test_topic_id}) = '{topic_name}'")
+        
+        if topic_name:
+            back_topic_id = db._get_topic_id_by_name(topic_name)
+            print(f"  _get_topic_id_by_name('{topic_name}') = {back_topic_id}")
+            if back_topic_id == test_topic_id:
+                print(f"  ✅ Конвертация ID ↔ Название работает корректно")
+            else:
+                print(f"  ❌ Конвертация ID ↔ Название работает некорректно")
+        
+        # Тест 5: Обновленные старые методы
+        print(f"\n🧪 Тест 5: Обновленные старые методы")
+        if topic_name:
+            old_method_tasks = db.get_tasks_for_topic(topic_name, limit=5)
+            print(f"  get_tasks_for_topic('{topic_name}') = {len(old_method_tasks)} вопросов")
+            
+            if old_method_tasks and 'topic_name' in old_method_tasks[0]:
+                print(f"  ✅ Обновленный метод работает с topic_id")
+            else:
+                print(f"  ⚠️ Обновленный метод использует fallback на старую схему")
+        
+        print("\n✅ Тестирование новых методов завершено")
+        
+    except Exception as e:
+        print(f"\n❌ Ошибка при тестировании новых методов: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main() 
