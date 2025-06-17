@@ -335,17 +335,33 @@ UPDATE subtopics SET name = 'Новое название' WHERE id = 123;     --
 **Для полного решения проблемы необходимо:**
 
 1. **Обновить весь код** для использования только `topic_id`:
-   - Заменить `add_question()` на использование topic_id вместо topic
-   - Переписать все запросы на JOIN через topic_id
-   - Убрать UPDATE questions в `update_topic_name()`
+   - ❌ **QuestionService** (3 места): использует `'topic': topic` в `add_question()`
+   - ❌ **PDF Processor** (1 место): использует `db.add_question()` 
+   - ❌ **Admin Questions Handler** (3 места): использует `db.add_question()`
+   - ❌ **Database.add_question()**: нужно переписать для автоконвертации topic → topic_id
 
-2. **Выполнить миграцию удаления:**
+2. **Найденные места использования старого поля 'topic':**
+   ```python
+   # QuestionService (src/services/question_service.py)
+   # Строки 370, 514, 584:
+   self.db.add_question({'topic': topic, ...})  # ❌
+   
+   # PDF Processor (src/services/pdf_processor.py) 
+   # Строка 821:
+   db.add_question(db_question)  # ❌ db_question содержит 'topic'
+   
+   # Admin Questions Handler (src/handlers/admin/questions.py)
+   # Строки 417, 885, 954:
+   self.db.add_question(db_question)  # ❌ db_question содержит 'topic'
+   ```
+
+3. **Выполнить миграцию удаления:**
    ```python
    # В инициализации БД добавить:
    self._migrate_remove_topic_column(cursor)
    ```
 
-3. **Создать VIEW для совместимости:**
+4. **Создать VIEW для совместимости:**
    ```sql
    CREATE VIEW questions_with_topic AS
    SELECT q.*, s.name AS topic 
