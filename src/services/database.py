@@ -351,124 +351,172 @@ class Database:
                 logging.error(f"Failed to create new questions table: {create_error}")
 
     def _migrate_questions_topic_id(self, cursor):
-        """Migrate questions to support topic_id instead of topic name."""
+        """
+        Миграция: добавление topic_id в таблицу questions и заполнение данных
+        """
         try:
-            # Check if questions table exists and has topic_id column
+            # Проверяем есть ли уже колонка topic_id
             cursor.execute("PRAGMA table_info(questions)")
             columns = [column[1] for column in cursor.fetchall()]
             
-            # If topic_id column already exists, migration is already done
             if 'topic_id' in columns:
-                logging.info("Questions table already has topic_id column - migration not needed")
-                return
+                logging.info("[MIGRATE] Колонка topic_id уже существует в таблице questions")
+                return True
             
-            # If table doesn't exist, create new structure
-            if not columns:
-                cursor.execute('''
-                    CREATE TABLE questions (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        topic_id INTEGER,
-                        topic TEXT NOT NULL,
-                        question TEXT NOT NULL,
-                        answer TEXT NOT NULL,
-                        explanation TEXT,
-                        incorrect_options TEXT,
-                        question_type TEXT DEFAULT 'standard',
-                        source TEXT DEFAULT 'db',
-                        image_path TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (topic_id) REFERENCES subtopics(id)
-                    )
-                ''')
-                logging.info("Created new questions table with topic_id structure")
-                return
+            logging.info("[MIGRATE] Добавляем колонку topic_id в таблицу questions...")
             
-            # Old structure exists, need to migrate
-            logging.info("Starting migration of questions table to add topic_id...")
+            # Добавляем колонку topic_id
+            cursor.execute('ALTER TABLE questions ADD COLUMN topic_id INTEGER')
             
-            # Step 1: Add topic_id column
-            try:
-                cursor.execute('ALTER TABLE questions ADD COLUMN topic_id INTEGER')
-                logging.info("Added topic_id column to questions table")
-            except sqlite3.OperationalError as e:
-                if "duplicate column name" in str(e).lower():
-                    logging.info("topic_id column already exists")
-                else:
-                    raise e
-            
-            # Step 2: Fill topic_id based on existing topic names
+            # Заполняем topic_id на основе существующих названий тем
+            logging.info("[MIGRATE] Заполняем topic_id для существующих вопросов...")
             cursor.execute('''
                 UPDATE questions 
                 SET topic_id = (
-                    SELECT s.id 
-                    FROM subtopics s 
-                    WHERE s.name = questions.topic
+                    SELECT id FROM subtopics 
+                    WHERE subtopics.name = questions.topic
                 )
                 WHERE topic_id IS NULL
             ''')
+            updated_questions = cursor.rowcount
+            logging.info(f"[MIGRATE] Обновлено {updated_questions} вопросов с topic_id")
             
-            updated_count = cursor.rowcount
-            logging.info(f"Updated {updated_count} questions with topic_id")
+            # Найдем вопросы которые не смогли связать с темами (орфанные)
+            cursor.execute('SELECT DISTINCT topic FROM questions WHERE topic_id IS NULL')
+            orphan_topics = cursor.fetchall()
             
-            # Step 3: Check for orphaned questions (where no matching subtopic was found)
-            cursor.execute('SELECT COUNT(*) FROM questions WHERE topic_id IS NULL')
-            orphaned_count = cursor.fetchone()[0]
-            
-            if orphaned_count > 0:
-                logging.warning(f"Found {orphaned_count} questions without matching subtopics")
+            if orphan_topics:
+                logging.info(f"[MIGRATE] Найдено {len(orphan_topics)} орфанных тем, создаем их...")
                 
-                # Get list of orphaned topics for logging
-                cursor.execute('SELECT DISTINCT topic FROM questions WHERE topic_id IS NULL')
-                orphaned_topics = [row[0] for row in cursor.fetchall()]
-                logging.warning(f"Orphaned topics: {orphaned_topics}")
-                
-                # Option 1: Create missing subtopics
-                # For now, we'll create them in the first available main_topic
-                cursor.execute('SELECT id FROM main_topics LIMIT 1')
-                main_topic_result = cursor.fetchone()
-                
-                if main_topic_result:
-                    main_topic_id = main_topic_result[0]
+                for (topic_name,) in orphan_topics:
+                    # Создаем недостающую тему с дефолтным main_topic_id = 1
+                    cursor.execute('''
+                        INSERT INTO subtopics (name, main_topic_id, is_active) 
+                        VALUES (?, 1, 1)
+                    ''', (topic_name,))
                     
-                    for topic_name in orphaned_topics:
-                        # Create missing subtopic
-                        cursor.execute('''
-                            INSERT OR IGNORE INTO subtopics (name, main_topic_id, description, is_active)
-                            VALUES (?, ?, ?, 1)
-                        ''', (topic_name, main_topic_id, f"Auto-created during migration for topic: {topic_name}"))
-                        
-                        # Get the created subtopic ID
-                        cursor.execute('SELECT id FROM subtopics WHERE name = ?', (topic_name,))
-                        subtopic_result = cursor.fetchone()
-                        
-                        if subtopic_result:
-                            subtopic_id = subtopic_result[0]
-                            
-                            # Update questions with the new subtopic_id
-                            cursor.execute('''
-                                UPDATE questions 
-                                SET topic_id = ? 
-                                WHERE topic = ? AND topic_id IS NULL
-                            ''', (subtopic_id, topic_name))
-                            
-                            logging.info(f"Created subtopic '{topic_name}' with ID {subtopic_id}")
-                
-                # Final check
-                cursor.execute('SELECT COUNT(*) FROM questions WHERE topic_id IS NULL')
-                remaining_orphaned = cursor.fetchone()[0]
-                
-                if remaining_orphaned > 0:
-                    logging.error(f"Still have {remaining_orphaned} questions without topic_id after migration")
-                    # Delete orphaned questions as last resort
-                    cursor.execute('DELETE FROM questions WHERE topic_id IS NULL')
-                    logging.warning(f"Deleted {remaining_orphaned} orphaned questions")
+                    new_topic_id = cursor.lastrowid
+                    logging.info(f"[MIGRATE] Создана тема '{topic_name}' с ID {new_topic_id}")
+                    
+                    # Обновляем topic_id для вопросов этой темы
+                    cursor.execute('''
+                        UPDATE questions 
+                        SET topic_id = ? 
+                        WHERE topic = ? AND topic_id IS NULL
+                    ''', (new_topic_id, topic_name))
+                    
+                    updated = cursor.rowcount
+                    logging.info(f"[MIGRATE] Связано {updated} вопросов с темой '{topic_name}'")
             
-            logging.info("Successfully migrated questions table to use topic_id")
+            # Добавляем FOREIGN KEY constraint (будет работать для новых записей)
+            # Примечание: в SQLite нельзя добавить FK к существующей таблице,
+            # но мы можем использовать его в новых операциях
+            
+            # Финальная проверка
+            cursor.execute('SELECT COUNT(*) FROM questions WHERE topic_id IS NULL')
+            remaining_orphans = cursor.fetchone()[0]
+            
+            if remaining_orphans > 0:
+                logging.warning(f"[MIGRATE] Остались {remaining_orphans} вопросов без topic_id")
+                return False
+            
+            logging.info("[MIGRATE] ✅ Миграция topic_id завершена успешно")
+            return True
             
         except Exception as e:
-            logging.error(f"Error during questions topic_id migration: {e}")
-            # Don't fail the entire initialization - log and continue
-            logging.warning("Questions topic_id migration failed - continuing with old structure")
+            logging.error(f"[MIGRATE] Ошибка при миграции topic_id: {e}")
+            return False
+
+    def _migrate_remove_topic_column(self, cursor):
+        """
+        Миграция: полное удаление колонки topic из таблицы questions
+        
+        Эта миграция должна выполняться ПОСЛЕ _migrate_questions_topic_id
+        и ПОСЛЕ обновления всего кода для использования topic_id
+        """
+        try:
+            # Проверяем что все questions имеют topic_id
+            cursor.execute('SELECT COUNT(*) FROM questions WHERE topic_id IS NULL')
+            orphan_count = cursor.fetchone()[0]
+            
+            if orphan_count > 0:
+                logging.error(f"[MIGRATE] Найдено {orphan_count} вопросов без topic_id! Миграция прервана.")
+                logging.error("[MIGRATE] Сначала выполните _migrate_questions_topic_id()")
+                return False
+            
+            # Проверяем что колонка topic_id существует
+            cursor.execute("PRAGMA table_info(questions)")
+            columns_info = cursor.fetchall()
+            columns = [column[1] for column in columns_info]
+            
+            if 'topic_id' not in columns:
+                logging.error("[MIGRATE] Колонка topic_id не найдена! Сначала выполните _migrate_questions_topic_id()")
+                return False
+            
+            if 'topic' not in columns:
+                logging.info("[MIGRATE] Колонка topic уже удалена")
+                return True
+            
+            logging.info("[MIGRATE] Начинаем удаление колонки topic из таблицы questions...")
+            
+            # В SQLite нельзя просто DROP COLUMN, нужно пересоздать таблицу
+            logging.info("[MIGRATE] Создаём новую таблицу questions без колонки topic...")
+            
+            # 1. Создаём новую таблицу без колонки topic
+            cursor.execute('''
+                CREATE TABLE questions_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id INTEGER NOT NULL,
+                    question TEXT NOT NULL,
+                    answer TEXT NOT NULL,
+                    explanation TEXT,
+                    incorrect_options TEXT,
+                    question_type TEXT DEFAULT 'multiple_choice',
+                    source TEXT DEFAULT 'db',
+                    image_path TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (topic_id) REFERENCES subtopics(id)
+                )
+            ''')
+            
+            # 2. Копируем данные БЕЗ колонки topic
+            logging.info("[MIGRATE] Копируем данные без колонки topic...")
+            cursor.execute('''
+                INSERT INTO questions_new 
+                (id, topic_id, question, answer, explanation, incorrect_options, 
+                 question_type, source, image_path, created_at)
+                SELECT id, topic_id, question, answer, explanation, incorrect_options,
+                       question_type, source, image_path, created_at
+                FROM questions
+            ''')
+            
+            copied_count = cursor.rowcount
+            logging.info(f"[MIGRATE] Скопировано {copied_count} вопросов")
+            
+            # 3. Удаляем старую таблицу
+            logging.info("[MIGRATE] Удаляем старую таблицу questions...")
+            cursor.execute('DROP TABLE questions')
+            
+            # 4. Переименовываем новую
+            logging.info("[MIGRATE] Переименовываем новую таблицу...")
+            cursor.execute('ALTER TABLE questions_new RENAME TO questions')
+            
+            # 5. Создаём VIEW для обратной совместимости (опционально)
+            logging.info("[MIGRATE] Создаём VIEW для обратной совместимости...")
+            cursor.execute('''
+                CREATE VIEW IF NOT EXISTS questions_with_topic AS
+                SELECT q.*, s.name AS topic 
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+            ''')
+            
+            logging.info("[MIGRATE] ✅ Колонка topic успешно удалена из таблицы questions")
+            logging.info("[MIGRATE] ✅ Создан VIEW questions_with_topic для обратной совместимости")
+            return True
+            
+        except Exception as e:
+            logging.error(f"[MIGRATE] Ошибка при удалении колонки topic: {e}")
+            return False
 
     def _get_connection(self):
         """Get database connection with foreign keys enabled."""
@@ -2725,9 +2773,19 @@ class Database:
                 # Обновляем название
                 cursor.execute('UPDATE subtopics SET name = ? WHERE id = ?', (new_name, topic_id))
                 
-                # Также обновляем в таблице вопросов
-                cursor.execute('UPDATE questions SET topic = ? WHERE topic = (SELECT name FROM subtopics WHERE id = ?)', 
-                             (new_name, topic_id))
+                # Проверяем есть ли колонка topic в questions (для совместимости)
+                cursor.execute("PRAGMA table_info(questions)")
+                columns = [column[1] for column in cursor.fetchall()]
+                
+                if 'topic' in columns:
+                    # Старая архитектура: также обновляем в таблице вопросов
+                    old_name_query = cursor.execute('SELECT name FROM subtopics WHERE id = ?', (topic_id,))
+                    cursor.execute('UPDATE questions SET topic = ? WHERE topic_id = ?', 
+                                 (new_name, topic_id))
+                    print(f"[LOG] Обновлена таблица questions (старая архитектура)")
+                else:
+                    # Новая архитектура: questions автоматически получат новое название через JOIN
+                    print(f"[LOG] Таблица questions обновится автоматически через topic_id (новая архитектура)")
                 
                 conn.commit()
                 print(f"[LOG] Название темы {topic_id} обновлено на '{new_name}'")
