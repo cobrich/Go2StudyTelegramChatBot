@@ -1,28 +1,31 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from config.constants import MAIN_MENU_KEYBOARD
-from services.database import Database
+from services.database import get_database_instance
 from utils.translations import get_message, get_main_menu_keyboard
 
-# Инициализируем БД для получения тем
-_db = Database()
+def _get_db():
+    """Получить экземпляр базы данных (синглтон)."""
+    return get_database_instance()
 
 def build_topic_selection_keyboard(user_id: int = None) -> InlineKeyboardMarkup:
     """Create InlineKeyboardMarkup for main topic categories selection."""
+    db = _get_db()
+    
     # Получаем язык пользователя
-    user_language = _db.get_user_language(user_id) if user_id else 'ru'
-    is_admin = user_id and _db.is_admin(user_id)
+    user_language = db.get_user_language(user_id) if user_id else 'ru'
+    is_admin = user_id and db.is_admin(user_id)
     
     # Получаем основные разделы по языку пользователя
     if is_admin:
         # Админы видят все разделы (русские и казахские)
-        russian_topics = _db.get_main_topics_by_language('ru', active_only=True)
-        kazakh_topics = _db.get_main_topics_by_language('kk', active_only=True)
+        russian_topics = db.get_main_topics_by_language('ru', active_only=True)
+        kazakh_topics = db.get_main_topics_by_language('kk', active_only=True)
         main_topics = russian_topics + kazakh_topics
         # Сортируем по order_index
         main_topics.sort(key=lambda x: x['order_index'])
     else:
         # Ученики видят только разделы на своем языке
-        main_topics = _db.get_main_topics_by_language(user_language, active_only=True)
+        main_topics = db.get_main_topics_by_language(user_language, active_only=True)
     
     keyboard = [
         [InlineKeyboardButton(topic['name'], callback_data=f"main_topic_{i}")]
@@ -34,9 +37,11 @@ def build_topic_selection_keyboard(user_id: int = None) -> InlineKeyboardMarkup:
 
 def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, user_id: int = None) -> InlineKeyboardMarkup:
     """Create InlineKeyboardMarkup for subtopic selection within a main topic."""
+    db = _get_db()
+    
     # Получаем язык пользователя и проверяем роль
-    user_language = _db.get_user_language(user_id) if user_id else 'ru'
-    is_admin = user_id and _db.is_admin(user_id)
+    user_language = db.get_user_language(user_id) if user_id else 'ru'
+    is_admin = user_id and db.is_admin(user_id)
     
     # Получаем полную структуру тем по языку
     ru_structure = {}
@@ -44,14 +49,14 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, us
     
     if is_admin:
         # Для админов получаем структуру для обоих языков
-        ru_structure = _db.get_full_topic_structure_by_language('ru', active_only=True)
-        kk_structure = _db.get_full_topic_structure_by_language('kk', active_only=True)
+        ru_structure = db.get_full_topic_structure_by_language('ru', active_only=True)
+        kk_structure = db.get_full_topic_structure_by_language('kk', active_only=True)
         
         # Объединяем структуры
         full_structure = {**ru_structure, **kk_structure}
     else:
         # Для учеников только их язык
-        full_structure = _db.get_full_topic_structure_by_language(user_language, active_only=True)
+        full_structure = db.get_full_topic_structure_by_language(user_language, active_only=True)
         
         # Заполняем структуры для определения языка
         if user_language == 'ru':
@@ -63,7 +68,7 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, us
     subtopics_for_main = full_structure.get(main_topic, [])
     
     # Получаем активные темы из БД для получения индексов
-    all_active_topics = _db.get_topic_names(active_only=True)
+    all_active_topics = db.get_topic_names(active_only=True)
     
     keyboard = []
     
@@ -109,8 +114,9 @@ def build_subtopic_selection_keyboard(main_topic: str, main_topic_index: int, us
 
 def get_main_menu_markup(user_id: int = None) -> ReplyKeyboardMarkup:
     """Get the main menu keyboard markup with language support."""
-    user_language = _db.get_user_language(user_id) if user_id else 'ru'
-    is_admin = user_id and _db.is_admin(user_id)
+    db = _get_db()
+    user_language = db.get_user_language(user_id) if user_id else 'ru'
+    is_admin = user_id and db.is_admin(user_id)
     
     # Получаем базовую клавиатуру для языка
     menu_keyboard = get_main_menu_keyboard(user_language)
@@ -129,7 +135,8 @@ def get_main_menu_markup(user_id: int = None) -> ReplyKeyboardMarkup:
 
 def build_question_keyboard(options: list, q_num: int, max_reached: int, total_questions: int, user_id: int = None, is_random_test: bool = False) -> InlineKeyboardMarkup:
     """Build keyboard for question display with navigation buttons."""
-    user_language = _db.get_user_language(user_id) if user_id else 'ru'
+    db = _get_db()
+    user_language = db.get_user_language(user_id) if user_id else 'ru'
     
     keyboard = [
         [InlineKeyboardButton(ans, callback_data=f"answer_{i}_{q_num}")]
@@ -161,7 +168,8 @@ def build_question_keyboard(options: list, q_num: int, max_reached: int, total_q
 
 def build_results_keyboard(errors_list: list, current_topic: str, user_id: int = None) -> InlineKeyboardMarkup:
     """Build keyboard for test results display."""
-    user_language = _db.get_user_language(user_id) if user_id else 'ru'
+    db = _get_db()
+    user_language = db.get_user_language(user_id) if user_id else 'ru'
     
     buttons = [[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]]
     
@@ -174,7 +182,7 @@ def build_results_keyboard(errors_list: list, current_topic: str, user_id: int =
             )])
     else:
         # Получаем темы на языке пользователя
-        topics_dict = _db.get_topics_by_language(user_language, active_only=True)
+        topics_dict = db.get_topics_by_language(user_language, active_only=True)
         
         # Создаем плоский список тем для поиска индекса
         user_topics = []
@@ -183,7 +191,7 @@ def build_results_keyboard(errors_list: list, current_topic: str, user_id: int =
         
         if current_topic in user_topics:
             # Получаем общий список активных тем для индекса
-            all_active_topics = _db.get_topic_names(active_only=True)
+            all_active_topics = db.get_topic_names(active_only=True)
             if current_topic in all_active_topics:
                 topic_index = all_active_topics.index(current_topic)
                 retake_text = get_message('retake_topic', user_language)
@@ -196,6 +204,7 @@ def build_results_keyboard(errors_list: list, current_topic: str, user_id: int =
 
 def build_continue_keyboard(user_id: int = None) -> InlineKeyboardMarkup:
     """Build keyboard with continue button."""
-    user_language = _db.get_user_language(user_id) if user_id else 'ru'
+    db = _get_db()
+    user_language = db.get_user_language(user_id) if user_id else 'ru'
     continue_text = get_message('continue_btn', user_language)
     return InlineKeyboardMarkup([[InlineKeyboardButton(f"➡️ {continue_text}", callback_data="continue_test")]]) 

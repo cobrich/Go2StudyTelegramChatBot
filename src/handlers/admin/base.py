@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from services.database import Database
+from services.database import Database, get_database_instance
 from services.question_service import QuestionService
 from services.pdf_processor import PDFProcessor, add_questions_to_db
 import logging

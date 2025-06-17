@@ -10,7 +10,7 @@ import sys
 # Добавляем путь к src в PYTHONPATH для корректных импортов
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from services.database import Database
+from services.database import Database, get_database_instance
 from services.ai_service import AIService
 
 class PDFProcessor:
@@ -20,7 +20,7 @@ class PDFProcessor:
             os.makedirs(output_dir)
         
         # Инициализируем базу данных для получения списка доступных тем
-        self.db = Database()
+        self.db = get_database_instance()
         
         # Паттерн для поиска заголовков тем
         self.topic_header_pattern = r'Тема:\s*([^(]+)\((\d+)\)'
@@ -794,7 +794,7 @@ def add_questions_to_db(questions: List[Dict], db: Database) -> Dict[str, int]:
             print(f"[AI][{idx}/{total}] Генерирую объяснение для вопроса...")
             try:
                 # Определяем язык темы
-                db_instance = Database()
+                db_instance = get_database_instance()
                 topic_language = db_instance.get_topic_language(topic)
                 
                 detailed_explanation = ai_service.generate_detailed_explanation(
@@ -897,8 +897,7 @@ def main():
             db_stats = {'saved_count': 0, 'topic_stats': {}}
             if questions:
                 print(f"\n🔄 Добавляю {len(questions)} вопросов в базу данных...")
-                from services.database import Database
-                db = Database()
+                db = get_database_instance()
                 db_stats = add_questions_to_db(questions, db)
                 print(f"✅ Вопросы успешно добавлены в базу данных")
             

@@ -9,6 +9,16 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+# Глобальный синглтон для Database
+_database_instance = None
+
+def get_database_instance():
+    """Получить глобальный экземпляр Database (синглтон)."""
+    global _database_instance
+    if _database_instance is None:
+        _database_instance = Database()
+    return _database_instance
+
 class Database:
     def __init__(self, db_path: str = None):
         # Всегда использовать базу в корне проекта
@@ -159,8 +169,8 @@ class Database:
             if cursor.fetchone()[0] == 0:
                 pass  # Method removed, create_kazakh_main_topics handles initialization
                 
-            # Create Kazakh main topics if they don't exist
-            self.create_kazakh_main_topics()
+            # Create Russian and Kazakh main topics if they don't exist
+            self._initialize_main_topics()
 
     def _migrate_user_errors_table(self, cursor):
         """Migrate user_errors table to new structure with question_id."""
@@ -2594,6 +2604,92 @@ class Database:
                 
         except Exception as e:
             print(f"[ERROR] Ошибка создания казахских основных разделов: {e}")
+            return False
+
+    def create_russian_main_topics(self) -> bool:
+        """Создает русские версии основных разделов (если они еще не созданы)."""
+        try:
+            try:
+                from config.constants import TOPIC_HIERARCHY
+            except ImportError:
+                print("[ERROR] config.constants не найден")
+                return False
+            
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Проверяем, есть ли уже русские темы
+                cursor.execute('SELECT COUNT(*) FROM main_topics WHERE language = "ru"')
+                existing_ru_count = cursor.fetchone()[0]
+                
+                if existing_ru_count > 0:
+                    print(f"[LOG] Русские темы уже существуют ({existing_ru_count} разделов), пропускаем создание")
+                    return True
+                
+                # Создаем русские основные разделы
+                created_count = 0
+                for order_index, main_topic_ru in enumerate(TOPIC_HIERARCHY.keys()):
+                    cursor.execute('''
+                        INSERT INTO main_topics (name, order_index, language, is_active)
+                        VALUES (?, ?, "ru", 1)
+                    ''', (main_topic_ru, order_index))
+                    
+                    russian_main_topic_id = cursor.lastrowid
+                    created_count += 1
+                    
+                    # Создаем русские подтемы для этого раздела
+                    if main_topic_ru in TOPIC_HIERARCHY:
+                        russian_subtopics = TOPIC_HIERARCHY[main_topic_ru]
+                        for subtopic_order, russian_subtopic in enumerate(russian_subtopics):
+                            cursor.execute('''
+                                INSERT INTO subtopics (main_topic_id, name, order_index, is_active)
+                                VALUES (?, ?, ?, 1)
+                            ''', (russian_main_topic_id, russian_subtopic, subtopic_order))
+                
+                conn.commit()
+                print(f"[LOG] Создано {created_count} русских основных разделов")
+                return True
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка создания русских основных разделов: {e}")
+            return False
+
+    def _initialize_main_topics(self) -> bool:
+        """Инициализирует основные темы для русского и казахского языков."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Проверяем общее количество тем
+                cursor.execute('SELECT COUNT(*) FROM main_topics')
+                total_count = cursor.fetchone()[0]
+                
+                if total_count == 0:
+                    print("[LOG] База данных пуста, инициализируем основные темы...")
+                    # Создаем русские темы
+                    self.create_russian_main_topics()
+                    # Создаем казахские темы
+                    self.create_kazakh_main_topics()
+                else:
+                    # Проверяем и создаем отсутствующие темы
+                    cursor.execute('SELECT COUNT(*) FROM main_topics WHERE language = "ru"')
+                    ru_count = cursor.fetchone()[0]
+                    
+                    cursor.execute('SELECT COUNT(*) FROM main_topics WHERE language = "kk"')
+                    kk_count = cursor.fetchone()[0]
+                    
+                    if ru_count == 0:
+                        print("[LOG] Русские темы отсутствуют, создаем...")
+                        self.create_russian_main_topics()
+                    
+                    if kk_count == 0:
+                        print("[LOG] Казахские темы отсутствуют, создаем...")
+                        self.create_kazakh_main_topics()
+                
+                return True
+                
+        except Exception as e:
+            print(f"[ERROR] Ошибка инициализации основных тем: {e}")
             return False
 
     def get_main_topics_by_language(self, language: str, active_only: bool = True) -> List[Dict[str, Any]]:

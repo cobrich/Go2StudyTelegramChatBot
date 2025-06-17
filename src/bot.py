@@ -9,7 +9,7 @@ from telegram.ext import (
 )
 from telegram.request import HTTPXRequest
 from config.constants import TELEGRAM_BOT_TOKEN
-from services.database import Database
+from services.database import get_database_instance
 from services.question_service import QuestionService
 from services.ai_service import AIService
 from handlers.command_handlers import CommandHandlers
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     """Start the bot."""
     # Initialize services
-    db = Database()
+    db = get_database_instance()
     ai_service = AIService()
     question_service = QuestionService(db, ai_service)
     
