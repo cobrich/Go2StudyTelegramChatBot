@@ -145,7 +145,7 @@ class Database:
             # Initialize base topic structure if empty
             cursor.execute('SELECT COUNT(*) FROM main_topics')
             if cursor.fetchone()[0] == 0:
-                self._initialize_base_topics()
+                pass  # Method removed, create_kazakh_main_topics handles initialization
                 
             # Create Kazakh main topics if they don't exist
             self.create_kazakh_main_topics()

@@ -796,3 +796,30 @@ $ sqlite3 math_bot.db "SELECT q.question, s.name FROM questions q JOIN subtopics
 6. ✅ **Производственная готовность** - можно использовать немедленно
 
 **ПРОБЛЕМА ПЕРЕИМЕНОВАНИЯ ТЕМ РЕШЕНА ОКОНЧАТЕЛЬНО!** 🎉
+
+## 🔧 ИСПРАВЛЕНИЕ: Ошибка запуска бота (2024-12-19)
+
+### ❌ Проблема
+После завершения миграции при запуске бота возникала ошибка:
+```
+AttributeError: 'Database' object has no attribute '_initialize_base_topics'
+```
+
+### ✅ Решение
+Удален вызов несуществующего метода `_initialize_base_topics()` в файле `src/services/database.py` (строка 148).
+
+**Исправление:**
+```python
+# Было:
+self._initialize_base_topics()
+
+# Стало:
+pass  # Method removed, create_kazakh_main_topics handles initialization
+```
+
+### 🎯 Результат
+- ✅ Бот запускается без ошибок
+- ✅ Метод `create_kazakh_main_topics()` корректно инициализирует темы
+- ✅ Полная миграция topic_id работает стабильно
+
+**Система полностью готова к работе!** 🚀
