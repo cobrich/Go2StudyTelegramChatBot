@@ -79,6 +79,32 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 ## 📋 Changelog
 
+### 2025-01-16: Исправлена ошибка отсутствующей колонки order_index в таблице main_topics
+
+**Проблема:**
+- При запуске бота появлялась ошибка: `table main_topics has no column named order_index`
+- Метод `create_kazakh_main_topics()` пытался использовать колонку `order_index`, которая отсутствовала в схеме БД
+- Ошибка повторялась циклично, блокируя запуск бота
+
+**Решение:**
+- ✅ Добавлена миграция для добавления колонки `order_index` в таблицу `main_topics`
+- ✅ Добавлена миграция для добавления колонки `order_index` в таблицу `subtopics`
+- ✅ Миграции выполняются автоматически при инициализации БД в методе `_init_db()`
+- ✅ Используется `ALTER TABLE ... ADD COLUMN` с обработкой исключений для безопасности
+
+**Изменения в коде:**
+```sql
+-- Добавлены в метод _init_db():
+ALTER TABLE main_topics ADD COLUMN order_index INTEGER DEFAULT 0
+ALTER TABLE subtopics ADD COLUMN order_index INTEGER DEFAULT 0
+```
+
+**Результат:**
+- ✅ Бот запускается без ошибок
+- ✅ Метод `create_kazakh_main_topics()` работает корректно
+- ✅ Порядок тем и подтем сохраняется через колонку `order_index`
+- ✅ Обратная совместимость с существующими базами данных
+
 ### 2025-01-16: Исправлена ошибка генерации объяснений - добавлен метод generate_detailed_explanation
 
 **Проблема:**

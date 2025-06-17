@@ -140,6 +140,18 @@ class Database:
             except sqlite3.OperationalError:
                 pass  # Column already exists
             
+            # Add order_index column to main_topics if it doesn't exist
+            try:
+                cursor.execute('ALTER TABLE main_topics ADD COLUMN order_index INTEGER DEFAULT 0')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            
+            # Add order_index column to subtopics if it doesn't exist
+            try:
+                cursor.execute('ALTER TABLE subtopics ADD COLUMN order_index INTEGER DEFAULT 0')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            
             conn.commit()
             
             # Initialize base topic structure if empty
