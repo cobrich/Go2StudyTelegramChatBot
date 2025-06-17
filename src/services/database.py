@@ -134,6 +134,9 @@ class Database:
             # Migrate questions to support topic_id instead of topic name
             self._migrate_questions_topic_id(cursor)
             
+            # Add timestamp column to test_results for compatibility
+            self._migrate_test_results_timestamp(cursor)
+            
             # Add missing columns to existing tables if they don't exist
             try:
                 cursor.execute('ALTER TABLE allowed_users ADD COLUMN current_topic TEXT')
@@ -448,6 +451,36 @@ class Database:
         except Exception as e:
             logging.error(f"[MIGRATE] Ошибка при миграции topic_id: {e}")
             return False
+
+    def _migrate_test_results_timestamp(self, cursor):
+        """
+        Миграция: добавление колонки timestamp в таблицу test_results
+        для совместимости с методами, которые ожидают timestamp вместо date
+        """
+        try:
+            # Проверяем существует ли колонка timestamp
+            cursor.execute("PRAGMA table_info(test_results)")
+            columns_info = cursor.fetchall()
+            columns = [column[1] for column in columns_info]
+            
+            if 'timestamp' in columns:
+                logging.info("[MIGRATE] Колонка timestamp уже существует в таблице test_results")
+                return True
+            
+            # Добавляем колонку timestamp
+            logging.info("[MIGRATE] Добавляю колонку timestamp в таблицу test_results...")
+            cursor.execute('ALTER TABLE test_results ADD COLUMN timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+            
+            # Копируем данные из колонки date в timestamp (если есть данные)
+            cursor.execute('UPDATE test_results SET timestamp = date WHERE timestamp IS NULL')
+            
+            logging.info("[MIGRATE] ✅ Колонка timestamp успешно добавлена в таблицу test_results")
+            return True
+            
+        except Exception as e:
+            logging.error(f"[MIGRATE] Ошибка при добавлении колонки timestamp: {e}")
+            return False
+
     def _get_connection(self):
         """Get database connection with foreign keys enabled."""
         conn = sqlite3.connect(self.db_path)

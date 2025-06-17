@@ -79,6 +79,46 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 ## 📋 Changelog
 
+### 2025-01-16: Исправлена ошибка отсутствующей колонки timestamp в таблице test_results
+
+**Проблема:**
+- При использовании функций прогресса и статистики появлялись ошибки: `no such column: timestamp`
+- Методы `get_user_test_results()` и `get_all_students_summary()` пытались обращаться к колонке `timestamp`
+- В таблице `test_results` была только колонка `date`, но код ожидал `timestamp`
+- Ошибки блокировали работу админ-панели и отображение прогресса учеников
+
+**Решение:**
+- ✅ Добавлена миграция `_migrate_test_results_timestamp()` для добавления колонки `timestamp`
+- ✅ Миграция автоматически выполняется при инициализации БД в методе `_init_db()`
+- ✅ Используется `ALTER TABLE ... ADD COLUMN` с копированием данных из `date` в `timestamp`
+- ✅ Добавлена обработка исключений для безопасности
+
+**Изменения в коде:**
+```sql
+-- Добавлено в метод _init_db():
+ALTER TABLE test_results ADD COLUMN timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+UPDATE test_results SET timestamp = date WHERE timestamp IS NULL;
+```
+
+**Результат:**
+- ✅ Бот запускается без ошибок типа `no such column: timestamp`
+- ✅ Методы `get_user_test_results()` и `get_all_students_summary()` работают корректно
+- ✅ Админ-панель отображает статистику учеников без ошибок
+- ✅ Прогресс и результаты тестов отображаются правильно
+- ✅ Обратная совместимость с существующими данными
+
+**Структура таблицы test_results после миграции:**
+```sql
+CREATE TABLE test_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    topic TEXT NOT NULL,
+    percentage REAL NOT NULL,
+    date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,      -- старая колонка
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP  -- новая колонка
+);
+```
+
 ### 2025-01-16: Очистка проекта от тестовых файлов и ненужных методов после завершения миграции
 
 **Удаленные тестовые файлы:**
