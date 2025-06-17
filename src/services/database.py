@@ -121,6 +121,360 @@ class Database:
             # Migrate user_errors table to new structure
             self._migrate_user_errors_table(cursor)
             
+            # Migrate questions to support many-to-many relationship
+            self._migrate_questions_to_many_to_many(cursor)
+            
+            # Add missing columns to existing tables if they don't exist
+            try:
+                cursor.execute('ALTER TABLE allowed_users ADD COLUMN current_topic TEXT')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+                
+            try:
+                cursor.execute('ALTER TABLE allowed_users ADD COLUMN last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            
+            try:
+                cursor.execute('ALTER TABLE allowed_users ADD COLUMN has_access BOOLEAN DEFAULT 1')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            
+            conn.commit()
+            
+            # Initialize base topic structure if empty
+            cursor.execute('SELECT COUNT(*) FROM main_topics')
+            if cursor.fetchone()[0] == 0:
+                self._initialize_base_topics()
+                
+            # Create Kazakh main topics if they don't exist
+            self.create_kazakh_main_topics()
+
+    def _migrate_user_errors_table(self, cursor):
+        """Migrate user_errors table to new structure with question_id."""
+        try:
+            # Check if old user_errors table exists and has old structure
+            cursor.execute("PRAGMA table_info(user_errors)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            # If table doesn't exist or already has new structure, create new table
+            if not columns or 'question_id' in columns:
+                if not columns:  # Table doesn't exist
+                    cursor.execute('''
+                        CREATE TABLE user_errors (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            user_id INTEGER NOT NULL,
+                            question_id INTEGER NOT NULL,
+                            topic TEXT NOT NULL,
+                            user_answer TEXT NOT NULL,
+                            correct_answer TEXT NOT NULL,
+                            error_count INTEGER DEFAULT 1,
+                            first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+                            UNIQUE(user_id, question_id)
+                        )
+                    ''')
+                    logging.info("Created new user_errors table with question_id structure")
+                return
+            
+            # Old structure exists, need to migrate
+            logging.info("Starting migration of user_errors table to new structure...")
+            
+            # Create new table with new structure
+            cursor.execute('''
+                CREATE TABLE user_errors_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    question_id INTEGER NOT NULL,
+                    topic TEXT NOT NULL,
+                    user_answer TEXT NOT NULL,
+                    correct_answer TEXT NOT NULL,
+                    error_count INTEGER DEFAULT 1,
+                    first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES allowed_users(user_id),
+                    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+                    UNIQUE(user_id, question_id)
+                )
+            ''')
+            
+            # Migrate data from old table to new table
+            # Old structure: user_id, topic, question_text, user_answer, correct_answer, explanation, error_count, timestamp
+            # New structure: user_id, question_id, topic, user_answer, correct_answer, error_count, first_error_date, last_error_date
+            cursor.execute('''
+                INSERT INTO user_errors_new (user_id, question_id, topic, user_answer, correct_answer, error_count, first_error_date, last_error_date)
+                SELECT 
+                    ue.user_id,
+                    COALESCE(q.id, -1) as question_id,  -- Use -1 for questions not found in questions table
+                    ue.topic,
+                    ue.user_answer,
+                    ue.correct_answer,
+                    ue.error_count,
+                    ue.timestamp as first_error_date,
+                    ue.timestamp as last_error_date
+                FROM user_errors ue
+                LEFT JOIN questions q ON q.question = ue.question_text
+                WHERE COALESCE(q.id, -1) != -1  -- Only migrate records where we found matching question
+            ''')
+            
+            migrated_count = cursor.rowcount
+            logging.info(f"Migrated {migrated_count} user_errors records to new structure")
+            
+            # Drop old table and rename new table
+            cursor.execute('DROP TABLE user_errors')
+            cursor.execute('ALTER TABLE user_errors_new RENAME TO user_errors')
+            
+            logging.info("Successfully migrated user_errors table to new structure")
+            
+        except Exception as e:
+            logging.error(f"Error during user_errors migration: {e}")
+            # If migration fails, create new empty table with new structure
+            try:
+                cursor.execute('DROP TABLE IF EXISTS user_errors_new')
+                cursor.execute('DROP TABLE IF EXISTS user_errors')
+                cursor.execute('''
+                    CREATE TABLE user_errors (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        question_id INTEGER NOT NULL,
+                        topic TEXT NOT NULL,
+                        user_answer TEXT NOT NULL,
+                        correct_answer TEXT NOT NULL,
+                        error_count INTEGER DEFAULT 1,
+                        first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+                        UNIQUE(user_id, question_id)
+                    )
+                ''')
+                logging.info("Created new user_errors table after migration failure")
+            except Exception as create_error:
+                logging.error(f"Failed to create new user_errors table: {create_error}")
+
+    def _migrate_questions_to_many_to_many(self, cursor):
+        """Migrate questions to support many-to-many relationship."""
+        try:
+            # Check if old questions table exists and has old structure
+            cursor.execute("PRAGMA table_info(questions)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            # If table doesn't exist or already has new structure, create new table
+            if not columns or 'topic' in columns:
+                if not columns:  # Table doesn't exist
+                    cursor.execute('''
+                        CREATE TABLE questions_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            topic TEXT NOT NULL,
+                            question TEXT NOT NULL,
+                            answer TEXT NOT NULL,
+                            explanation TEXT,
+                            incorrect_options TEXT,
+                            question_type TEXT DEFAULT 'standard',
+                            source TEXT DEFAULT 'db',
+                            image_path TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    ''')
+                    logging.info("Created new questions table with many-to-many relationship")
+                return
+            
+            # Old structure exists, need to migrate
+            logging.info("Starting migration of questions table to new structure...")
+            
+            # Create new table with new structure
+            cursor.execute('''
+                CREATE TABLE questions_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic TEXT NOT NULL,
+                    question TEXT NOT NULL,
+                    answer TEXT NOT NULL,
+                    explanation TEXT,
+                    incorrect_options TEXT,
+                    question_type TEXT DEFAULT 'standard',
+                    source TEXT DEFAULT 'db',
+                    image_path TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Migrate data from old table to new table
+            # Old structure: id, topic, question, answer, explanation, incorrect_options, question_type, source, image_path, timestamp
+            # New structure: id, topic, question, answer, explanation, incorrect_options, question_type, source, image_path, timestamp
+            cursor.execute('''
+                INSERT INTO questions_new (id, topic, question, answer, explanation, incorrect_options, question_type, source, image_path, created_at)
+                SELECT 
+                    q.id,
+                    q.topic,
+                    q.question,
+                    q.answer,
+                    q.explanation,
+                    q.incorrect_options,
+                    q.question_type,
+                    q.source,
+                    q.image_path,
+                    q.timestamp as created_at
+                FROM questions q
+            ''')
+            
+            migrated_count = cursor.rowcount
+            logging.info(f"Migrated {migrated_count} questions records to new structure")
+            
+            # Drop old table and rename new table
+            cursor.execute('DROP TABLE questions')
+            cursor.execute('ALTER TABLE questions_new RENAME TO questions')
+            
+            logging.info("Successfully migrated questions table to new structure")
+            
+        except Exception as e:
+            logging.error(f"Error during questions migration: {e}")
+            # If migration fails, create new empty table with new structure
+            try:
+                cursor.execute('DROP TABLE IF EXISTS questions_new')
+                cursor.execute('DROP TABLE IF EXISTS questions')
+                cursor.execute('''
+                    CREATE TABLE questions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        topic TEXT NOT NULL,
+                        question TEXT NOT NULL,
+                        answer TEXT NOT NULL,
+                        explanation TEXT,
+                        incorrect_options TEXT,
+                        question_type TEXT DEFAULT 'standard',
+                        source TEXT DEFAULT 'db',
+                        image_path TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                logging.info("Created new questions table after migration failure")
+            except Exception as create_error:
+                logging.error(f"Failed to create new questions table: {create_error}")
+
+    def _get_connection(self):
+        """Get database connection with foreign keys enabled."""
+import sqlite3
+import logging
+import os
+import sys
+from typing import List, Dict, Any, Optional, Tuple
+
+# Добавляем корневую директорию проекта в sys.path для импортов
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+class Database:
+    def __init__(self, db_path: str = None):
+        # Всегда использовать базу в корне проекта
+        if db_path is None:
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            db_path = os.path.join(project_root, "math_bot.db")
+        self.db_path = db_path
+        print(f"[LOG] Используется база данных: {os.path.abspath(self.db_path)}")
+        self._init_db()
+
+    def _init_db(self):
+        """Initialize database with all required tables."""
+        with sqlite3.connect(self.db_path) as conn:
+            # Enable foreign key constraints
+            conn.execute("PRAGMA foreign_keys = ON")
+            cursor = conn.cursor()
+            
+            # Create admins table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS admins (
+                    user_id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    full_name TEXT,
+                    is_super_admin BOOLEAN DEFAULT 0,
+                    created_by INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Create allowed_users table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS allowed_users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE,
+                    full_name TEXT,
+                    grade INTEGER,
+                    added_by INTEGER,
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT 0,
+                    user_id INTEGER,
+                    language TEXT DEFAULT "ru",
+                    current_topic TEXT,
+                    last_activity TIMESTAMP,
+                    FOREIGN KEY (added_by) REFERENCES admins(user_id)
+                )
+            ''')
+            
+            # Create unique index for user_id
+            cursor.execute('''
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_allowed_users_user_id 
+                ON allowed_users(user_id) WHERE user_id IS NOT NULL
+            ''')
+            
+            # Create main_topics table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS main_topics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    language TEXT DEFAULT "ru",
+                    is_active BOOLEAN DEFAULT 1,
+                    created_by INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (created_by) REFERENCES admins(user_id)
+                )
+            ''')
+            
+            # Create subtopics table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS subtopics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    main_topic_id INTEGER NOT NULL,
+                    description TEXT,
+                    is_active BOOLEAN DEFAULT 1,
+                    created_by INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (main_topic_id) REFERENCES main_topics(id),
+                    FOREIGN KEY (created_by) REFERENCES admins(user_id)
+                )
+            ''')
+            
+            # Create questions table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS questions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic TEXT NOT NULL,
+                    question TEXT NOT NULL,
+                    answer TEXT NOT NULL,
+                    explanation TEXT,
+                    incorrect_options TEXT,
+                    question_type TEXT DEFAULT 'standard',
+                    source TEXT DEFAULT 'db',
+                    image_path TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Create test_results table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS test_results (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    topic TEXT NOT NULL,
+                    percentage REAL NOT NULL,
+                    date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES allowed_users(user_id)
+                )
+            ''')
+            
+            # Migrate user_errors table to new structure
+            self._migrate_user_errors_table(cursor)
+            
             # Add missing columns to existing tables if they don't exist
             try:
                 cursor.execute('ALTER TABLE allowed_users ADD COLUMN current_topic TEXT')
