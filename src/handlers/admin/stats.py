@@ -29,7 +29,11 @@ class StatsHandler(AdminBaseHandler):
                 cursor.execute('SELECT COUNT(*) FROM questions')
                 total_questions = cursor.fetchone()[0]
                 
-                cursor.execute('SELECT COUNT(DISTINCT topic) FROM questions')
+                cursor.execute('''
+                    SELECT COUNT(DISTINCT s.name) 
+                    FROM questions q 
+                    JOIN subtopics s ON q.topic_id = s.id
+                ''')
                 unique_topics = cursor.fetchone()[0]
                 
                 # Общая статистика - только тесты учеников

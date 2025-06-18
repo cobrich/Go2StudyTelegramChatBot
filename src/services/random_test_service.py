@@ -354,7 +354,12 @@ class RandomTestService:
                         try:
                             with sqlite3.connect(self.db.db_path) as conn:
                                 cursor = conn.cursor()
-                                cursor.execute('SELECT topic FROM questions WHERE id = ? LIMIT 1', (question_id,))
+                                cursor.execute('''
+                                    SELECT s.name 
+                                    FROM questions q 
+                                    JOIN subtopics s ON q.topic_id = s.id 
+                                    WHERE q.id = ? LIMIT 1
+                                ''', (question_id,))
                                 result = cursor.fetchone()
                                 if result:
                                     question_topic = result[0]
@@ -366,8 +371,12 @@ class RandomTestService:
                         try:
                             with sqlite3.connect(self.db.db_path) as conn:
                                 cursor = conn.cursor()
-                                cursor.execute('SELECT topic FROM questions WHERE question = ? LIMIT 1', 
-                                             (question_text,))
+                                cursor.execute('''
+                                    SELECT s.name 
+                                    FROM questions q 
+                                    JOIN subtopics s ON q.topic_id = s.id 
+                                    WHERE q.question = ? LIMIT 1
+                                ''', (question_text,))
                                 result = cursor.fetchone()
                                 if result:
                                     question_topic = result[0]

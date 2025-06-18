@@ -1406,7 +1406,10 @@ class Database:
                 cursor.execute('DELETE FROM user_errors WHERE topic = ?', (topic_name,))
                 
                 # 3. Удаляем вопросы по теме
-                cursor.execute('DELETE FROM questions WHERE topic = ?', (topic_name,))
+                cursor.execute('''
+                    DELETE FROM questions 
+                    WHERE topic_id = ?
+                ''', (topic_id,))
                 
                 # 4. Удаляем саму тему
                 cursor.execute('DELETE FROM subtopics WHERE id = ?', (topic_id,))
@@ -2949,7 +2952,10 @@ class Database:
                 deleted_results = cursor.rowcount
                 
                 # 2. Удаляем вопросы
-                cursor.execute('DELETE FROM questions WHERE topic = ?', (topic_name,))
+                cursor.execute('''
+                    DELETE FROM questions 
+                    WHERE topic_id = ?
+                ''', (topic_id,))
                 deleted_questions = cursor.rowcount
                 
                 # 3. Удаляем саму тему

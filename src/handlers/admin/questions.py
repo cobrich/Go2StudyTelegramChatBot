@@ -104,7 +104,11 @@ class QuestionsHandler(AdminBaseHandler):
                 cursor.execute('SELECT COUNT(*) FROM questions')
                 total_questions = cursor.fetchone()[0]
                 
-                cursor.execute('SELECT COUNT(DISTINCT topic) FROM questions')
+                cursor.execute('''
+                    SELECT COUNT(DISTINCT s.name) 
+                    FROM questions q 
+                    JOIN subtopics s ON q.topic_id = s.id
+                ''')
                 unique_topics = cursor.fetchone()[0]
                 
                 cursor.execute('SELECT COUNT(*) FROM questions WHERE explanation IS NOT NULL AND explanation != ""')
@@ -112,9 +116,10 @@ class QuestionsHandler(AdminBaseHandler):
                 
                 # Статистика по темам
                 cursor.execute('''
-                    SELECT topic, COUNT(*) as count 
-                    FROM questions 
-                    GROUP BY topic 
+                    SELECT s.name as topic, COUNT(*) as count 
+                    FROM questions q
+                    JOIN subtopics s ON q.topic_id = s.id
+                    GROUP BY s.name 
                     ORDER BY count DESC 
                     LIMIT 10
                 ''')
@@ -210,15 +215,16 @@ class QuestionsHandler(AdminBaseHandler):
         query = update.callback_query
         await self.safe_answer_callback(query)
         
-        # Получаем список тем с количеством вопросов
+        # Получаем список тем с количеством вопросов для удаления
         try:
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    SELECT topic, COUNT(*) as count
-                    FROM questions 
-                    GROUP BY topic 
-                    ORDER BY topic
+                    SELECT s.name as topic, COUNT(*) as count
+                    FROM questions q
+                    JOIN subtopics s ON q.topic_id = s.id
+                    GROUP BY s.name 
+                    ORDER BY s.name
                 """)
                 topics_with_counts = cursor.fetchall()
         except Exception as e:
@@ -393,22 +399,17 @@ class QuestionsHandler(AdminBaseHandler):
                     # Определяем язык темы
                     topic_language = self.db.get_topic_language(topic)
                     
-                    detailed_explanation = ai_service.generate_detailed_explanation(
-                        question_text, 
-                        correct_answer_text, 
-                        topic,
-                        topic_language
-                    )
-                    logging.info(f"[AI] Объяснение сгенерировано для вопроса {idx} на языке {topic_language}: {detailed_explanation[:100]}...")
+                    explanation = ai_service.generate_detailed_explanation(question, correct_answer_text, topic, topic_language)
+                    logging.info(f"[AI] Объяснение сгенерировано для вопроса {idx} на языке {topic_language}: {explanation[:100]}...")
                 except Exception as e:
                     logging.error(f"[AI] Ошибка генерации объяснения для вопроса {idx}: {e}")
-                    detailed_explanation = f"Правильный ответ: {correct_answer_letter}) {correct_answer_text}"
+                    explanation = f"Правильный ответ: {correct_answer_letter}) {correct_answer_text}"
                 
                 db_question = {
                     'topic': topic,
                     'question': question_text,
                     'answer': correct_answer_text,
-                    'explanation': detailed_explanation,
+                    'explanation': explanation,
                     'incorrect_options': '\n'.join(incorrect_options),
                     'question_type': 'standard',
                     'source': 'pdf'
@@ -496,7 +497,12 @@ class QuestionsHandler(AdminBaseHandler):
         try:
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('SELECT COUNT(*) FROM questions WHERE topic = ?', (topic,))
+                cursor.execute('''
+                    SELECT COUNT(*) 
+                    FROM questions q
+                    JOIN subtopics s ON q.topic_id = s.id
+                    WHERE s.name = ?
+                ''', (topic,))
                 count = cursor.fetchone()[0]
         except Exception as e:
             logging.error(f"Error counting questions for topic {topic}: {e}")
@@ -536,10 +542,13 @@ class QuestionsHandler(AdminBaseHandler):
         try:
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('SELECT COUNT(*) FROM questions WHERE topic = ?', (topic,))
+                cursor.execute('SELECT COUNT(*) FROM questions WHERE topic_id = ?', (topic,))
                 count_before = cursor.fetchone()[0]
                 
-                cursor.execute('DELETE FROM questions WHERE topic = ?', (topic,))
+                cursor.execute('''
+                    DELETE FROM questions 
+                    WHERE topic_id = (SELECT id FROM subtopics WHERE name = ?)
+                ''', (topic,))
                 deleted_count = cursor.rowcount
                 conn.commit()
             
@@ -605,7 +614,12 @@ class QuestionsHandler(AdminBaseHandler):
         try:
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('SELECT topic, question FROM questions WHERE id = ?', (question_id,))
+                cursor.execute('''
+                    SELECT s.name as topic, q.question 
+                    FROM questions q 
+                    JOIN subtopics s ON q.topic_id = s.id 
+                    WHERE q.id = ?
+                ''', (question_id,))
                 result = cursor.fetchone()
         except Exception as e:
             logging.error(f"Error getting question {question_id}: {e}")
@@ -678,7 +692,12 @@ class QuestionsHandler(AdminBaseHandler):
             # Получаем информацию о вопросе
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('SELECT topic, question, answer FROM questions WHERE id = ?', (question_id,))
+                cursor.execute('''
+                    SELECT s.name as topic, q.question, q.answer 
+                    FROM questions q 
+                    JOIN subtopics s ON q.topic_id = s.id 
+                    WHERE q.id = ?
+                ''', (question_id,))
                 result = cursor.fetchone()
             
             if not result:
@@ -757,10 +776,11 @@ class QuestionsHandler(AdminBaseHandler):
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT id, topic, question, answer, explanation
-                    FROM questions 
-                    WHERE question LIKE ?
-                    ORDER BY topic, id
+                    SELECT q.id, s.name as topic, q.question, q.answer, q.explanation
+                    FROM questions q
+                    JOIN subtopics s ON q.topic_id = s.id
+                    WHERE q.question LIKE ?
+                    ORDER BY s.name, q.id
                     LIMIT 20
                 ''', (f'%{search_text}%',))
                 results = cursor.fetchall()
@@ -1033,7 +1053,12 @@ class QuestionsHandler(AdminBaseHandler):
         try:
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('SELECT topic, question, answer, explanation FROM questions WHERE id = ?', (question_id,))
+                cursor.execute('''
+                    SELECT s.name as topic, q.question, q.answer, q.explanation 
+                    FROM questions q 
+                    JOIN subtopics s ON q.topic_id = s.id 
+                    WHERE q.id = ?
+                ''', (question_id,))
                 result = cursor.fetchone()
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка получения вопроса: {e}")
@@ -1115,10 +1140,11 @@ class QuestionsHandler(AdminBaseHandler):
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT id, topic, question
-                    FROM questions 
-                    WHERE question LIKE ?
-                    ORDER BY topic, id
+                    SELECT q.id, s.name as topic, q.question
+                    FROM questions q
+                    JOIN subtopics s ON q.topic_id = s.id
+                    WHERE q.question LIKE ?
+                    ORDER BY s.name, q.id
                     LIMIT 10
                 ''', (f'%{search_text}%',))
                 results = cursor.fetchall()
