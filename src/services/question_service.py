@@ -461,48 +461,50 @@ class QuestionService:
                     if not task.get('question') or not task.get('answer') or not task.get('explanation'):
                         logging.warning(f"[get_or_generate_tasks] Skipping db_task with empty fields: {task}")
                         continue
+                    
                     if task['question'] not in existing_question_texts_to_exclude:
                         options = []
-                    if task['incorrect_options']:
-                        # Убеждаемся, что incorrect_options правильно разбиваются на список
-                        if isinstance(task['incorrect_options'], str):
-                            incorrect_opts = [opt.strip() for opt in task['incorrect_options'].split('\n') if opt.strip()]
-                        else:
-                            incorrect_opts = task['incorrect_options'] if isinstance(task['incorrect_options'], list) else []
-                        options.extend(incorrect_opts)
-                    
-                    # Убеждаемся, что options - это список строк
-                    options = [str(opt) for opt in options if opt and str(opt).strip()]
-                    
-                    # КРИТИЧЕСКИ ВАЖНО: Гарантируем наличие правильного ответа в вариантах
-                    if task['answer'] not in options:
-                        options.append(task['answer'])
-                    
-                    # Если вариантов мало, добавляем фиктивные
-                    if len(options) < 4:
-                        options.extend([f"Вариант {i}" for i in range(len(options), 4)])
-                    
-                    # Удаляем дубликаты, сохраняя порядок
-                    options = list(dict.fromkeys(options))
-                    random.shuffle(options)
-                    tasks.append((
-                        task['question'],
-                        task['answer'],
-                        task['explanation'],
-                        options,  # Теперь гарантированно список
-                        task.get('source', 'db'),
-                        task['image_path'] if 'image_path' in task else None,
-                        task.get('id')  # Добавляем question_id
-                    ))
-                    existing_question_texts_to_exclude.add(task['question'])
-                    logging.info(f"[get_or_generate_tasks] Added db_task: {task['question']}")
+                        if task['incorrect_options']:
+                            # Убеждаемся, что incorrect_options правильно разбиваются на список
+                            if isinstance(task['incorrect_options'], str):
+                                incorrect_opts = [opt.strip() for opt in task['incorrect_options'].split('\n') if opt.strip()]
+                            else:
+                                incorrect_opts = task['incorrect_options'] if isinstance(task['incorrect_options'], list) else []
+                            options.extend(incorrect_opts)
                         
+                        # Убеждаемся, что options - это список строк
+                        options = [str(opt) for opt in options if opt and str(opt).strip()]
+                        
+                        # КРИТИЧЕСКИ ВАЖНО: Гарантируем наличие правильного ответа в вариантах
+                        if task['answer'] not in options:
+                            options.append(task['answer'])
+                        
+                        # Если вариантов мало, добавляем фиктивные
+                        if len(options) < 4:
+                            options.extend([f"Вариант {i}" for i in range(len(options), 4)])
+                        
+                        # Удаляем дубликаты, сохраняя порядок
+                        options = list(dict.fromkeys(options))
+                        random.shuffle(options)
+                        tasks.append((
+                            task['question'],
+                            task['answer'],
+                            task['explanation'],
+                            options,  # Теперь гарантированно список
+                            task.get('source', 'db'),
+                            task['image_path'] if 'image_path' in task else None,
+                            task.get('id')  # Добавляем question_id
+                        ))
+                        existing_question_texts_to_exclude.add(task['question'])
+                        logging.info(f"[get_or_generate_tasks] Added db_task: {task['question']}")
+                            
                         # Останавливаемся если достигли лимита DB вопросов
-                    if len(tasks) >= max_db_questions:
-                        logging.info(f"[get_or_generate_tasks] Reached max DB questions limit: {max_db_questions}")
-                        break
-                else:
-                    logging.info(f"[get_or_generate_tasks] Skipped duplicate db_task: {task['question']}")
+                        if len(tasks) >= max_db_questions:
+                            logging.info(f"[get_or_generate_tasks] Reached max DB questions limit: {max_db_questions}")
+                            break
+                    else:
+                        # Если вопрос уже есть в исключениях, пропускаем его
+                        logging.info(f"[get_or_generate_tasks] Skipped duplicate db_task: {task['question']}")
 
             # 3. ОБЯЗАТЕЛЬНАЯ генерация ИИ вопросов (минимум min_ai_questions)
             ai_questions_needed = needed - len(tasks)
