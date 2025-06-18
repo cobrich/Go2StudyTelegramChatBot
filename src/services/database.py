@@ -907,33 +907,33 @@ class Database:
             # Записываем в БД в зависимости от доступных колонок
             if has_topic_id_column and has_topic_column:
                 # Обе колонки есть - заполняем обе для совместимости
-                cursor.execute('''
-                    INSERT INTO questions (topic_id, topic, question, answer, explanation, incorrect_options, question_type, source)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
+                        cursor.execute('''
+                            INSERT INTO questions (topic_id, topic, question, answer, explanation, incorrect_options, question_type, source)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
                     final_topic_id,
                     final_topic_name,
-                    question['question'],
-                    question['answer'],
-                    question['explanation'],
-                    question.get('incorrect_options', ''),
-                    question.get('question_type', 'standard'),
-                    question.get('source', 'db')
-                ))
+                            question['question'],
+                            question['answer'],
+                            question['explanation'],
+                            question.get('incorrect_options', ''),
+                            question.get('question_type', 'standard'),
+                            question.get('source', 'db')
+                        ))
             elif has_topic_id_column:
                 # Только topic_id колонка (после полной миграции)
-                cursor.execute('''
-                    INSERT INTO questions (topic_id, question, answer, explanation, incorrect_options, question_type, source)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (
+                        cursor.execute('''
+                            INSERT INTO questions (topic_id, question, answer, explanation, incorrect_options, question_type, source)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ''', (
                     final_topic_id,
-                    question['question'],
-                    question['answer'],
-                    question['explanation'],
-                    question.get('incorrect_options', ''),
-                    question.get('question_type', 'standard'),
-                    question.get('source', 'db')
-                ))
+                            question['question'],
+                            question['answer'],
+                            question['explanation'],
+                            question.get('incorrect_options', ''),
+                            question.get('question_type', 'standard'),
+                            question.get('source', 'db')
+                        ))
             elif has_topic_column:
                 # Только старая колонка topic (обратная совместимость)
                 cursor.execute('''
@@ -1778,10 +1778,10 @@ class Database:
                     FROM subtopics s
                     JOIN main_topics m ON s.main_topic_id = m.id
                     LEFT JOIN (
-                        SELECT topic, COUNT(*) as question_count
+                        SELECT topic_id, COUNT(*) as question_count
                         FROM questions
-                        GROUP BY topic
-                    ) q ON s.name = q.topic
+                        GROUP BY topic_id
+                    ) q ON s.id = q.topic_id
                     WHERE s.is_active = 1 AND m.is_active = 1
                     ORDER BY m.order_index, s.order_index
                 ''')
@@ -1793,10 +1793,10 @@ class Database:
                     FROM subtopics s
                     JOIN main_topics m ON s.main_topic_id = m.id
                     LEFT JOIN (
-                        SELECT topic, COUNT(*) as question_count
+                        SELECT topic_id, COUNT(*) as question_count
                         FROM questions
-                        GROUP BY topic
-                    ) q ON s.name = q.topic
+                        GROUP BY topic_id
+                    ) q ON s.id = q.topic_id
                     ORDER BY m.order_index, s.order_index
                 ''')
             
@@ -2378,17 +2378,17 @@ class Database:
                 
                 # Получаем вопросы через связь с темами по языку main_topics
                 query = '''
-                    SELECT DISTINCT q.id, q.topic, q.question, q.answer, q.explanation, 
+                    SELECT DISTINCT q.id, q.topic_id, st.name as topic_name, q.question, q.answer, q.explanation, 
                            q.incorrect_options, q.question_type, q.source, q.image_path
                     FROM questions q
-                    JOIN subtopics st ON q.topic = st.name
+                    JOIN subtopics st ON q.topic_id = st.id
                     JOIN main_topics mt ON st.main_topic_id = mt.id
                     WHERE mt.language = ?
                 '''
                 params = [user_language]
                 
                 if topic:
-                    query += ' AND q.topic = ?'
+                    query += ' AND st.name = ?'
                     params.append(topic)
                 
                 cursor.execute(query, params)
@@ -2397,14 +2397,15 @@ class Database:
                 return [
                     {
                         'id': row[0],
-                        'topic': row[1],
-                        'question': row[2],
-                        'answer': row[3],
-                        'explanation': row[4],
-                        'incorrect_options': row[5],
-                        'question_type': row[6],
-                        'source': row[7],
-                        'image_path': row[8]
+                        'topic_id': row[1],
+                        'topic': row[2],  # topic_name
+                        'question': row[3],
+                        'answer': row[4],
+                        'explanation': row[5],
+                        'incorrect_options': row[6],
+                        'question_type': row[7],
+                        'source': row[8],
+                        'image_path': row[9]
                     }
                     for row in rows
                 ]
@@ -2457,7 +2458,7 @@ class Database:
                            COUNT(q.id) as question_count, st.id
                     FROM main_topics mt
                     JOIN subtopics st ON mt.id = st.main_topic_id
-                    LEFT JOIN questions q ON st.name = q.topic
+                    LEFT JOIN questions q ON st.id = q.topic_id
                 '''
                 
                 if active_only:
@@ -2680,7 +2681,7 @@ class Database:
                            COUNT(q.id) as question_count
                     FROM main_topics mt
                     LEFT JOIN subtopics st ON mt.id = st.main_topic_id
-                    LEFT JOIN questions q ON st.name = q.topic
+                    LEFT JOIN questions q ON st.id = q.topic_id
                     WHERE mt.language = ?
                 '''
                 params = [language]

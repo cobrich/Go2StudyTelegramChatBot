@@ -162,7 +162,7 @@ class TopicManager:
                         COUNT(q.id) as question_count
                     FROM subtopics st
                     JOIN main_topics mt ON st.main_topic_id = mt.id
-                    LEFT JOIN questions q ON st.name = q.topic
+                    LEFT JOIN questions q ON st.id = q.topic_id
                     WHERE st.is_active = 1 AND mt.is_active = 1
                     GROUP BY st.id, st.name, mt.name, st.is_active, st.created_at
                     ORDER BY mt.order_index, st.order_index
@@ -199,7 +199,7 @@ class TopicManager:
                         COUNT(q.id) as total_questions
                     FROM main_topics mt
                     LEFT JOIN subtopics st ON mt.id = st.main_topic_id AND st.is_active = 1
-                    LEFT JOIN questions q ON st.name = q.topic
+                    LEFT JOIN questions q ON st.id = q.topic_id
                     WHERE mt.is_active = 1
                     GROUP BY mt.id, mt.name, mt.order_index
                     ORDER BY mt.order_index
