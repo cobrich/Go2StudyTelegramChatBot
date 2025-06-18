@@ -705,7 +705,7 @@ class Database:
             
             # Try to use topic_id approach first (more efficient)
             cursor.execute('''
-                SELECT q.id, q.question, q.answer, q.explanation, q.incorrect_options, 
+                SELECT DISTINCT q.id, q.question, q.answer, q.explanation, q.incorrect_options, 
                        q.question_type, q.source, q.image_path, s.name as topic_name
                 FROM questions q
                 JOIN subtopics s ON q.topic_id = s.id
@@ -715,6 +715,11 @@ class Database:
             ''', (topic, limit))
             
             results = cursor.fetchall()
+            
+            # If no results with topic_id, fallback to old method (should not happen after migration)
+            if not results:
+                logging.warning(f"No questions found with topic_id for topic '{topic}', this should not happen after migration")
+                return []
             
             # If no results with topic_id, fallback to old method
             if not results:

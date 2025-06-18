@@ -775,15 +775,25 @@ class QuestionsHandler(AdminBaseHandler):
         try:
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
+                # Получаем все вопросы и фильтруем в Python для корректной работы с казахскими буквами
                 cursor.execute('''
                     SELECT q.id, s.name as topic, q.question, q.answer, q.explanation
                     FROM questions q
                     JOIN subtopics s ON q.topic_id = s.id
-                    WHERE q.question LIKE ?
                     ORDER BY s.name, q.id
-                    LIMIT 20
-                ''', (f'%{search_text}%',))
-                results = cursor.fetchall()
+                ''')
+                all_results = cursor.fetchall()
+                
+                # Фильтруем результаты в Python для корректной работы с казахскими буквами
+                search_lower = search_text.lower()
+                results = []
+                for row in all_results:
+                    question_lower = row[2].lower()  # row[2] это q.question
+                    if search_lower in question_lower:
+                        results.append(row)
+                        if len(results) >= 20:  # Ограничиваем до 20 результатов
+                            break
+                            
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка поиска: {e}")
             context.user_data.pop('admin_action', None)
@@ -1015,14 +1025,25 @@ class QuestionsHandler(AdminBaseHandler):
         try:
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
+                # Получаем все вопросы и фильтруем в Python для корректной работы с казахскими буквами
                 cursor.execute('''
-                    SELECT id, topic, question, answer, explanation
-                    FROM questions 
-                    WHERE question LIKE ?
-                    ORDER BY topic, id
-                    LIMIT 10
-                ''', (f'%{search_text}%',))
-                results = cursor.fetchall()
+                    SELECT q.id, s.name as topic, q.question, q.answer, q.explanation
+                    FROM questions q
+                    JOIN subtopics s ON q.topic_id = s.id
+                    ORDER BY s.name, q.id
+                ''')
+                all_results = cursor.fetchall()
+                
+                # Фильтруем результаты в Python для корректной работы с казахскими буквами
+                search_lower = search_text.lower()
+                results = []
+                for row in all_results:
+                    question_lower = row[2].lower()  # row[2] это q.question
+                    if search_lower in question_lower:
+                        results.append(row)
+                        if len(results) >= 10:  # Ограничиваем до 10 результатов
+                            break
+                            
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка поиска: {e}")
             context.user_data.pop('admin_action', None)
@@ -1139,15 +1160,25 @@ class QuestionsHandler(AdminBaseHandler):
         try:
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
+                # Получаем все вопросы и фильтруем в Python для корректной работы с казахскими буквами
                 cursor.execute('''
                     SELECT q.id, s.name as topic, q.question
                     FROM questions q
                     JOIN subtopics s ON q.topic_id = s.id
-                    WHERE q.question LIKE ?
                     ORDER BY s.name, q.id
-                    LIMIT 10
-                ''', (f'%{search_text}%',))
-                results = cursor.fetchall()
+                ''')
+                all_results = cursor.fetchall()
+                
+                # Фильтруем результаты в Python для корректной работы с казахскими буквами
+                search_lower = search_text.lower()
+                results = []
+                for row in all_results:
+                    question_lower = row[2].lower()  # row[2] это q.question
+                    if search_lower in question_lower:
+                        results.append(row)
+                        if len(results) >= 10:  # Ограничиваем до 10 результатов
+                            break
+                            
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка поиска: {e}")
             context.user_data.pop('admin_action', None)

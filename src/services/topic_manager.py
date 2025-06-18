@@ -241,9 +241,26 @@ class TopicManager:
             # Перемещаем все вопросы
             with self.db._get_connection() as conn:
                 cursor = conn.cursor()
+                
+                # Получаем topic_id для обеих тем
+                cursor.execute('SELECT id FROM subtopics WHERE name = ?', (source_topic,))
+                source_result = cursor.fetchone()
+                if not source_result:
+                    logging.error(f"Source topic '{source_topic}' not found")
+                    return False
+                source_id = source_result[0]
+                
+                cursor.execute('SELECT id FROM subtopics WHERE name = ?', (target_topic,))
+                target_result = cursor.fetchone()
+                if not target_result:
+                    logging.error(f"Target topic '{target_topic}' not found")
+                    return False
+                target_id = target_result[0]
+                
+                # Перемещаем все вопросы с source_topic_id на target_topic_id
                 cursor.execute(
-                    'UPDATE questions SET topic = ? WHERE topic = ?',
-                    (target_topic, source_topic)
+                    'UPDATE questions SET topic_id = ? WHERE topic_id = ?',
+                    (target_id, source_id)
                 )
                 
                 # Деактивируем исходную тему
@@ -280,7 +297,7 @@ class TopicManager:
                         COUNT(q.id) as question_count
                     FROM subtopics st
                     JOIN main_topics mt ON st.main_topic_id = mt.id
-                    LEFT JOIN questions q ON st.name = q.topic
+                    LEFT JOIN questions q ON st.id = q.topic_id
                     GROUP BY st.id, st.name, mt.name, st.is_active, st.created_at
                     ORDER BY mt.order_index, st.order_index
                 ''')
