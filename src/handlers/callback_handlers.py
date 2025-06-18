@@ -96,14 +96,8 @@ class CallbackHandlers(BaseHandler):
             await query.message.edit_text(get_message('preparing_questions', user_language), reply_markup=keyboard)
         except Exception:
             # Если не удалось отредактировать, отправляем новое сообщение
-            try:
-                # Создаем клавиатуру с кнопкой "В главное меню"
-                keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
-                
-                await query.message.reply_text(get_message('preparing_questions', user_language), reply_markup=keyboard)
-            except Exception:
-                keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
-                await query.message.reply_text(get_message('preparing_questions', user_language), reply_markup=keyboard)
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
+            await query.message.reply_text(get_message('preparing_questions', user_language), reply_markup=keyboard)
         
         chat_id = query.message.chat_id
         
