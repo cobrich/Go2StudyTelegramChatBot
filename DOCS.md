@@ -1227,3 +1227,61 @@ except Exception:
 - Мягкая валидация для обеспечения нужного количества вопросов
 
 ### 2024-12-19: Исправление критической ошибки UnboundLocalError в question_service.py
+
+### 🔧 Исправление критической ошибки UnboundLocalError в генерации вопросов (17.01.2025)
+
+**Проблема**: При выборе темы для теста возникала ошибка `UnboundLocalError: local variable 'error_tasks' referenced before assignment` в файле `src/services/question_service.py` на строке 290.
+
+**Причина**: Серьезная структурная ошибка в функции `get_or_generate_tasks()`:
+
+```python
+if is_retake:
+    # Переменная error_tasks определяется только здесь
+    error_tasks = self.db.get_error_tasks_for_user(user_id, topic, limit=needed)
+    
+for task in error_tasks:  # ← ОШИБКА: цикл находится ВНЕ блока if is_retake
+    # Обработка error_tasks
+    ...
+else:
+    # Блок else для if is_retake
+    ...
+```
+
+Когда `is_retake=False`, переменная `error_tasks` не определялась, но цикл `for task in error_tasks:` все равно выполнялся, что приводило к `UnboundLocalError`.
+
+**Решение**: Исправлена структура кода - перенесен цикл обработки `error_tasks` внутрь соответствующих блоков `if is_retake` и `else`:
+
+```python
+if is_retake:
+    # ЛОГИКА ПЕРЕСДАЧИ
+    error_tasks = self.db.get_error_tasks_for_user(user_id, topic, limit=needed)
+    
+    for task in error_tasks:  # ← Теперь внутри if is_retake
+        # Обработка error_tasks для пересдачи
+        ...
+        
+    # Генерация дополнительных AI вопросов для пересдачи
+    ...
+else:
+    # ЛОГИКА ОБЫЧНОГО ТЕСТА
+    error_tasks = self.db.get_error_tasks_for_user(user_id, topic, limit=max_db_questions)
+    
+    for task in error_tasks:  # ← Теперь внутри else
+        # Обработка error_tasks для обычного теста
+        ...
+        
+    # Генерация AI вопросов для обычного теста
+    ...
+```
+
+**Дополнительные улучшения**:
+- Оптимизирована логика генерации AI вопросов - ограничены попытки генерации
+- Улучшена обработка вариантов ответов - гарантируется наличие правильного ответа
+- Добавлена мягкая валидация для обеспечения минимального количества вопросов
+
+**Результат**: 
+- ✅ Устранена критическая ошибка `UnboundLocalError`
+- ✅ Корректная работа всех типов тестов (обычный, пересдача, случайный)
+- ✅ Оптимизирована производительность генерации вопросов
+
+### 🔧 Исправление дублирования сообщения "Подготавливаем вопросы.." (17.01.2025)
