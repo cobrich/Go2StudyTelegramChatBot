@@ -1051,7 +1051,7 @@ class CallbackHandlers(BaseHandler):
         try:
             await query.message.edit_text(preparing_text)
         except Exception:
-            preparing_msg = await query.message.reply_text(preparing_text)
+            await query.message.reply_text(preparing_text)
         
         # Generate retry test using RandomTestService
         from services.random_test_service import RandomTestService
@@ -1060,16 +1060,11 @@ class CallbackHandlers(BaseHandler):
         
         if not questions_data:
             error_text = get_message('retry_test_error', user_language)
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
             try:
-                await query.message.edit_text(
-                    error_text,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
-                )
+                await query.message.edit_text(error_text, reply_markup=keyboard)
             except Exception:
-                await query.message.reply_text(
-                    error_text,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
-                )
+                await query.message.reply_text(error_text, reply_markup=keyboard)
             return
         
         # Convert questions data to the format expected by the test system
@@ -1146,25 +1141,15 @@ class CallbackHandlers(BaseHandler):
             except Exception as e:
                 logging.error(f"Error displaying retry test question: {e}")
                 error_text = get_message('question_display_error', user_language)
+                keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
                 try:
-                    await query.message.edit_text(
-                        error_text,
-                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
-                    )
+                    await query.message.edit_text(error_text, reply_markup=keyboard)
                 except Exception:
-                    await query.message.reply_text(
-                        error_text,
-                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
-                    )
+                    await query.message.reply_text(error_text, reply_markup=keyboard)
         else:
             error_text = get_message('questions_load_error', user_language)
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
             try:
-                await query.message.edit_text(
-                    error_text,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
-                )
+                await query.message.edit_text(error_text, reply_markup=keyboard)
             except Exception:
-                await query.message.reply_text(
-                    error_text,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
-                ) 
+                await query.message.reply_text(error_text, reply_markup=keyboard) 
