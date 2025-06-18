@@ -322,11 +322,6 @@ ALTER TABLE subtopics ADD COLUMN order_index INTEGER DEFAULT 0
 - Проект полностью готов к продакшену, план реализации выполнен
 - Вся необходимая информация перенесена в основную документацию
 
-**Причина:**
-- План реализации был актуален на этапе разработки
-- Все задачи из плана успешно выполнены
-- Проект готов к продакшену, дальнейшее планирование не требуется
-
 ### 2024-12-28: Исправление требования точно 3 неправильных ответов
 
 **Проблема:**
@@ -931,6 +926,7 @@ question = {
 -- Новая структура (только нужные поля)
 CREATE TABLE questions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_id INTEGER NOT NULL,
     question TEXT NOT NULL,
     answer TEXT NOT NULL,
     explanation TEXT,
@@ -938,9 +934,9 @@ CREATE TABLE questions (
     question_type TEXT DEFAULT 'standard',
     source TEXT DEFAULT 'db',
     image_path TEXT,
-    topic_id INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (topic_id) REFERENCES subtopics(id)
-)
+);
 ```
 
 ### ✅ Доказательство решения

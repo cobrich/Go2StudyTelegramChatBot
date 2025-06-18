@@ -134,6 +134,9 @@ class Database:
             # Migrate questions to support topic_id instead of topic name
             self._migrate_questions_topic_id(cursor)
             
+            # Remove topic column after successful migration to topic_id
+            self._migrate_remove_topic_column(cursor)
+            
             # Add timestamp column to test_results for compatibility
             self._migrate_test_results_timestamp(cursor)
             
@@ -981,10 +984,15 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT question, answer, explanation, topic
-                FROM questions
+                SELECT q.id, q.question, q.answer, q.explanation, q.incorrect_options,
+                       q.question_type, q.source, q.image_path, s.name as topic_name,
+                       q.topic_id, q.created_at
+                FROM questions q
+                LEFT JOIN subtopics s ON q.topic_id = s.id
+                ORDER BY q.id DESC
             ''')
-            columns = ['question', 'answer', 'explanation', 'topic']
+            columns = ['id', 'question', 'answer', 'explanation', 'incorrect_options',
+                      'question_type', 'source', 'image_path', 'topic', 'topic_id', 'created_at']
             return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     def get_recent_unique_topics(self, user_id: int, unique_limit: int = 5, history_limit: int = 20) -> list:
@@ -3172,10 +3180,12 @@ class Database:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, question, answer, explanation, topic, source
-                FROM questions 
-                WHERE source = 'ai'
-                ORDER BY id DESC
+                SELECT q.id, q.question, q.answer, q.explanation, s.name as topic_name, 
+                       q.source, q.topic_id, q.created_at
+                FROM questions q
+                LEFT JOIN subtopics s ON q.topic_id = s.id
+                WHERE q.source = 'ai'
+                ORDER BY q.id DESC
             ''')
             
             columns = [description[0] for description in cursor.description]
@@ -3183,6 +3193,10 @@ class Database:
             
             for row in cursor.fetchall():
                 question_dict = dict(zip(columns, row))
+                # Переименовываем topic_name в topic для совместимости
+                if 'topic_name' in question_dict:
+                    question_dict['topic'] = question_dict['topic_name']
+                    del question_dict['topic_name']
                 results.append(question_dict)
             
             return results
@@ -3482,3 +3496,64 @@ class Database:
             return False
         
         return self.rename_topic_by_id(topic_id, new_name)
+
+    def _migrate_remove_topic_column(self, cursor):
+        """
+        Миграция: удаление колонки topic из таблицы questions после успешной миграции на topic_id
+        """
+        try:
+            # Проверяем есть ли колонка topic
+            cursor.execute("PRAGMA table_info(questions)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'topic' not in columns:
+                logging.info("[MIGRATE] Колонка topic уже удалена из таблицы questions")
+                return True
+            
+            # Проверяем что все вопросы имеют topic_id
+            cursor.execute('SELECT COUNT(*) FROM questions WHERE topic_id IS NULL')
+            orphan_count = cursor.fetchone()[0]
+            
+            if orphan_count > 0:
+                logging.warning(f"[MIGRATE] Найдено {orphan_count} вопросов без topic_id. Пропускаем удаление колонки topic")
+                return False
+            
+            logging.info("[MIGRATE] Удаляем колонку topic из таблицы questions...")
+            
+            # В SQLite нельзя удалить колонку напрямую, нужно пересоздать таблицу
+            cursor.execute('''
+                CREATE TABLE questions_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id INTEGER NOT NULL,
+                    question TEXT NOT NULL,
+                    answer TEXT NOT NULL,
+                    explanation TEXT,
+                    incorrect_options TEXT,
+                    question_type TEXT DEFAULT 'standard',
+                    source TEXT DEFAULT 'db',
+                    image_path TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (topic_id) REFERENCES subtopics(id)
+                )
+            ''')
+            
+            # Копируем данные в новую таблицу
+            cursor.execute('''
+                INSERT INTO questions_new 
+                (id, topic_id, question, answer, explanation, incorrect_options, 
+                 question_type, source, image_path, created_at)
+                SELECT id, topic_id, question, answer, explanation, incorrect_options,
+                       question_type, source, image_path, created_at
+                FROM questions
+            ''')
+            
+            # Удаляем старую таблицу и переименовываем новую
+            cursor.execute('DROP TABLE questions')
+            cursor.execute('ALTER TABLE questions_new RENAME TO questions')
+            
+            logging.info("[MIGRATE] ✅ Колонка topic успешно удалена из таблицы questions")
+            return True
+            
+        except Exception as e:
+            logging.error(f"[MIGRATE] Ошибка при удалении колонки topic: {e}")
+            return False
