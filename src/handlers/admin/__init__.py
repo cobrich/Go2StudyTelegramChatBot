@@ -222,7 +222,8 @@ class AdminHandlers(AdminBaseHandler):
         return await self.questions.generate_ai_explanation_for_edit(update, context)
     
     async def manual_explanation_for_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await self.questions.manual_explanation_for_edit(update, context)
+        """Делегирование к QuestionsHandler."""
+        await self.questions.manual_explanation_for_edit(update, context)
 
     # === ДЕЛЕГИРОВАНИЕ МЕТОДОВ УПРАВЛЕНИЯ АДМИНАМИ ===
     
@@ -496,4 +497,35 @@ class AdminHandlers(AdminBaseHandler):
         return await self.sections.delete_section_execute(update, context)
     
     async def confirm_add_student(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        return await super().confirm_add_student(update, context) 
+        return await super().confirm_add_student(update, context)
+
+    # NEW EDIT QUESTION DELEGATION METHODS
+    async def handle_edit_question_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Делегирование к QuestionsHandler."""
+        query = update.callback_query
+        question_id = query.data.split('_')[-1]  # Извлекаем ID из callback_data
+        await self.questions.handle_edit_question_id(update, context, question_id)
+    
+    async def edit_question_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Делегирование к QuestionsHandler."""
+        await self.questions.edit_question_topic_start(update, context)
+    
+    async def edit_question_topic_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Делегирование к QuestionsHandler."""
+        await self.questions.edit_question_topic_select(update, context)
+    
+    async def edit_question_text_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Делегирование к QuestionsHandler."""
+        await self.questions.edit_question_text_start(update, context)
+    
+    async def edit_question_correct_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Делегирование к QuestionsHandler."""
+        await self.questions.edit_question_correct_start(update, context)
+    
+    async def edit_question_options_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Делегирование к QuestionsHandler."""
+        await self.questions.edit_question_options_start(update, context)
+    
+    async def edit_question_explanation_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Делегирование к QuestionsHandler."""
+        await self.questions.edit_question_explanation_start(update, context) 

@@ -1071,10 +1071,13 @@ class QuestionsHandler(AdminBaseHandler):
 
     async def handle_edit_question_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE, question_id_text: str) -> None:
         """Обработка ID вопроса для редактирования."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
         try:
             question_id = int(question_id_text.strip())
         except ValueError:
-            await update.message.reply_text("❌ Введите корректный ID вопроса (число):")
+            await query.edit_message_text("❌ Введите корректный ID вопроса (число):")
             return
         
         # Получаем информацию о вопросе
@@ -1089,12 +1092,12 @@ class QuestionsHandler(AdminBaseHandler):
                 ''', (question_id,))
                 result = cursor.fetchone()
         except Exception as e:
-            await update.message.reply_text(f"❌ Ошибка получения вопроса: {e}")
+            await query.edit_message_text(f"❌ Ошибка получения вопроса: {e}")
             context.user_data.pop('admin_action', None)
             return
         
         if not result:
-            await update.message.reply_text(f"❌ Вопрос с ID {question_id} не найден. Попробуйте другой ID:")
+            await query.edit_message_text(f"❌ Вопрос с ID {question_id} не найден. Попробуйте другой ID:")
             return
         
         topic, question, answer, explanation, incorrect_options, topic_id = result
@@ -1142,7 +1145,7 @@ class QuestionsHandler(AdminBaseHandler):
         # Сохраняем ID вопроса в контексте для дальнейшего использования
         context.user_data['editing_question_id'] = question_id
         context.user_data.pop('admin_action', None)
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def handle_edit_question_explanation(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_explanation: str) -> None:
         """Обработка нового объяснения вопроса."""
