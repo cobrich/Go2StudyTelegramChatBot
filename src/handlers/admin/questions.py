@@ -1147,11 +1147,11 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Добавляем правильный ответ к вариантам для полного отображения
         all_options = []
-        if correct_answer:
-            all_options.append(correct_answer.strip())
+        if answer:
+            all_options.append(answer.strip())
         if options:
             for opt in options:
-                if opt.strip() and opt.strip() not in [correct_answer.strip() if correct_answer else ""]:
+                if opt.strip() and opt.strip() not in [answer.strip() if answer else ""]:
                     all_options.append(opt.strip())
         
         text = f"✏️ <b>Редактирование вопроса ID {question_id}</b>\n\n"
