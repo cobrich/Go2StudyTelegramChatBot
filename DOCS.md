@@ -79,6 +79,31 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 ## 📋 Changelog
 
+### 2025-01-19: Исправлена ошибка импорта "Import src.bot_factory could not be resolved"
+
+**Проблема**: В файле `src/bot_universal.py` был импорт `from src.bot_factory import create_universal_bot`, но модуль `src/bot_factory.py` не существовал, что приводило к ошибке импорта.
+
+**Причина**: Функция `create_universal_bot` была определена в файле `src/bot_compat.py`, но импортировалась из несуществующего `src/bot_factory.py`.
+
+**Решение**:
+- ✅ **Создан модуль `src/bot_factory.py`**: Новый файл, который импортирует и экспортирует функцию из `bot_compat.py`
+- ✅ **Исправлен импорт конфигурации**: Изменен `from src.config import TELEGRAM_BOT_TOKEN` на `from config.constants import TELEGRAM_BOT_TOKEN`
+
+**🔧 Изменения:**
+```python
+# src/bot_factory.py (новый файл)
+from .bot_compat import create_universal_bot
+__all__ = ['create_universal_bot']
+
+# src/bot_universal.py (исправлен импорт)
+from config.constants import TELEGRAM_BOT_TOKEN  # было: from src.config import TELEGRAM_BOT_TOKEN
+```
+
+**📊 Результат**:
+- ✅ **Ошибка импорта устранена**: Модуль `src.bot_factory` теперь существует и доступен
+- ✅ **Правильная структура**: Чистое разделение между совместимостью (`bot_compat.py`) и фабрикой (`bot_factory.py`)
+- ✅ **Корректная конфигурация**: Импорт из правильного пути конфигурации
+
 ### 2025-01-19: Завершена полная очистка устаревших функций миграции после пересоздания БД
 
 **Проблема**: После удаления файла БД и её пересоздания в коде остались устаревшие функции миграции, которые больше не нужны и могут вызывать путаницу.

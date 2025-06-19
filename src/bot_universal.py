@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
 """
-Universal Go2Study Bot - Works with any python-telegram-bot version
+Go2Study Bot - Universal Version
+Supports both synchronous and asynchronous python-telegram-bot versions
 """
 
+import os
+import sys
 import logging
-from bot_compat import create_universal_bot
+from pathlib import Path
+
+# Add the src directory to Python path
+current_dir = Path(__file__).parent
+src_dir = current_dir
+sys.path.insert(0, str(src_dir))
+
+from src.bot_factory import create_universal_bot
 from config.constants import TELEGRAM_BOT_TOKEN
 from services.database import Database
 from services.question_service import QuestionService
@@ -266,6 +276,16 @@ def setup_handlers(application):
         callback_handlers.handle_back_to_results,
         pattern="^back_to_results$"
     ))
+
+    # Add callback query handler for logging
+    async def log_callback_query(update, context):
+        query = update.callback_query
+        if query:
+            logging.info(f"[CALLBACK] Received: '{query.data}' from user {query.from_user.id}")
+        else:
+            logging.warning("[CALLBACK] No callback query in update!")
+    
+    application.add_handler(CallbackQueryHandler(log_callback_query), group=-1)
 
 def main():
     """Main function"""
