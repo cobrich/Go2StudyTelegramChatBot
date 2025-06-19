@@ -1314,3 +1314,9 @@ results = [row for row in all_results if search_lower in row[2].lower()]
 - 📱 Удобный интерфейс без необходимости запоминать ID
 
 ### 2024-12-26 - Улучшенная система редактирования вопросов
+
+### 2024-12-19
+- **ИСПРАВЛЕНО**: Добавлены недостающие обработчики для редактирования вопросов в основной файл `bot.py`
+  - Ранее обработчики `edit_question_select_`, `edit_question_topic_`, `edit_topic_select_`, `edit_question_text_`, `edit_question_correct_`, `edit_question_options_`, `edit_question_explanation_` были определены только в `bot_universal.py`
+  - Теперь все обработчики доступны в основном файле `bot.py`
+  - Исправлена проблема с нефункционирующими кнопками редактирования вопросов

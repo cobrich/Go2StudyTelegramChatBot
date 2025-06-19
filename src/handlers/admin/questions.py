@@ -1022,6 +1022,8 @@ class QuestionsHandler(AdminBaseHandler):
 
     async def handle_edit_question_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_text: str) -> None:
         """Обработка поиска вопроса для редактирования."""
+        logging.info(f"[EDIT_SEARCH] Starting search for: '{search_text}'")
+        
         try:
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
@@ -1033,6 +1035,7 @@ class QuestionsHandler(AdminBaseHandler):
                     ORDER BY s.name, q.id
                 ''')
                 all_results = cursor.fetchall()
+                logging.info(f"[EDIT_SEARCH] Found {len(all_results)} total questions in database")
                 
                 # Фильтруем результаты в Python для корректной работы с казахскими буквами
                 search_lower = search_text.lower()
@@ -1044,12 +1047,16 @@ class QuestionsHandler(AdminBaseHandler):
                         if len(results) >= 10:  # Ограничиваем до 10 результатов
                             break
                             
+                logging.info(f"[EDIT_SEARCH] Filtered to {len(results)} matching questions")
+                            
         except Exception as e:
+            logging.error(f"[EDIT_SEARCH] Database error: {e}")
             await update.message.reply_text(f"❌ Ошибка поиска: {e}")
             context.user_data.pop('admin_action', None)
             return
         
         if not results:
+            logging.info(f"[EDIT_SEARCH] No results found for search: '{search_text}'")
             await update.message.reply_text(f"🔍 По запросу '<i>{search_text}</i>' вопросы не найдены.\n\nПопробуйте другой поисковый запрос:", parse_mode='HTML')
             return
         
@@ -1058,25 +1065,40 @@ class QuestionsHandler(AdminBaseHandler):
         
         for q_id, topic, question, answer, explanation in results:
             short_question = question[:50] + "..." if len(question) > 50 else question
+            callback_data = f"edit_question_select_{q_id}"
+            logging.info(f"[EDIT_SEARCH] Creating button for question {q_id} with callback_data: '{callback_data}'")
             keyboard.append([InlineKeyboardButton(
                 f"✏️ ID {q_id}: {short_question}",
-                callback_data=f"edit_question_select_{q_id}"
+                callback_data=callback_data
             )])
         
         keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="edit_question")])
         reply_markup = InlineKeyboardMarkup(keyboard)
         
+        logging.info(f"[EDIT_SEARCH] Sending message with {len(keyboard)} buttons")
         context.user_data.pop('admin_action', None)
         await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def handle_edit_question_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE, question_id_text: str) -> None:
         """Обработка ID вопроса для редактирования."""
+        logging.info(f"[EDIT_ID] Called with question_id_text: '{question_id_text}'")
+        logging.info(f"[EDIT_ID] Update type: {type(update)}")
+        
         query = update.callback_query
-        await self.safe_answer_callback(query)
+        if query:
+            logging.info(f"[EDIT_ID] Callback query data: '{query.data}'")
+            logging.info(f"[EDIT_ID] Callback query from user: {query.from_user.id}")
+        else:
+            logging.error("[EDIT_ID] No callback query found in update!")
+            return
+        
+        # Не отвечаем на callback здесь, так как это уже сделано в делегирующей функции
         
         try:
             question_id = int(question_id_text.strip())
-        except ValueError:
+            logging.info(f"[EDIT_ID] Parsed question_id: {question_id}")
+        except ValueError as e:
+            logging.error(f"[EDIT_ID] Failed to parse question_id from '{question_id_text}': {e}")
             await query.edit_message_text("❌ Введите корректный ID вопроса (число):")
             return
         

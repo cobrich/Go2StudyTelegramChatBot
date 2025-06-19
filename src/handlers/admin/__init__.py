@@ -13,6 +13,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from services.database import Database
 from services.question_service import QuestionService
+import logging
 
 class AdminHandlers(AdminBaseHandler):
     """Главный класс для обработки всех админ-функций."""
@@ -503,8 +504,31 @@ class AdminHandlers(AdminBaseHandler):
     async def handle_edit_question_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Делегирование к QuestionsHandler."""
         query = update.callback_query
+        logging.info(f"[ADMIN_DELEGATE] handle_edit_question_id called")
+        logging.info(f"[ADMIN_DELEGATE] Update object: {update}")
+        logging.info(f"[ADMIN_DELEGATE] Callback data: '{query.data if query else 'No query'}'")
+        
+        if not query:
+            logging.error("[ADMIN_DELEGATE] No callback query in update!")
+            return
+            
+        # Отвечаем на callback сразу, чтобы убрать "loading" состояние
+        try:
+            await query.answer()
+            logging.info("[ADMIN_DELEGATE] Callback answered successfully")
+        except Exception as e:
+            logging.error(f"[ADMIN_DELEGATE] Failed to answer callback: {e}")
+            
         question_id = query.data.split('_')[-1]  # Извлекаем ID из callback_data
-        await self.questions.handle_edit_question_id(update, context, question_id)
+        logging.info(f"[ADMIN_DELEGATE] Extracted question_id: '{question_id}'")
+        
+        try:
+            await self.questions.handle_edit_question_id(update, context, question_id)
+            logging.info(f"[ADMIN_DELEGATE] Successfully delegated to questions handler")
+        except Exception as e:
+            logging.error(f"[ADMIN_DELEGATE] Error in delegation: {e}")
+            import traceback
+            logging.error(f"[ADMIN_DELEGATE] Traceback: {traceback.format_exc()}")
     
     async def edit_question_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Делегирование к QuestionsHandler."""

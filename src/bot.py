@@ -320,6 +320,36 @@ def main() -> None:
         pattern="^edit_question$"
     ))
     
+    # New edit question handlers - ДОБАВЛЯЕМ НЕДОСТАЮЩИЕ ОБРАБОТЧИКИ
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.handle_edit_question_id,
+        pattern="^edit_question_select_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_question_topic_start,
+        pattern="^edit_question_topic_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_question_topic_select,
+        pattern="^edit_topic_select_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_question_text_start,
+        pattern="^edit_question_text_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_question_correct_start,
+        pattern="^edit_question_correct_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_question_options_start,
+        pattern="^edit_question_options_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_question_explanation_start,
+        pattern="^edit_question_explanation_"
+    ))
+    
     # AI explanation generation handlers for question editing
     application.add_handler(CallbackQueryHandler(
         admin_handlers.generate_ai_explanation_for_edit,
