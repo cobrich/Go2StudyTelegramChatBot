@@ -377,19 +377,29 @@ class QuestionService:
                                     options.extend([opt.strip() for opt in incorrect_options.split('\n') if opt.strip()])
                             
                             options = [str(opt) for opt in options if opt and str(opt).strip()]
-                            if len(options) < 2:
+                            if len(options) < 2:  # Добавляем фиктивные варианты если их мало
                                 options.extend([f"Вариант {i}" for i in range(len(options), 4)])
                             
                             if correct_answer not in options:
                                 options.append(correct_answer)
-                            options = list(dict.fromkeys(options))
+                            options = list(dict.fromkeys(options))  # remove duplicates, preserve order
+                            
+                            # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ФОРМИРОВАНИЯ ВАРИАНТОВ
+                            logging.info(f"🔍 [AI ВОПРОС] Формирование вариантов для: {question[:50]}...")
+                            logging.info(f"  ✅ Правильный ответ: '{correct_answer}' (тип: {type(correct_answer)})")
+                            logging.info(f"  ❌ Неправильные варианты: {incorrect_options}")
+                            logging.info(f"  📋 Финальные варианты ДО перемешивания: {options}")
+                            
                             random.shuffle(options)
+                            
+                            logging.info(f"  🔄 Финальные варианты ПОСЛЕ перемешивания: {options}")
+                            logging.info(f"  🎯 Правильный ответ остался: '{correct_answer}' в позиции {options.index(correct_answer) if correct_answer in options else 'НЕ НАЙДЕН!'}")
                             
                             new_tasks.append((
                                 question,
                                 correct_answer,
                                 explanation,
-                                options,
+                                options,  # Теперь гарантированно список
                                 'ai_retake',
                                 None
                             ))
@@ -591,7 +601,18 @@ class QuestionService:
                             if correct_answer not in options:
                                 options.append(correct_answer)
                             options = list(dict.fromkeys(options))  # remove duplicates, preserve order
+                            
+                            # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ФОРМИРОВАНИЯ ВАРИАНТОВ
+                            logging.info(f"🔍 [AI ВОПРОС] Формирование вариантов для: {question[:50]}...")
+                            logging.info(f"  ✅ Правильный ответ: '{correct_answer}' (тип: {type(correct_answer)})")
+                            logging.info(f"  ❌ Неправильные варианты: {incorrect_options}")
+                            logging.info(f"  📋 Финальные варианты ДО перемешивания: {options}")
+                            
                             random.shuffle(options)
+                            
+                            logging.info(f"  🔄 Финальные варианты ПОСЛЕ перемешивания: {options}")
+                            logging.info(f"  🎯 Правильный ответ остался: '{correct_answer}' в позиции {options.index(correct_answer) if correct_answer in options else 'НЕ НАЙДЕН!'}")
+                            
                             new_tasks.append((
                                 question,
                                 correct_answer,

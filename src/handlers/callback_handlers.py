@@ -222,7 +222,20 @@ class CallbackHandlers(BaseHandler):
         
         correct_answer = question[1]
         selected_answer = options[selected_index] if 0 <= selected_index < len(options) else None
+        
+        # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+        logging.info(f"🔍 [ОТЛАДКА ОТВЕТОВ] Пользователь {user_id}:")
+        logging.info(f"  📋 Все варианты ответов: {options}")
+        logging.info(f"  🎯 Выбранный индекс: {selected_index}")
+        logging.info(f"  👤 Выбранный ответ: '{selected_answer}'")
+        logging.info(f"  ✅ Правильный ответ: '{correct_answer}'")
+        logging.info(f"  🔄 Типы данных: selected='{type(selected_answer)}', correct='{type(correct_answer)}'")
+        logging.info(f"  📏 Длины строк: selected={len(str(selected_answer)) if selected_answer else 0}, correct={len(str(correct_answer))}")
+        logging.info(f"  🔍 Побайтовое сравнение: selected={repr(selected_answer)}, correct={repr(correct_answer)}")
+        
         is_correct = selected_answer == correct_answer
+        logging.info(f"  ⚖️ Результат сравнения: {is_correct}")
+        
         # Store result
         if 'user_results' not in context.user_data:
             context.user_data['user_results'] = []
@@ -789,10 +802,13 @@ class CallbackHandlers(BaseHandler):
         user_answer = None
         correct_answer = question[1]
         explanation = None
+        is_correct = False  # Добавляем переменную для отслеживания правильности
+        
         for result in user_results:
             if result['q_num'] == prev_index:
                 user_answer = result['user_answer']
                 explanation = result['explanation']
+                is_correct = result['is_correct']  # Получаем реальный результат
                 break
         
         topic = self.get_user_data(context).get('current_topic', '')
@@ -800,8 +816,14 @@ class CallbackHandlers(BaseHandler):
                                   topic=topic, current=prev_index + 1, total=len(questions), question=question[0])
         
         if user_answer is not None:
-            question_text += f"\n\n{get_message('explanation_user_answer', user_language, answer=user_answer)}"
-            question_text += f"{get_message('explanation_correct_answer', user_language, answer=correct_answer)}"
+            # Показываем правильную иконку в зависимости от результата
+            if is_correct:
+                question_text += f"\n\n✅ <b>Ваш ответ:</b> {user_answer}\n"
+                question_text += f"✅ <b>Правильный ответ:</b> {correct_answer}\n\n"
+            else:
+                question_text += f"\n\n❌ <b>Ваш ответ:</b> {user_answer}\n"
+                question_text += f"✅ <b>Правильный ответ:</b> {correct_answer}\n\n"
+            
             if explanation:
                 question_text += f"\n\n{get_message('explanation_text', user_language, explanation=explanation)}"
             # Только навигация
@@ -850,10 +872,13 @@ class CallbackHandlers(BaseHandler):
         user_answer = None
         correct_answer = question[1]
         explanation = None
+        is_correct = False  # Добавляем переменную для отслеживания правильности
+        
         for result in user_results:
             if result['q_num'] == next_index:
                 user_answer = result['user_answer']
                 explanation = result['explanation']
+                is_correct = result['is_correct']  # Получаем реальный результат
                 break
         
         topic = self.get_user_data(context).get('current_topic', '')
@@ -861,8 +886,14 @@ class CallbackHandlers(BaseHandler):
                                   topic=topic, current=next_index + 1, total=len(questions), question=question[0])
         
         if user_answer is not None:
-            question_text += f"\n\n{get_message('explanation_user_answer', user_language, answer=user_answer)}"
-            question_text += f"{get_message('explanation_correct_answer', user_language, answer=correct_answer)}"
+            # Показываем правильную иконку в зависимости от результата
+            if is_correct:
+                question_text += f"\n\n✅ <b>Ваш ответ:</b> {user_answer}\n"
+                question_text += f"✅ <b>Правильный ответ:</b> {correct_answer}\n\n"
+            else:
+                question_text += f"\n\n❌ <b>Ваш ответ:</b> {user_answer}\n"
+                question_text += f"✅ <b>Правильный ответ:</b> {correct_answer}\n\n"
+            
             if explanation:
                 question_text += f"\n\n{get_message('explanation_text', user_language, explanation=explanation)}"
             # Только навигация
