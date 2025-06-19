@@ -62,6 +62,7 @@ class Database:
                     language TEXT DEFAULT "ru",
                     current_topic TEXT,
                     last_activity TIMESTAMP,
+                    has_access BOOLEAN DEFAULT 1,
                     FOREIGN KEY (added_by) REFERENCES admins(user_id)
                 )
             ''')
@@ -81,6 +82,7 @@ class Database:
                     is_active BOOLEAN DEFAULT 1,
                     created_by INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    order_index INTEGER DEFAULT 0,
                     FOREIGN KEY (created_by) REFERENCES admins(user_id)
                 )
             ''')
@@ -95,16 +97,17 @@ class Database:
                     is_active BOOLEAN DEFAULT 1,
                     created_by INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    order_index INTEGER DEFAULT 0,
                     FOREIGN KEY (main_topic_id) REFERENCES main_topics(id),
                     FOREIGN KEY (created_by) REFERENCES admins(user_id)
                 )
             ''')
             
-            # Create questions table
+            # Create questions table with correct structure (topic_id instead of topic)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS questions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    topic TEXT NOT NULL,
+                    topic_id INTEGER NOT NULL,
                     question TEXT NOT NULL,
                     answer TEXT NOT NULL,
                     explanation TEXT,
@@ -112,7 +115,8 @@ class Database:
                     question_type TEXT DEFAULT 'standard',
                     source TEXT DEFAULT 'db',
                     image_path TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (topic_id) REFERENCES subtopics(id)
                 )
             ''')
             
@@ -124,94 +128,14 @@ class Database:
                     topic TEXT NOT NULL,
                     percentage REAL NOT NULL,
                     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES allowed_users(user_id)
                 )
             ''')
             
-            # Migrate user_errors table to new structure
-            self._migrate_user_errors_table(cursor)
-            
-            # Migrate questions to support topic_id instead of topic name
-            self._migrate_questions_topic_id(cursor)
-            
-            # Remove topic column after successful migration to topic_id
-            self._migrate_remove_topic_column(cursor)
-            
-            # Add timestamp column to test_results for compatibility
-            self._migrate_test_results_timestamp(cursor)
-            
-            # Add missing columns to existing tables if they don't exist
-            try:
-                cursor.execute('ALTER TABLE allowed_users ADD COLUMN current_topic TEXT')
-            except sqlite3.OperationalError:
-                pass  # Column already exists
-                
-            try:
-                cursor.execute('ALTER TABLE allowed_users ADD COLUMN last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-            except sqlite3.OperationalError:
-                pass  # Column already exists
-            
-            try:
-                cursor.execute('ALTER TABLE allowed_users ADD COLUMN has_access BOOLEAN DEFAULT 1')
-            except sqlite3.OperationalError:
-                pass  # Column already exists
-            
-            # Add order_index column to main_topics if it doesn't exist
-            try:
-                cursor.execute('ALTER TABLE main_topics ADD COLUMN order_index INTEGER DEFAULT 0')
-            except sqlite3.OperationalError:
-                pass  # Column already exists
-            
-            # Add order_index column to subtopics if it doesn't exist
-            try:
-                cursor.execute('ALTER TABLE subtopics ADD COLUMN order_index INTEGER DEFAULT 0')
-            except sqlite3.OperationalError:
-                pass  # Column already exists
-            
-            conn.commit()
-            
-            # Initialize base topic structure if empty
-            cursor.execute('SELECT COUNT(*) FROM main_topics')
-            if cursor.fetchone()[0] == 0:
-                pass  # Method removed, create_kazakh_main_topics handles initialization
-                
-            # Create Russian and Kazakh main topics if they don't exist
-            self._initialize_main_topics()
-
-    def _migrate_user_errors_table(self, cursor):
-        """Migrate user_errors table to new structure with question_id."""
-        try:
-            # Check if old user_errors table exists and has old structure
-            cursor.execute("PRAGMA table_info(user_errors)")
-            columns = [column[1] for column in cursor.fetchall()]
-            
-            # If table doesn't exist or already has new structure, create new table
-            if not columns or 'question_id' in columns:
-                if not columns:  # Table doesn't exist
-                    cursor.execute('''
-                        CREATE TABLE user_errors (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            user_id INTEGER NOT NULL,
-                            question_id INTEGER NOT NULL,
-                            topic TEXT NOT NULL,
-                            user_answer TEXT NOT NULL,
-                            correct_answer TEXT NOT NULL,
-                            error_count INTEGER DEFAULT 1,
-                            first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
-                            UNIQUE(user_id, question_id)
-                        )
-                    ''')
-                    logging.info("Created new user_errors table with question_id structure")
-                return
-            
-            # Old structure exists, need to migrate
-            logging.info("Starting migration of user_errors table to new structure...")
-            
-            # Create new table with new structure
+            # Create user_errors table with correct structure
             cursor.execute('''
-                CREATE TABLE user_errors_new (
+                CREATE TABLE IF NOT EXISTS user_errors (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
                     question_id INTEGER NOT NULL,
@@ -221,274 +145,18 @@ class Database:
                     error_count INTEGER DEFAULT 1,
                     first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES allowed_users(user_id),
                     FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
                     UNIQUE(user_id, question_id)
                 )
             ''')
             
-            # Migrate data from old table to new table
-            # Old structure: user_id, topic, question_text, user_answer, correct_answer, explanation, error_count, timestamp
-            # New structure: user_id, question_id, topic, user_answer, correct_answer, error_count, first_error_date, last_error_date
-            cursor.execute('''
-                INSERT INTO user_errors_new (user_id, question_id, topic, user_answer, correct_answer, error_count, first_error_date, last_error_date)
-                SELECT 
-                    ue.user_id,
-                    COALESCE(q.id, -1) as question_id,  -- Use -1 for questions not found in questions table
-                    ue.topic,
-                    ue.user_answer,
-                    ue.correct_answer,
-                    ue.error_count,
-                    ue.timestamp as first_error_date,
-                    ue.timestamp as last_error_date
-                FROM user_errors ue
-                LEFT JOIN questions q ON q.question = ue.question_text
-                WHERE COALESCE(q.id, -1) != -1  -- Only migrate records where we found matching question
-            ''')
+            conn.commit()
             
-            migrated_count = cursor.rowcount
-            logging.info(f"Migrated {migrated_count} user_errors records to new structure")
-            
-            # Drop old table and rename new table
-            cursor.execute('DROP TABLE user_errors')
-            cursor.execute('ALTER TABLE user_errors_new RENAME TO user_errors')
-            
-            logging.info("Successfully migrated user_errors table to new structure")
-            
-        except Exception as e:
-            logging.error(f"Error during user_errors migration: {e}")
-            # If migration fails, create new empty table with new structure
-            try:
-                cursor.execute('DROP TABLE IF EXISTS user_errors_new')
-                cursor.execute('DROP TABLE IF EXISTS user_errors')
-                cursor.execute('''
-                    CREATE TABLE user_errors (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER NOT NULL,
-                        question_id INTEGER NOT NULL,
-                        topic TEXT NOT NULL,
-                        user_answer TEXT NOT NULL,
-                        correct_answer TEXT NOT NULL,
-                        error_count INTEGER DEFAULT 1,
-                        first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
-                        UNIQUE(user_id, question_id)
-                    )
-                ''')
-                logging.info("Created new user_errors table after migration failure")
-            except Exception as create_error:
-                logging.error(f"Failed to create new user_errors table: {create_error}")
-
-    def _migrate_questions_to_many_to_many(self, cursor):
-        """Migrate questions to support many-to-many relationship."""
-        try:
-            # Check if old questions table exists and has old structure
-            cursor.execute("PRAGMA table_info(questions)")
-            columns = [column[1] for column in cursor.fetchall()]
-            
-            # If table doesn't exist or already has new structure, create new table
-            if not columns or 'topic' in columns:
-                if not columns:  # Table doesn't exist
-                    cursor.execute('''
-                        CREATE TABLE questions_new (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            topic TEXT NOT NULL,
-                            question TEXT NOT NULL,
-                            answer TEXT NOT NULL,
-                            explanation TEXT,
-                            incorrect_options TEXT,
-                            question_type TEXT DEFAULT 'standard',
-                            source TEXT DEFAULT 'db',
-                            image_path TEXT,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    ''')
-                    logging.info("Created new questions table with many-to-many relationship")
-                return
-            
-            # Old structure exists, need to migrate
-            logging.info("Starting migration of questions table to new structure...")
-            
-            # Create new table with new structure
-            cursor.execute('''
-                CREATE TABLE questions_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    topic TEXT NOT NULL,
-                    question TEXT NOT NULL,
-                    answer TEXT NOT NULL,
-                    explanation TEXT,
-                    incorrect_options TEXT,
-                    question_type TEXT DEFAULT 'standard',
-                    source TEXT DEFAULT 'db',
-                    image_path TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            # Migrate data from old table to new table
-            # Old structure: id, topic, question, answer, explanation, incorrect_options, question_type, source, image_path, timestamp
-            # New structure: id, topic, question, answer, explanation, incorrect_options, question_type, source, image_path, timestamp
-            cursor.execute('''
-                INSERT INTO questions_new (id, topic, question, answer, explanation, incorrect_options, question_type, source, image_path, created_at)
-                SELECT 
-                    q.id,
-                    q.topic,
-                    q.question,
-                    q.answer,
-                    q.explanation,
-                    q.incorrect_options,
-                    q.question_type,
-                    q.source,
-                    q.image_path,
-                    q.timestamp as created_at
-                FROM questions q
-            ''')
-            
-            migrated_count = cursor.rowcount
-            logging.info(f"Migrated {migrated_count} questions records to new structure")
-            
-            # Drop old table and rename new table
-            cursor.execute('DROP TABLE questions')
-            cursor.execute('ALTER TABLE questions_new RENAME TO questions')
-            
-            logging.info("Successfully migrated questions table to new structure")
-            
-        except Exception as e:
-            logging.error(f"Error during questions migration: {e}")
-            # If migration fails, create new empty table with new structure
-            try:
-                cursor.execute('DROP TABLE IF EXISTS questions_new')
-                cursor.execute('DROP TABLE IF EXISTS questions')
-                cursor.execute('''
-                    CREATE TABLE questions (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        topic TEXT NOT NULL,
-                        question TEXT NOT NULL,
-                        answer TEXT NOT NULL,
-                        explanation TEXT,
-                        incorrect_options TEXT,
-                        question_type TEXT DEFAULT 'standard',
-                        source TEXT DEFAULT 'db',
-                        image_path TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                logging.info("Created new questions table after migration failure")
-            except Exception as create_error:
-                logging.error(f"Failed to create new questions table: {create_error}")
-
-    def _migrate_questions_topic_id(self, cursor):
-        """
-        Миграция: добавление topic_id в таблицу questions и заполнение данных
-        """
-        try:
-            # Проверяем есть ли уже колонка topic_id
-            cursor.execute("PRAGMA table_info(questions)")
-            columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'topic_id' in columns:
-                logging.info("[MIGRATE] Колонка topic_id уже существует в таблице questions")
-                return True
-            
-            logging.info("[MIGRATE] Добавляем колонку topic_id в таблицу questions...")
-            
-            # Добавляем колонку topic_id
-            cursor.execute('ALTER TABLE questions ADD COLUMN topic_id INTEGER')
-            
-            # Заполняем topic_id на основе существующих названий тем
-            logging.info("[MIGRATE] Заполняем topic_id для существующих вопросов...")
-            cursor.execute('''
-                UPDATE questions 
-                SET topic_id = (
-                    SELECT id FROM subtopics 
-                    WHERE subtopics.name = questions.topic
-                )
-                WHERE topic_id IS NULL
-            ''')
-            updated_questions = cursor.rowcount
-            logging.info(f"[MIGRATE] Обновлено {updated_questions} вопросов с topic_id")
-            
-            # Найдем вопросы которые не смогли связать с темами (орфанные)
-            cursor.execute('SELECT DISTINCT topic FROM questions WHERE topic_id IS NULL')
-            orphan_topics = cursor.fetchall()
-            
-            if orphan_topics:
-                logging.info(f"[MIGRATE] Найдено {len(orphan_topics)} орфанных тем, создаем их...")
-                
-                for (topic_name,) in orphan_topics:
-                    # Создаем недостающую тему с дефолтным main_topic_id = 1
-                    cursor.execute('''
-                        INSERT INTO subtopics (name, main_topic_id, is_active) 
-                        VALUES (?, 1, 1)
-                    ''', (topic_name,))
-                    
-                    new_topic_id = cursor.lastrowid
-                    logging.info(f"[MIGRATE] Создана тема '{topic_name}' с ID {new_topic_id}")
-                    
-                    # Обновляем topic_id для вопросов этой темы
-                    cursor.execute('''
-                        UPDATE questions 
-                        SET topic_id = ? 
-                        WHERE topic = ? AND topic_id IS NULL
-                    ''', (new_topic_id, topic_name))
-                    
-                    updated = cursor.rowcount
-                    logging.info(f"[MIGRATE] Связано {updated} вопросов с темой '{topic_name}'")
-            
-            # Добавляем FOREIGN KEY constraint (будет работать для новых записей)
-            # Примечание: в SQLite нельзя добавить FK к существующей таблице,
-            # но мы можем использовать его в новых операциях
-            
-            # Финальная проверка
-            cursor.execute('SELECT COUNT(*) FROM questions WHERE topic_id IS NULL')
-            remaining_orphans = cursor.fetchone()[0]
-            
-            if remaining_orphans > 0:
-                logging.warning(f"[MIGRATE] Остались {remaining_orphans} вопросов без topic_id")
-                return False
-            
-            logging.info("[MIGRATE] ✅ Миграция topic_id завершена успешно")
-            return True
-            
-        except Exception as e:
-            logging.error(f"[MIGRATE] Ошибка при миграции topic_id: {e}")
-            return False
-
-    def _migrate_test_results_timestamp(self, cursor):
-        """
-        Миграция: добавление колонки timestamp в таблицу test_results
-        для совместимости с методами, которые ожидают timestamp вместо date
-        """
-        try:
-            # Проверяем существует ли колонка timestamp
-            cursor.execute("PRAGMA table_info(test_results)")
-            columns_info = cursor.fetchall()
-            columns = [column[1] for column in columns_info]
-            
-            if 'timestamp' in columns:
-                logging.info("[MIGRATE] Колонка timestamp уже существует в таблице test_results")
-                return True
-            
-            # Добавляем колонку timestamp
-            logging.info("[MIGRATE] Добавляю колонку timestamp в таблицу test_results...")
-            cursor.execute('ALTER TABLE test_results ADD COLUMN timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-            
-            # Копируем данные из колонки date в timestamp (если есть данные)
-            cursor.execute('UPDATE test_results SET timestamp = date WHERE timestamp IS NULL')
-            
-            logging.info("[MIGRATE] ✅ Колонка timestamp успешно добавлена в таблицу test_results")
-            return True
-            
-        except Exception as e:
-            logging.error(f"[MIGRATE] Ошибка при добавлении колонки timestamp: {e}")
-            return False
-
-    def _get_connection(self):
-        """Get database connection with foreign keys enabled."""
-        conn = sqlite3.connect(self.db_path)
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+            # Initialize base topic structure if empty
+            cursor.execute('SELECT COUNT(*) FROM main_topics')
+            if cursor.fetchone()[0] == 0:
+                # Create Russian and Kazakh main topics if they don't exist
+                self._initialize_main_topics()
 
     def set_user_active(self, user_id: int, topic: str) -> None:
         """Set user as active with current topic."""
@@ -3410,7 +3078,7 @@ class Database:
     # === END NEW TOPIC_ID METHODS ===
 
     def _get_connection(self):
-        """Get database connection with foreign keys enabled."""
+        """Get database connection with foreign key constraints enabled."""
         conn = sqlite3.connect(self.db_path)
         conn.execute("PRAGMA foreign_keys = ON")
         return conn
@@ -3490,64 +3158,3 @@ class Database:
             return False
         
         return self.rename_topic_by_id(topic_id, new_name)
-
-    def _migrate_remove_topic_column(self, cursor):
-        """
-        Миграция: удаление колонки topic из таблицы questions после успешной миграции на topic_id
-        """
-        try:
-            # Проверяем есть ли колонка topic
-            cursor.execute("PRAGMA table_info(questions)")
-            columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'topic' not in columns:
-                logging.info("[MIGRATE] Колонка topic уже удалена из таблицы questions")
-                return True
-            
-            # Проверяем что все вопросы имеют topic_id
-            cursor.execute('SELECT COUNT(*) FROM questions WHERE topic_id IS NULL')
-            orphan_count = cursor.fetchone()[0]
-            
-            if orphan_count > 0:
-                logging.warning(f"[MIGRATE] Найдено {orphan_count} вопросов без topic_id. Пропускаем удаление колонки topic")
-                return False
-            
-            logging.info("[MIGRATE] Удаляем колонку topic из таблицы questions...")
-            
-            # В SQLite нельзя удалить колонку напрямую, нужно пересоздать таблицу
-            cursor.execute('''
-                CREATE TABLE questions_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    topic_id INTEGER NOT NULL,
-                    question TEXT NOT NULL,
-                    answer TEXT NOT NULL,
-                    explanation TEXT,
-                    incorrect_options TEXT,
-                    question_type TEXT DEFAULT 'standard',
-                    source TEXT DEFAULT 'db',
-                    image_path TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (topic_id) REFERENCES subtopics(id)
-                )
-            ''')
-            
-            # Копируем данные в новую таблицу
-            cursor.execute('''
-                INSERT INTO questions_new 
-                (id, topic_id, question, answer, explanation, incorrect_options, 
-                 question_type, source, image_path, created_at)
-                SELECT id, topic_id, question, answer, explanation, incorrect_options,
-                       question_type, source, image_path, created_at
-                FROM questions
-            ''')
-            
-            # Удаляем старую таблицу и переименовываем новую
-            cursor.execute('DROP TABLE questions')
-            cursor.execute('ALTER TABLE questions_new RENAME TO questions')
-            
-            logging.info("[MIGRATE] ✅ Колонка topic успешно удалена из таблицы questions")
-            return True
-            
-        except Exception as e:
-            logging.error(f"[MIGRATE] Ошибка при удалении колонки topic: {e}")
-            return False
