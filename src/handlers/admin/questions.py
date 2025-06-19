@@ -1148,7 +1148,11 @@ class QuestionsHandler(AdminBaseHandler):
             labels = ['A', 'B', 'C', 'D']
             for i, option in enumerate(options[:4]):
                 if option:
-                    text += f"  {labels[i]}: {option}\n"
+                    # Проверяем, является ли этот вариант правильным ответом
+                    if option.strip() == answer.strip():
+                        text += f"  ✅ {labels[i]}) {option} <i>(правильный)</i>\n"
+                    else:
+                        text += f"  ❌ {labels[i]}) {option}\n"
         
         text += f"<b>Объяснение:</b> {(explanation or 'Отсутствует')[:200]}{'...' if explanation and len(explanation) > 200 else ''}\n\n"
         text += "Выберите что хотите изменить:"
