@@ -23,7 +23,7 @@ class StatsHandler(AdminBaseHandler):
                 cursor = conn.cursor()
                 
                 # Общая статистика
-                cursor.execute('SELECT COUNT(*) FROM allowed_users WHERE is_active = 1')
+                cursor.execute('SELECT COUNT(*) FROM allowed_users WHERE has_access = 1')
                 active_students = cursor.fetchone()[0]
                 
                 cursor.execute('SELECT COUNT(*) FROM questions')

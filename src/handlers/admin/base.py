@@ -78,7 +78,7 @@ class AdminBaseHandler(BaseHandler):
                 cursor = conn.cursor()
                 
                 # Количество учеников
-                cursor.execute('SELECT COUNT(*) FROM allowed_users WHERE is_active = 1')
+                cursor.execute('SELECT COUNT(*) FROM allowed_users WHERE has_access = 1')
                 students_count = cursor.fetchone()[0]
                 
                 # Количество тем

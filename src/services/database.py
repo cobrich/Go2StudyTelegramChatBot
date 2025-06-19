@@ -1668,7 +1668,7 @@ class Database:
                            AVG(tr.percentage) as avg_score
                     FROM allowed_users au
                     LEFT JOIN test_results tr ON au.user_id = tr.user_id
-                    WHERE au.grade = ? AND au.is_active = 1
+                    WHERE au.grade = ? AND au.has_access = 1
                     GROUP BY au.grade
                 ''', (grade,))
             else:
@@ -1681,7 +1681,7 @@ class Database:
                            AVG(tr.percentage) as avg_score
                     FROM allowed_users au
                     LEFT JOIN test_results tr ON au.user_id = tr.user_id
-                    WHERE au.is_active = 1
+                    WHERE au.has_access = 1
                     GROUP BY au.grade
                     ORDER BY au.grade
                 ''')
