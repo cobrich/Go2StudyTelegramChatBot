@@ -1053,14 +1053,21 @@ class QuestionsHandler(AdminBaseHandler):
             await update.message.reply_text(f"🔍 По запросу '<i>{search_text}</i>' вопросы не найдены.\n\nПопробуйте другой поисковый запрос:", parse_mode='HTML')
             return
         
-        text = f"🔍 <b>Найдено {len(results)} вопросов</b>\n\nВведите ID вопроса для редактирования:\n\n"
+        text = f"🔍 <b>Найдено {len(results)} вопросов</b>\n\nВыберите вопрос для редактирования:\n\n"
+        keyboard = []
         
-        for i, (q_id, topic, question, answer, explanation) in enumerate(results, 1):
-            short_question = question[:80] + "..." if len(question) > 80 else question
-            text += f"<b>ID {q_id}</b> | {topic}\n{short_question}\n\n"
+        for q_id, topic, question, answer, explanation in results:
+            short_question = question[:50] + "..." if len(question) > 50 else question
+            keyboard.append([InlineKeyboardButton(
+                f"✏️ ID {q_id}: {short_question}",
+                callback_data=f"edit_question_select_{q_id}"
+            )])
         
-        context.user_data['admin_action'] = 'edit_question_id'
-        await update.message.reply_text(text, parse_mode='HTML')
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="edit_question")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        context.user_data.pop('admin_action', None)
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     async def handle_edit_question_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE, question_id_text: str) -> None:
         """Обработка ID вопроса для редактирования."""
@@ -1075,7 +1082,7 @@ class QuestionsHandler(AdminBaseHandler):
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT s.name as topic, q.question, q.answer, q.explanation 
+                    SELECT s.name as topic, q.question, q.answer, q.explanation, q.incorrect_options, q.topic_id
                     FROM questions q 
                     JOIN subtopics s ON q.topic_id = s.id 
                     WHERE q.id = ?
@@ -1090,22 +1097,50 @@ class QuestionsHandler(AdminBaseHandler):
             await update.message.reply_text(f"❌ Вопрос с ID {question_id} не найден. Попробуйте другой ID:")
             return
         
-        topic, question, answer, explanation = result
+        topic, question, answer, explanation, incorrect_options, topic_id = result
+        
+        # Парсим варианты ответов
+        options = []
+        if incorrect_options:
+            try:
+                import json
+                options_data = json.loads(incorrect_options)
+                if isinstance(options_data, list):
+                    options = options_data
+                elif isinstance(options_data, dict):
+                    options = [options_data.get('A', ''), options_data.get('B', ''), 
+                              options_data.get('C', ''), options_data.get('D', '')]
+            except:
+                options = []
         
         text = f"✏️ <b>Редактирование вопроса ID {question_id}</b>\n\n"
         text += f"<b>Тема:</b> {topic}\n"
-        text += f"<b>Вопрос:</b> {question}\n"
-        text += f"<b>Ответ:</b> {answer}\n"
-        text += f"<b>Текущее объяснение:</b> {explanation or 'Отсутствует'}\n\n"
-        text += "Выберите действие:"
+        text += f"<b>Вопрос:</b> {question[:200]}{'...' if len(question) > 200 else ''}\n"
+        text += f"<b>Правильный ответ:</b> {answer}\n"
+        
+        if options:
+            text += f"<b>Варианты ответов:</b>\n"
+            labels = ['A', 'B', 'C', 'D']
+            for i, option in enumerate(options[:4]):
+                if option:
+                    text += f"  {labels[i]}: {option}\n"
+        
+        text += f"<b>Объяснение:</b> {(explanation or 'Отсутствует')[:200]}{'...' if explanation and len(explanation) > 200 else ''}\n\n"
+        text += "Выберите что хотите изменить:"
         
         keyboard = [
+            [InlineKeyboardButton("📝 Изменить тему", callback_data=f"edit_question_topic_{question_id}")],
+            [InlineKeyboardButton("❓ Изменить текст вопроса", callback_data=f"edit_question_text_{question_id}")],
+            [InlineKeyboardButton("✅ Изменить правильный ответ", callback_data=f"edit_question_correct_{question_id}")],
+            [InlineKeyboardButton("📋 Изменить варианты ответов", callback_data=f"edit_question_options_{question_id}")],
+            [InlineKeyboardButton("💡 Изменить объяснение", callback_data=f"edit_question_explanation_{question_id}")],
             [InlineKeyboardButton("🤖 Сгенерировать ИИ объяснение", callback_data=f"generate_ai_explanation_{question_id}")],
-            [InlineKeyboardButton("✏️ Ввести объяснение вручную", callback_data=f"manual_explanation_{question_id}")],
             [InlineKeyboardButton("🔙 Назад к поиску", callback_data="edit_question")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
+        # Сохраняем ID вопроса в контексте для дальнейшего использования
+        context.user_data['editing_question_id'] = question_id
         context.user_data.pop('admin_action', None)
         await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
@@ -1404,3 +1439,440 @@ class QuestionsHandler(AdminBaseHandler):
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML') 
+
+    # === NEW EDIT FUNCTIONS ===
+    
+    async def edit_question_topic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало изменения темы вопроса."""
+        query = update.callback_query
+        question_id = int(query.data.split('_')[-1])
+        await self.safe_answer_callback(query)
+        
+        # Получаем доступные темы
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT s.id, s.name, m.name as main_topic
+                    FROM subtopics s
+                    JOIN main_topics m ON s.main_topic_id = m.id
+                    WHERE s.is_active = 1 AND m.is_active = 1
+                    ORDER BY m.name, s.name
+                ''')
+                topics = cursor.fetchall()
+        except Exception as e:
+            await query.edit_message_text(f"❌ Ошибка получения тем: {e}")
+            return
+        
+        text = f"📝 <b>Изменение темы вопроса ID {question_id}</b>\n\n"
+        text += "Выберите новую тему:"
+        
+        keyboard = []
+        current_main_topic = None
+        
+        for topic_id, topic_name, main_topic in topics[:20]:  # Ограничиваем для избежания длинного меню
+            if current_main_topic != main_topic:
+                current_main_topic = main_topic
+                
+            keyboard.append([InlineKeyboardButton(
+                f"{main_topic}: {topic_name}",
+                callback_data=f"edit_topic_select_{question_id}_{topic_id}"
+            )])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data=f"edit_question_select_{question_id}")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def edit_question_topic_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Обработка выбора новой темы."""
+        query = update.callback_query
+        parts = query.data.split('_')
+        question_id = int(parts[3])
+        new_topic_id = int(parts[4])
+        await self.safe_answer_callback(query)
+        
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Получаем название новой темы
+                cursor.execute('SELECT name FROM subtopics WHERE id = ?', (new_topic_id,))
+                new_topic_name = cursor.fetchone()[0]
+                
+                # Обновляем тему вопроса
+                cursor.execute('UPDATE questions SET topic_id = ? WHERE id = ?', (new_topic_id, question_id))
+                conn.commit()
+                
+                # Автоматически обновляем объяснение
+                await self._auto_update_explanation_after_change(question_id, "topic")
+                
+            text = f"✅ <b>Тема изменена</b>\n\n"
+            text += f"<b>ID вопроса:</b> {question_id}\n"
+            text += f"<b>Новая тема:</b> {new_topic_name}\n"
+            text += f"<b>Объяснение:</b> Автоматически обновлено"
+            
+            keyboard = [
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_question_select_{question_id}")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except Exception as e:
+            await query.edit_message_text(f"❌ Ошибка изменения темы: {e}")
+    
+    async def edit_question_text_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало изменения текста вопроса."""
+        query = update.callback_query
+        question_id = int(query.data.split('_')[-1])
+        await self.safe_answer_callback(query)
+        
+        # Получаем текущий текст вопроса
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT question FROM questions WHERE id = ?', (question_id,))
+                current_question = cursor.fetchone()[0]
+        except Exception as e:
+            await query.edit_message_text(f"❌ Ошибка получения вопроса: {e}")
+            return
+        
+        text = f"❓ <b>Изменение текста вопроса ID {question_id}</b>\n\n"
+        text += f"<b>Текущий текст:</b>\n{current_question}\n\n"
+        text += "Введите новый текст вопроса:"
+        
+        context.user_data['admin_action'] = 'edit_question_text'
+        context.user_data['editing_question_id'] = question_id
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_question_select_{question_id}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def edit_question_correct_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало изменения правильного ответа."""
+        query = update.callback_query
+        question_id = int(query.data.split('_')[-1])
+        await self.safe_answer_callback(query)
+        
+        # Получаем текущий ответ
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT answer FROM questions WHERE id = ?', (question_id,))
+                current_answer = cursor.fetchone()[0]
+        except Exception as e:
+            await query.edit_message_text(f"❌ Ошибка получения ответа: {e}")
+            return
+        
+        text = f"✅ <b>Изменение правильного ответа ID {question_id}</b>\n\n"
+        text += f"<b>Текущий ответ:</b> {current_answer}\n\n"
+        text += "Введите новый правильный ответ:"
+        
+        context.user_data['admin_action'] = 'edit_question_correct'
+        context.user_data['editing_question_id'] = question_id
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_question_select_{question_id}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def edit_question_options_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало изменения вариантов ответов."""
+        query = update.callback_query
+        question_id = int(query.data.split('_')[-1])
+        await self.safe_answer_callback(query)
+        
+        # Получаем текущие варианты
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT incorrect_options FROM questions WHERE id = ?', (question_id,))
+                incorrect_options = cursor.fetchone()[0]
+        except Exception as e:
+            await query.edit_message_text(f"❌ Ошибка получения вариантов: {e}")
+            return
+        
+        # Парсим варианты ответов
+        options = []
+        if incorrect_options:
+            try:
+                import json
+                options_data = json.loads(incorrect_options)
+                if isinstance(options_data, list):
+                    options = options_data
+                elif isinstance(options_data, dict):
+                    options = [options_data.get('A', ''), options_data.get('B', ''), 
+                              options_data.get('C', ''), options_data.get('D', '')]
+            except:
+                options = []
+        
+        text = f"📋 <b>Изменение вариантов ответов ID {question_id}</b>\n\n"
+        if options:
+            text += "<b>Текущие варианты:</b>\n"
+            labels = ['A', 'B', 'C', 'D']
+            for i, option in enumerate(options[:4]):
+                if option:
+                    text += f"{labels[i]}: {option}\n"
+        else:
+            text += "<b>Текущие варианты:</b> Отсутствуют\n"
+        
+        text += "\nВведите новые варианты ответов в формате:\n"
+        text += "A: вариант A\nB: вариант B\nC: вариант C\nD: вариант D"
+        
+        context.user_data['admin_action'] = 'edit_question_options'
+        context.user_data['editing_question_id'] = question_id
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_question_select_{question_id}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def edit_question_explanation_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало изменения объяснения."""
+        query = update.callback_query
+        question_id = int(query.data.split('_')[-1])
+        await self.safe_answer_callback(query)
+        
+        # Получаем текущее объяснение
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT explanation FROM questions WHERE id = ?', (question_id,))
+                current_explanation = cursor.fetchone()[0] or "Отсутствует"
+        except Exception as e:
+            await query.edit_message_text(f"❌ Ошибка получения объяснения: {e}")
+            return
+        
+        text = f"💡 <b>Изменение объяснения ID {question_id}</b>\n\n"
+        text += f"<b>Текущее объяснение:</b>\n{current_explanation[:500]}{'...' if len(current_explanation) > 500 else ''}\n\n"
+        text += "Введите новое объяснение:"
+        
+        context.user_data['admin_action'] = 'edit_question_explanation'
+        context.user_data['editing_question_id'] = question_id
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_question_select_{question_id}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def handle_edit_question_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_text: str) -> None:
+        """Обработка нового текста вопроса."""
+        question_id = context.user_data.get('editing_question_id')
+        
+        if not question_id:
+            await update.message.reply_text("❌ Ошибка: ID вопроса не найден.")
+            context.user_data.pop('admin_action', None)
+            return
+        
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('UPDATE questions SET question = ? WHERE id = ?', (new_text, question_id))
+                conn.commit()
+            
+            # Автоматически обновляем объяснение
+            await self._auto_update_explanation_after_change(question_id, "question")
+            
+            text = f"✅ <b>Текст вопроса обновлен</b>\n\n"
+            text += f"<b>ID вопроса:</b> {question_id}\n"
+            text += f"<b>Новый текст:</b> {new_text[:200]}{'...' if len(new_text) > 200 else ''}\n"
+            text += f"<b>Объяснение:</b> Автоматически обновлено"
+            
+            keyboard = [
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_question_select_{question_id}")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка обновления текста вопроса: {e}")
+        
+        context.user_data.pop('admin_action', None)
+        context.user_data.pop('editing_question_id', None)
+    
+    async def handle_edit_question_correct_answer(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_answer: str) -> None:
+        """Обработка нового правильного ответа."""
+        question_id = context.user_data.get('editing_question_id')
+        
+        if not question_id:
+            await update.message.reply_text("❌ Ошибка: ID вопроса не найден.")
+            context.user_data.pop('admin_action', None)
+            return
+        
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('UPDATE questions SET answer = ? WHERE id = ?', (new_answer, question_id))
+                conn.commit()
+            
+            # Автоматически обновляем объяснение
+            await self._auto_update_explanation_after_change(question_id, "answer")
+            
+            text = f"✅ <b>Правильный ответ обновлен</b>\n\n"
+            text += f"<b>ID вопроса:</b> {question_id}\n"
+            text += f"<b>Новый ответ:</b> {new_answer}\n"
+            text += f"<b>Объяснение:</b> Автоматически обновлено"
+            
+            keyboard = [
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_question_select_{question_id}")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка обновления ответа: {e}")
+        
+        context.user_data.pop('admin_action', None)
+        context.user_data.pop('editing_question_id', None)
+    
+    async def handle_edit_question_options(self, update: Update, context: ContextTypes.DEFAULT_TYPE, options_text: str) -> None:
+        """Обработка новых вариантов ответов."""
+        question_id = context.user_data.get('editing_question_id')
+        
+        if not question_id:
+            await update.message.reply_text("❌ Ошибка: ID вопроса не найден.")
+            context.user_data.pop('admin_action', None)
+            return
+        
+        # Парсим варианты ответов
+        try:
+            import json
+            lines = options_text.strip().split('\n')
+            options = {}
+            
+            for line in lines:
+                if ':' in line:
+                    parts = line.split(':', 1)
+                    label = parts[0].strip().upper()
+                    value = parts[1].strip()
+                    if label in ['A', 'B', 'C', 'D'] and value:
+                        options[label] = value
+            
+            if not options:
+                await update.message.reply_text("❌ Неверный формат. Используйте:\nA: вариант A\nB: вариант B\nи т.д.")
+                return
+            
+            # Конвертируем в список для сохранения
+            options_list = [options.get('A', ''), options.get('B', ''), options.get('C', ''), options.get('D', '')]
+            options_json = json.dumps(options_list)
+            
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('UPDATE questions SET incorrect_options = ? WHERE id = ?', (options_json, question_id))
+                conn.commit()
+            
+            # Автоматически обновляем объяснение
+            await self._auto_update_explanation_after_change(question_id, "options")
+            
+            text = f"✅ <b>Варианты ответов обновлены</b>\n\n"
+            text += f"<b>ID вопроса:</b> {question_id}\n"
+            text += f"<b>Новые варианты:</b>\n"
+            for label, value in options.items():
+                text += f"{label}: {value}\n"
+            text += f"\n<b>Объяснение:</b> Автоматически обновлено"
+            
+            keyboard = [
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_question_select_{question_id}")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка обновления вариантов: {e}")
+        
+        context.user_data.pop('admin_action', None)
+        context.user_data.pop('editing_question_id', None)
+    
+    async def handle_edit_question_explanation_manual(self, update: Update, context: ContextTypes.DEFAULT_TYPE, new_explanation: str) -> None:
+        """Обработка нового объяснения (ручной ввод)."""
+        question_id = context.user_data.get('editing_question_id')
+        
+        if not question_id:
+            await update.message.reply_text("❌ Ошибка: ID вопроса не найден.")
+            context.user_data.pop('admin_action', None)
+            return
+        
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('UPDATE questions SET explanation = ? WHERE id = ?', (new_explanation, question_id))
+                conn.commit()
+            
+            text = f"✅ <b>Объяснение обновлено</b>\n\n"
+            text += f"<b>ID вопроса:</b> {question_id}\n"
+            text += f"<b>Новое объяснение:</b> {new_explanation[:200]}{'...' if len(new_explanation) > 200 else ''}"
+            
+            keyboard = [
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_question_select_{question_id}")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка обновления объяснения: {e}")
+        
+        context.user_data.pop('admin_action', None)
+        context.user_data.pop('editing_question_id', None)
+    
+    async def _auto_update_explanation_after_change(self, question_id: int, change_type: str) -> None:
+        """Автоматически обновляет объяснение после изменения вопроса."""
+        try:
+            # Получаем данные вопроса
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT q.question, q.answer, q.incorrect_options, s.name as topic
+                    FROM questions q
+                    JOIN subtopics s ON q.topic_id = s.id
+                    WHERE q.id = ?
+                ''', (question_id,))
+                result = cursor.fetchone()
+            
+            if not result:
+                return
+            
+            question, answer, incorrect_options, topic = result
+            
+            # Создаем новое объяснение с помощью ИИ
+            from src.services.ai_service import AIService
+            ai_service = AIService()
+            
+            options_text = ""
+            if incorrect_options:
+                try:
+                    import json
+                    options_data = json.loads(incorrect_options)
+                    if isinstance(options_data, list):
+                        labels = ['A', 'B', 'C', 'D']
+                        for i, option in enumerate(options_data[:4]):
+                            if option:
+                                options_text += f"{labels[i]}: {option}\n"
+                except:
+                    pass
+            
+            new_explanation = await ai_service.generate_explanation(
+                question=question,
+                correct_answer=answer,
+                topic=topic,
+                options=options_text
+            )
+            
+            if new_explanation:
+                with sqlite3.connect(self.db.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute('UPDATE questions SET explanation = ? WHERE id = ?', (new_explanation, question_id))
+                    conn.commit()
+                    
+        except Exception as e:
+            logging.error(f"Error auto-updating explanation: {e}")

@@ -330,23 +330,23 @@ def main() -> None:
         pattern="^manual_explanation_"
     ))
     
-    # Explanation improvement handlers
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.improve_explanations_start,
-        pattern="^improve_explanations$"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.improve_short_explanations,
-        pattern="^improve_short_explanations$"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.improve_no_steps_explanations,
-        pattern="^improve_no_steps_explanations$"
-    ))
-    application.add_handler(CallbackQueryHandler(
-        admin_handlers.improve_all_explanations,
-        pattern="^improve_all_explanations$"
-    ))
+    # # Explanation improvement handlers
+    # application.add_handler(CallbackQueryHandler(
+    #     admin_handlers.improve_explanations_start,
+    #     pattern="^improve_explanations$"
+    # ))
+    # application.add_handler(CallbackQueryHandler(
+    #     admin_handlers.improve_short_explanations,
+    #     pattern="^improve_short_explanations$"
+    # ))
+    # application.add_handler(CallbackQueryHandler(
+    #     admin_handlers.improve_no_steps_explanations,
+    #     pattern="^improve_no_steps_explanations$"
+    # ))
+    # application.add_handler(CallbackQueryHandler(
+    #     admin_handlers.improve_all_explanations,
+    #     pattern="^improve_all_explanations$"
+    # ))
     
     # Admin management handlers
     application.add_handler(CallbackQueryHandler(

@@ -351,6 +351,20 @@ class AdminHandlers(AdminBaseHandler):
             await self.questions.handle_delete_single_question_search(update, context, text)
             return True
         
+        # New edit question handlers
+        elif action == 'edit_question_text':
+            await self.questions.handle_edit_question_text(update, context, text)
+            return True
+        elif action == 'edit_question_correct':
+            await self.questions.handle_edit_question_correct_answer(update, context, text)
+            return True
+        elif action == 'edit_question_options':
+            await self.questions.handle_edit_question_options(update, context, text)
+            return True
+        elif action == 'edit_question_explanation':
+            await self.questions.handle_edit_question_explanation_manual(update, context, text)
+            return True
+        
         # Обработка действий для админов
         elif action == 'add_admin':
             await self.admins.handle_add_admin(update, context, text)
