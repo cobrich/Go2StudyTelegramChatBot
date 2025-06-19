@@ -1129,6 +1129,7 @@ class QuestionsHandler(AdminBaseHandler):
         if incorrect_options:
             try:
                 import json
+                # Сначала пробуем JSON формат
                 options_data = json.loads(incorrect_options)
                 if isinstance(options_data, list):
                     options = options_data
@@ -1136,23 +1137,40 @@ class QuestionsHandler(AdminBaseHandler):
                     options = [options_data.get('A', ''), options_data.get('B', ''), 
                               options_data.get('C', ''), options_data.get('D', '')]
             except:
-                options = []
+                # Если JSON не работает, пробуем простой текст с переносами строк
+                try:
+                    # Разбиваем по переносам строк и убираем пустые строки
+                    text_options = [opt.strip() for opt in incorrect_options.split('\n') if opt.strip()]
+                    options = text_options
+                except:
+                    options = []
+        
+        # Добавляем правильный ответ к вариантам для полного отображения
+        all_options = []
+        if correct_answer:
+            all_options.append(correct_answer.strip())
+        if options:
+            for opt in options:
+                if opt.strip() and opt.strip() not in [correct_answer.strip() if correct_answer else ""]:
+                    all_options.append(opt.strip())
         
         text = f"✏️ <b>Редактирование вопроса ID {question_id}</b>\n\n"
         text += f"<b>Тема:</b> {topic}\n"
         text += f"<b>Вопрос:</b> {question[:200]}{'...' if len(question) > 200 else ''}\n"
         text += f"<b>Правильный ответ:</b> {answer}\n"
         
-        if options:
-            text += f"<b>Варианты ответов:</b>\n"
+        if all_options:  # Проверяем что есть хотя бы один вариант
+            text += "<b>Варианты ответов:</b>\n"
             labels = ['A', 'B', 'C', 'D']
-            for i, option in enumerate(options[:4]):
+            for i, option in enumerate(all_options[:4]):
                 if option:
                     # Проверяем, является ли этот вариант правильным ответом
-                    if option.strip() == answer.strip():
-                        text += f"  ✅ {labels[i]}) {option} <i>(правильный)</i>\n"
+                    if option.strip() == answer.strip() if answer else False:
+                        text += f"✅ {labels[i]}) {option} <i>(правильный)</i>\n"
                     else:
-                        text += f"  ❌ {labels[i]}) {option}\n"
+                        text += f"❌ {labels[i]}) {option}\n"
+        else:
+            text += "<b>Варианты ответов:</b> Отсутствуют\n"
         
         text += f"<b>Объяснение:</b> {(explanation or 'Отсутствует')[:200]}{'...' if explanation and len(explanation) > 200 else ''}\n\n"
         text += "Выберите что хотите изменить:"
@@ -1614,12 +1632,16 @@ class QuestionsHandler(AdminBaseHandler):
         question_id = int(query.data.split('_')[-1])
         await self.safe_answer_callback(query)
         
-        # Получаем текущие варианты
+        # Получаем текущие варианты и правильный ответ
         try:
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute('SELECT incorrect_options FROM questions WHERE id = ?', (question_id,))
-                incorrect_options = cursor.fetchone()[0]
+                cursor.execute('SELECT incorrect_options, answer FROM questions WHERE id = ?', (question_id,))
+                result = cursor.fetchone()
+                if result:
+                    incorrect_options, correct_answer = result
+                else:
+                    incorrect_options, correct_answer = None, None
         except Exception as e:
             await query.edit_message_text(f"❌ Ошибка получения вариантов: {e}")
             return
@@ -1629,6 +1651,7 @@ class QuestionsHandler(AdminBaseHandler):
         if incorrect_options:
             try:
                 import json
+                # Сначала пробуем JSON формат
                 options_data = json.loads(incorrect_options)
                 if isinstance(options_data, list):
                     options = options_data
@@ -1636,15 +1659,34 @@ class QuestionsHandler(AdminBaseHandler):
                     options = [options_data.get('A', ''), options_data.get('B', ''), 
                               options_data.get('C', ''), options_data.get('D', '')]
             except:
-                options = []
+                # Если JSON не работает, пробуем простой текст с переносами строк
+                try:
+                    # Разбиваем по переносам строк и убираем пустые строки
+                    text_options = [opt.strip() for opt in incorrect_options.split('\n') if opt.strip()]
+                    options = text_options
+                except:
+                    options = []
+        
+        # Добавляем правильный ответ к вариантам для полного отображения
+        all_options = []
+        if correct_answer:
+            all_options.append(correct_answer.strip())
+        if options:
+            for opt in options:
+                if opt.strip() and opt.strip() not in [correct_answer.strip() if correct_answer else ""]:
+                    all_options.append(opt.strip())
         
         text = f"📋 <b>Изменение вариантов ответов ID {question_id}</b>\n\n"
-        if options:
+        if all_options:  # Проверяем что есть хотя бы один вариант
             text += "<b>Текущие варианты:</b>\n"
             labels = ['A', 'B', 'C', 'D']
-            for i, option in enumerate(options[:4]):
+            for i, option in enumerate(all_options[:4]):
                 if option:
-                    text += f"{labels[i]}: {option}\n"
+                    # Проверяем, является ли этот вариант правильным ответом
+                    if option.strip() == correct_answer.strip() if correct_answer else False:
+                        text += f"✅ {labels[i]}) {option} <i>(правильный)</i>\n"
+                    else:
+                        text += f"❌ {labels[i]}) {option}\n"
         else:
             text += "<b>Текущие варианты:</b> Отсутствуют\n"
         
