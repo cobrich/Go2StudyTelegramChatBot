@@ -1202,4 +1202,205 @@ class QuestionsHandler(AdminBaseHandler):
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         context.user_data.pop('admin_action', None)
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML') 
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def improve_explanations_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало улучшения объяснений."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        # Получаем статистику объяснений
+        try:
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Подсчет общего количества вопросов
+                cursor.execute("SELECT COUNT(*) FROM questions")
+                total_questions = cursor.fetchone()[0]
+                
+                # Подсчет вопросов с короткими объяснениями (менее 100 символов)
+                cursor.execute("SELECT COUNT(*) FROM questions WHERE LENGTH(explanation) < 100")
+                short_explanations = cursor.fetchone()[0]
+                
+                # Подсчет вопросов без пошагового объяснения
+                cursor.execute("""
+                    SELECT COUNT(*) FROM questions 
+                    WHERE explanation NOT LIKE '%Шаг%' 
+                    AND explanation NOT LIKE '%шаг%'
+                    AND explanation NOT LIKE '%қадам%'
+                    AND explanation NOT LIKE '%ҚАДАМ%'
+                """)
+                no_steps = cursor.fetchone()[0]
+                
+        except Exception as e:
+            logging.error(f"Error getting explanation stats: {e}")
+            total_questions = 0
+            short_explanations = 0
+            no_steps = 0
+        
+        text = f"🤖 <b>Улучшение объяснений</b>\n\n"
+        text += f"📊 <b>Статистика:</b>\n"
+        text += f"• Всего вопросов: {total_questions}\n"
+        text += f"• Короткие объяснения (< 100 символов): {short_explanations}\n"
+        text += f"• Без пошагового объяснения: {no_steps}\n\n"
+        text += f"⚠️ <b>Внимание:</b> Процесс может занять несколько минут.\n"
+        text += f"Будут улучшены объяснения, которые:\n"
+        text += f"• Слишком короткие\n"
+        text += f"• Не содержат пошаговое решение\n"
+        text += f"• Написаны сложным языком\n\n"
+        text += f"Выберите действие:"
+        
+        keyboard = [
+            [InlineKeyboardButton("🚀 Улучшить все короткие объяснения", callback_data="improve_short_explanations")],
+            [InlineKeyboardButton("📝 Улучшить объяснения без шагов", callback_data="improve_no_steps_explanations")],
+            [InlineKeyboardButton("🎯 Улучшить все объяснения", callback_data="improve_all_explanations")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="admin_questions")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def improve_short_explanations(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Улучшение коротких объяснений."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        await self._process_explanation_improvement(query, "short")
+
+    async def improve_no_steps_explanations(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Улучшение объяснений без шагов."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        await self._process_explanation_improvement(query, "no_steps")
+
+    async def improve_all_explanations(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Улучшение всех объяснений."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        await self._process_explanation_improvement(query, "all")
+
+    async def _process_explanation_improvement(self, query, improvement_type: str) -> None:
+        """Обработка улучшения объяснений."""
+        try:
+            # Показываем сообщение о начале процесса
+            await query.edit_message_text("🤖 Начинаю улучшение объяснений...\n\nЭто может занять несколько минут.")
+            
+            # Получаем вопросы для улучшения
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                
+                if improvement_type == "short":
+                    cursor.execute("""
+                        SELECT q.id, q.question, q.answer, q.explanation, s.name as topic
+                        FROM questions q
+                        JOIN subtopics s ON q.topic_id = s.id
+                        WHERE LENGTH(q.explanation) < 100
+                        ORDER BY q.id
+                    """)
+                elif improvement_type == "no_steps":
+                    cursor.execute("""
+                        SELECT q.id, q.question, q.answer, q.explanation, s.name as topic
+                        FROM questions q
+                        JOIN subtopics s ON q.topic_id = s.id
+                        WHERE q.explanation NOT LIKE '%Шаг%' 
+                        AND q.explanation NOT LIKE '%шаг%'
+                        AND q.explanation NOT LIKE '%қадам%'
+                        AND q.explanation NOT LIKE '%ҚАДАМ%'
+                        ORDER BY q.id
+                    """)
+                else:  # all
+                    cursor.execute("""
+                        SELECT q.id, q.question, q.answer, q.explanation, s.name as topic
+                        FROM questions q
+                        JOIN subtopics s ON q.topic_id = s.id
+                        ORDER BY q.id
+                        LIMIT 50
+                    """)
+                
+                questions_to_improve = cursor.fetchall()
+            
+            if not questions_to_improve:
+                await query.edit_message_text("✅ Нет вопросов для улучшения!")
+                return
+            
+            # Инициализируем AI сервис
+            from services.ai_service import AIService
+            ai_service = AIService()
+            
+            improved_count = 0
+            total_count = len(questions_to_improve)
+            
+            for i, (question_id, question, answer, old_explanation, topic) in enumerate(questions_to_improve, 1):
+                try:
+                    # Обновляем сообщение каждые 5 вопросов
+                    if i % 5 == 0 or i == 1:
+                        await query.edit_message_text(
+                            f"🤖 Улучшаю объяснения...\n\n"
+                            f"Обработано: {i}/{total_count}\n"
+                            f"Улучшено: {improved_count}\n\n"
+                            f"Текущий вопрос: {question[:50]}..."
+                        )
+                    
+                    # Определяем язык темы
+                    topic_language = self.db.get_topic_language(topic)
+                    
+                    # Улучшаем объяснение
+                    improved_explanation = ai_service.improve_existing_explanation(
+                        question, answer, old_explanation, topic, topic_language
+                    )
+                    
+                    # Проверяем, что объяснение действительно улучшилось
+                    if (len(improved_explanation) > len(old_explanation) * 1.2 and 
+                        improved_explanation != old_explanation):
+                        
+                        # Сохраняем улучшенное объяснение
+                        with sqlite3.connect(self.db.db_path) as conn:
+                            cursor = conn.cursor()
+                            cursor.execute(
+                                'UPDATE questions SET explanation = ? WHERE id = ?',
+                                (improved_explanation, question_id)
+                            )
+                            conn.commit()
+                        
+                        improved_count += 1
+                        logging.info(f"Improved explanation for question {question_id}")
+                    
+                except Exception as e:
+                    logging.error(f"Error improving explanation for question {question_id}: {e}")
+                    continue
+            
+            # Финальное сообщение
+            text = f"✅ <b>Улучшение объяснений завершено!</b>\n\n"
+            text += f"📊 <b>Результаты:</b>\n"
+            text += f"• Обработано вопросов: {total_count}\n"
+            text += f"• Улучшено объяснений: {improved_count}\n"
+            text += f"• Пропущено: {total_count - improved_count}\n\n"
+            text += f"💡 Улучшенные объяснения теперь содержат:\n"
+            text += f"• Пошаговое решение\n"
+            text += f"• Подробные вычисления\n"
+            text += f"• Простой язык для детей\n"
+            text += f"• Проверку ответа"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔄 Улучшить еще", callback_data="improve_explanations")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except Exception as e:
+            logging.error(f"Error in explanation improvement process: {e}")
+            text = f"❌ <b>Ошибка при улучшении объяснений</b>\n\n"
+            text += f"Произошла ошибка: {str(e)}\n\n"
+            text += f"Попробуйте еще раз или обратитесь к разработчику."
+            
+            keyboard = [
+                [InlineKeyboardButton("🔄 Попробовать снова", callback_data="improve_explanations")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML') 
