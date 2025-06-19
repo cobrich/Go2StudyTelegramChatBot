@@ -84,21 +84,6 @@ class CallbackHandlers(BaseHandler):
                 pass
             return
         
-        # Показываем сообщение о поиске для всех выборов темы
-        try:
-            # Проверяем, есть ли вопросы в БД для этой темы
-            topic_counts = self.db.get_topic_question_counts()
-            has_questions_in_db = topic_counts.get(topic, 0) > 0
-            
-            # Создаем клавиатуру с кнопкой "В главное меню"
-            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
-            
-            await query.message.edit_text(get_message('preparing_questions', user_language), reply_markup=keyboard)
-        except Exception:
-            # Если не удалось отредактировать, отправляем новое сообщение
-            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
-            await query.message.reply_text(get_message('preparing_questions', user_language), reply_markup=keyboard)
-        
         chat_id = query.message.chat_id
         
         # Check if user is already taking a test
@@ -113,6 +98,16 @@ class CallbackHandlers(BaseHandler):
         self.db.set_user_active(user_id, topic)
         self.set_user_data(context, 'current_topic', topic)
         self.set_user_data(context, 'current_question_index', 0)
+        
+        # Показываем сообщение о подготовке вопросов только перед генерацией
+        try:
+            # Создаем клавиатуру с кнопкой "В главное меню"
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
+            await query.message.edit_text(get_message('preparing_questions', user_language), reply_markup=keyboard)
+        except Exception:
+            # Если не удалось отредактировать, отправляем новое сообщение
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu")]])
+            await query.message.reply_text(get_message('preparing_questions', user_language), reply_markup=keyboard)
         
         # Get or generate questions
         questions = await self.question_service.get_or_generate_tasks(
