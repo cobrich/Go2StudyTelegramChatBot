@@ -312,7 +312,7 @@ SQLITE_ERROR: sqlite3 result code 1: no such column: "topic"
 - ✅ `handle_delete_single_question_search()` - переписан для корректной работы с казахскими буквами
 
 **Изменения в коде**:
-```python
+```
 # Было (не работало с казахскими буквами):
 WHERE LOWER(q.question) LIKE LOWER(?)
 
