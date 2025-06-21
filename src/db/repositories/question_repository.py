@@ -686,4 +686,279 @@ class QuestionRepository(BaseRepository):
             
         except Exception as e:
             logger.error(f"Error getting subtopics for main topic {main_topic_name}: {e}")
-            return [] 
+            return []
+    
+    # ============== ADDITIONAL ADMIN METHODS ==============
+    
+    def count_questions_by_topic_name(self, topic_name: str) -> int:
+        """Count questions for a topic by name."""
+        try:
+            query = f'''
+                SELECT COUNT(*) 
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE s.subtopic_name = {self._get_placeholder(1)}
+            '''
+            
+            return self.fetch_val(query, (topic_name,)) or 0
+            
+        except Exception as e:
+            logger.error(f"Error counting questions for topic {topic_name}: {e}")
+            return 0
+    
+    def delete_questions_by_topic_name(self, topic_name: str) -> int:
+        """Delete all questions for a topic by name and return count."""
+        try:
+            # First get the topic ID
+            topic_id = self.get_topic_id_by_name(topic_name)
+            if not topic_id:
+                return 0
+            
+            # Count questions before deletion
+            count = self.count_questions_by_topic_name(topic_name)
+            
+            if count > 0:
+                # Delete questions
+                delete_query = f'''
+                    DELETE FROM questions 
+                    WHERE topic_id = (SELECT id FROM subtopics WHERE subtopic_name = {self._get_placeholder(1)})
+                '''
+                self.execute_query(delete_query, (topic_name,))
+                logger.info(f"Deleted {count} questions for topic '{topic_name}'")
+                return count
+            
+            return 0
+            
+        except Exception as e:
+            logger.error(f"Error deleting questions for topic {topic_name}: {e}")
+            return 0
+    
+    def get_question_with_topic_by_id(self, question_id: int) -> Optional[Dict]:
+        """Get question with topic information by ID."""
+        try:
+            query = f'''
+                SELECT q.id, q.question_text as question, q.correct_answer as answer,
+                       q.explanation, q.option_a, q.option_b, q.option_c, q.option_d,
+                       q.topic_id, s.subtopic_name as topic
+                FROM questions q
+                LEFT JOIN subtopics s ON q.topic_id = s.id
+                WHERE q.id = {self._get_placeholder(1)}
+            '''
+            
+            result = self.fetch_one(query, (question_id,))
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting question with topic by ID {question_id}: {e}")
+            return None
+    
+    def get_active_topics_for_selection(self) -> List[Dict]:
+        """Get active topics formatted for selection UI."""
+        try:
+            query = f'''
+                SELECT s.id, s.subtopic_name as name, mt.topic_name as main_topic,
+                       s.is_active, s.created_at
+                FROM subtopics s
+                JOIN main_topics mt ON s.main_topic_id = mt.id
+                WHERE s.is_active = {self._get_placeholder(1)} AND mt.is_active = {self._get_placeholder(2)}
+                ORDER BY mt.topic_name, s.subtopic_name
+            '''
+            
+            return self.fetch_all(query, (self._get_boolean_value(True), self._get_boolean_value(True)))
+            
+        except Exception as e:
+            logger.error(f"Error getting active topics for selection: {e}")
+            return []
+    
+    def get_topic_language(self, topic_name: str) -> str:
+        """Get language for a topic by name."""
+        try:
+            query = f'''
+                SELECT mt.language
+                FROM subtopics s
+                JOIN main_topics mt ON s.main_topic_id = mt.id
+                WHERE s.subtopic_name = {self._get_placeholder(1)}
+            '''
+            
+            result = self.fetch_val(query, (topic_name,))
+            return result or 'kz'  # Default to Kazakh
+            
+        except Exception as e:
+            logger.error(f"Error getting topic language for {topic_name}: {e}")
+            return 'kz'
+    
+    def search_questions_for_edit(self, search_term: str, limit: int = 10) -> List[Tuple]:
+        """Search questions for editing with topic information."""
+        try:
+            query = f'''
+                SELECT q.id, s.subtopic_name as topic, q.question_text as question, 
+                       q.correct_answer as answer, q.explanation
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE LOWER(q.question_text) LIKE {self._get_placeholder(1)}
+                ORDER BY s.subtopic_name, q.id
+                LIMIT {self._get_placeholder(2)}
+            '''
+            
+            search_pattern = f"%{search_term.lower()}%"
+            results = self.fetch_all(query, (search_pattern, limit))
+            
+            # Convert to tuples for compatibility
+            return [(r['id'], r['topic'], r['question'], r['answer'], r['explanation']) for r in results]
+            
+        except Exception as e:
+            logger.error(f"Error searching questions for edit: {e}")
+            return []
+    
+    def search_questions_for_deletion(self, search_term: str, limit: int = 10) -> List[Tuple]:
+        """Search questions for deletion."""
+        try:
+            query = f'''
+                SELECT q.id, s.subtopic_name as topic, q.question_text as question
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE LOWER(q.question_text) LIKE {self._get_placeholder(1)}
+                ORDER BY s.subtopic_name, q.id
+                LIMIT {self._get_placeholder(2)}
+            '''
+            
+            search_pattern = f"%{search_term.lower()}%"
+            results = self.fetch_all(query, (search_pattern, limit))
+            
+            # Convert to tuples for compatibility
+            return [(r['id'], r['topic'], r['question']) for r in results]
+            
+        except Exception as e:
+            logger.error(f"Error searching questions for deletion: {e}")
+            return []
+    
+    def get_topics_for_editing(self) -> List[Tuple]:
+        """Get topics for editing with IDs and names."""
+        try:
+            query = f'''
+                SELECT s.id, s.subtopic_name as name, mt.topic_name as main_topic
+                FROM subtopics s
+                JOIN main_topics mt ON s.main_topic_id = mt.id
+                WHERE s.is_active = {self._get_placeholder(1)} AND mt.is_active = {self._get_placeholder(2)}
+                ORDER BY mt.topic_name, s.subtopic_name
+            '''
+            
+            results = self.fetch_all(query, (self._get_boolean_value(True), self._get_boolean_value(True)))
+            
+            # Convert to tuples for compatibility
+            return [(r['id'], r['name'], r['main_topic']) for r in results]
+            
+        except Exception as e:
+            logger.error(f"Error getting topics for editing: {e}")
+            return []
+    
+    def get_topic_name_by_id_for_edit(self, topic_id: int) -> Optional[str]:
+        """Get topic name by ID for editing operations."""
+        try:
+            query = f'SELECT subtopic_name FROM subtopics WHERE id = {self._get_placeholder(1)}'
+            return self.fetch_val(query, (topic_id,))
+            
+        except Exception as e:
+            logger.error(f"Error getting topic name by ID {topic_id}: {e}")
+            return None
+    
+    def update_question_in_database(self, question_id: int, field: str, value: str) -> bool:
+        """Generic method to update any question field."""
+        try:
+            # Map field names to database columns
+            field_mapping = {
+                'question': 'question_text',
+                'answer': 'correct_answer',
+                'explanation': 'explanation',
+                'topic_id': 'topic_id'
+            }
+            
+            db_field = field_mapping.get(field, field)
+            
+            query = f'''
+                UPDATE questions 
+                SET {db_field} = {self._get_placeholder(1)}
+                WHERE id = {self._get_placeholder(2)}
+            '''
+            
+            self.execute_query(query, (value, question_id))
+            logger.info(f"Updated {field} for question {question_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating question {question_id} field {field}: {e}")
+            return False
+    
+    def get_questions_for_explanation_improvement(self, improvement_type: str, limit: int = 50) -> List[Tuple]:
+        """Get questions that need explanation improvement."""
+        try:
+            if improvement_type == "short":
+                query = f'''
+                    SELECT q.id, q.question_text, q.correct_answer, q.explanation, s.subtopic_name as topic
+                    FROM questions q
+                    JOIN subtopics s ON q.topic_id = s.id
+                    WHERE LENGTH(q.explanation) < 100
+                    ORDER BY q.id
+                    LIMIT {self._get_placeholder(1)}
+                '''
+                params = (limit,)
+            elif improvement_type == "no_steps":
+                query = f'''
+                    SELECT q.id, q.question_text, q.correct_answer, q.explanation, s.subtopic_name as topic
+                    FROM questions q
+                    JOIN subtopics s ON q.topic_id = s.id
+                    WHERE q.explanation NOT LIKE '%Шаг%' 
+                    AND q.explanation NOT LIKE '%шаг%'
+                    AND q.explanation NOT LIKE '%қадам%'
+                    AND q.explanation NOT LIKE '%ҚАДАМ%'
+                    ORDER BY q.id
+                    LIMIT {self._get_placeholder(1)}
+                '''
+                params = (limit,)
+            else:  # all
+                query = f'''
+                    SELECT q.id, q.question_text, q.correct_answer, q.explanation, s.subtopic_name as topic
+                    FROM questions q
+                    JOIN subtopics s ON q.topic_id = s.id
+                    ORDER BY q.id
+                    LIMIT {self._get_placeholder(1)}
+                '''
+                params = (limit,)
+            
+            results = self.fetch_all(query, params)
+            
+            # Convert to tuples for compatibility
+            return [(r['id'], r['question_text'], r['correct_answer'], r['explanation'], r['topic']) for r in results]
+            
+        except Exception as e:
+            logger.error(f"Error getting questions for explanation improvement: {e}")
+            return []
+    
+    def get_explanation_improvement_stats(self) -> Dict[str, int]:
+        """Get statistics for explanation improvement."""
+        try:
+            stats = {}
+            
+            # Total questions
+            total_query = 'SELECT COUNT(*) FROM questions'
+            stats['total_questions'] = self.fetch_val(total_query) or 0
+            
+            # Short explanations
+            short_query = 'SELECT COUNT(*) FROM questions WHERE LENGTH(explanation) < 100'
+            stats['short_explanations'] = self.fetch_val(short_query) or 0
+            
+            # No steps
+            no_steps_query = '''
+                SELECT COUNT(*) FROM questions 
+                WHERE explanation NOT LIKE '%Шаг%' 
+                AND explanation NOT LIKE '%шаг%'
+                AND explanation NOT LIKE '%қадам%'
+                AND explanation NOT LIKE '%ҚАДАМ%'
+            '''
+            stats['no_steps'] = self.fetch_val(no_steps_query) or 0
+            
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Error getting explanation improvement stats: {e}")
+            return {'total_questions': 0, 'short_explanations': 0, 'no_steps': 0} 

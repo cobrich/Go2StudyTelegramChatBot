@@ -276,7 +276,7 @@ class DatabaseFacade:
         return self.questions.get_main_topics_by_language(language, active_only)
     
     def get_subtopics_by_main_topic(self, main_topic_name: str, user_language: str = None) -> List[Dict]:
-        """Get subtopics for a main topic"""
+        """Get subtopics for a main topic."""
         return self.questions.get_subtopics_by_main_topic(main_topic_name, user_language)
     
     # Additional methods for user management
@@ -310,6 +310,56 @@ class DatabaseFacade:
     def get_explanation_fuzzy_by_question_text(self, question_text: str) -> Optional[str]:
         """Get explanation using fuzzy search"""
         return self.questions.get_explanation_fuzzy_by_question_text(question_text)
+    
+    # ============== ADDITIONAL ADMIN METHODS ==============
+    
+    def count_questions_by_topic_name(self, topic_name: str) -> int:
+        """Count questions for a topic by name."""
+        return self.questions.count_questions_by_topic_name(topic_name)
+    
+    def delete_questions_by_topic_name(self, topic_name: str) -> int:
+        """Delete all questions for a topic by name and return count."""
+        return self.questions.delete_questions_by_topic_name(topic_name)
+    
+    def get_question_with_topic_by_id(self, question_id: int) -> Optional[Dict]:
+        """Get question with topic information by ID."""
+        return self.questions.get_question_with_topic_by_id(question_id)
+    
+    def get_active_topics_for_selection(self) -> List[Dict]:
+        """Get active topics formatted for selection UI."""
+        return self.questions.get_active_topics_for_selection()
+    
+    def get_topic_language(self, topic_name: str) -> str:
+        """Get language for a topic by name."""
+        return self.questions.get_topic_language(topic_name)
+    
+    def search_questions_for_edit(self, search_term: str, limit: int = 10) -> List[Tuple]:
+        """Search questions for editing with topic information."""
+        return self.questions.search_questions_for_edit(search_term, limit)
+    
+    def search_questions_for_deletion(self, search_term: str, limit: int = 10) -> List[Tuple]:
+        """Search questions for deletion."""
+        return self.questions.search_questions_for_deletion(search_term, limit)
+    
+    def get_topics_for_editing(self) -> List[Tuple]:
+        """Get topics for editing with IDs and names."""
+        return self.questions.get_topics_for_editing()
+    
+    def get_topic_name_by_id_for_edit(self, topic_id: int) -> Optional[str]:
+        """Get topic name by ID for editing operations."""
+        return self.questions.get_topic_name_by_id_for_edit(topic_id)
+    
+    def update_question_in_database(self, question_id: int, field: str, value: str) -> bool:
+        """Generic method to update any question field."""
+        return self.questions.update_question_in_database(question_id, field, value)
+    
+    def get_questions_for_explanation_improvement(self, improvement_type: str, limit: int = 50) -> List[Tuple]:
+        """Get questions that need explanation improvement."""
+        return self.questions.get_questions_for_explanation_improvement(improvement_type, limit)
+    
+    def get_explanation_improvement_stats(self) -> Dict[str, int]:
+        """Get statistics for explanation improvement."""
+        return self.questions.get_explanation_improvement_stats()
 
 def get_database() -> DatabaseFacade:
     """Get global database facade instance"""

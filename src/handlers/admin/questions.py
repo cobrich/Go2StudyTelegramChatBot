@@ -33,7 +33,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 import logging
-import sqlite3
 
 class QuestionsHandler(AdminBaseHandler):
     """Обработчик для управления вопросами."""
@@ -520,15 +519,8 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Получаем количество вопросов по теме
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT COUNT(*) 
-                    FROM questions q
-                    JOIN subtopics s ON q.topic_id = s.id
-                    WHERE s.name = ?
-                ''', (topic,))
-                count = cursor.fetchone()[0]
+            # Используем database facade вместо прямого SQLite подключения
+            count = self.db.count_questions_by_topic_name(topic)
         except Exception as e:
             logging.error(f"Error counting questions for topic {topic}: {e}")
             count = 0
@@ -565,17 +557,8 @@ class QuestionsHandler(AdminBaseHandler):
             return
         
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT COUNT(*) FROM questions WHERE topic_id = ?', (topic,))
-                count_before = cursor.fetchone()[0]
-                
-                cursor.execute('''
-                    DELETE FROM questions 
-                    WHERE topic_id = (SELECT id FROM subtopics WHERE name = ?)
-                ''', (topic,))
-                deleted_count = cursor.rowcount
-                conn.commit()
+            # Используем database facade вместо прямого SQLite подключения
+            deleted_count = self.db.delete_questions_by_topic_name(topic)
             
             text = f"✅ <b>Удаление завершено</b>\n\n"
             text += f"<b>Тема:</b> {topic}\n"
@@ -637,15 +620,8 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Получаем информацию о вопросе
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT s.name as topic, q.question 
-                    FROM questions q 
-                    JOIN subtopics s ON q.topic_id = s.id 
-                    WHERE q.id = ?
-                ''', (question_id,))
-                result = cursor.fetchone()
+            # Используем database facade вместо прямого SQLite подключения
+            result = self.db.get_question_with_topic_by_id(question_id)
         except Exception as e:
             logging.error(f"Error getting question {question_id}: {e}")
             result = None
@@ -654,7 +630,8 @@ class QuestionsHandler(AdminBaseHandler):
             text = "❌ Вопрос не найден."
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="delete_single_question")]]
         else:
-            topic, question = result
+            topic = result.get('topic', 'Неизвестная тема')
+            question = result.get('question', '')
             short_question = question[:100] + "..." if len(question) > 100 else question
             
             text = f"⚠️ <b>Подтверждение удаления вопроса</b>\n\n"
@@ -679,13 +656,10 @@ class QuestionsHandler(AdminBaseHandler):
         await self.safe_answer_callback(query)
         
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('DELETE FROM questions WHERE id = ?', (question_id,))
-                deleted_count = cursor.rowcount
-                conn.commit()
+            # Используем database facade вместо прямого SQLite подключения
+            success = self.db.delete_question_by_id(question_id)
             
-            if deleted_count > 0:
+            if success:
                 text = f"✅ <b>Вопрос удален</b>\n\n"
                 text += f"Вопрос с ID {question_id} был успешно удален."
             else:
@@ -715,21 +689,16 @@ class QuestionsHandler(AdminBaseHandler):
         
         try:
             # Получаем информацию о вопросе
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT s.name as topic, q.question, q.answer 
-                    FROM questions q 
-                    JOIN subtopics s ON q.topic_id = s.id 
-                    WHERE q.id = ?
-                ''', (question_id,))
-                result = cursor.fetchone()
+            # Используем database facade вместо прямого SQLite подключения
+            result = self.db.get_question_with_topic_by_id(question_id)
             
             if not result:
                 await query.edit_message_text("❌ Вопрос не найден.")
                 return
             
-            topic, question, answer = result
+            topic = result.get('topic', 'Неизвестная тема')
+            question = result.get('question', '')
+            answer = result.get('answer', '')
             
             # Генерируем объяснение с помощью ИИ
             await query.edit_message_text("🤖 Генерирую объяснение с помощью ИИ...")
@@ -743,10 +712,7 @@ class QuestionsHandler(AdminBaseHandler):
             explanation = ai_service.generate_detailed_explanation(question, answer, topic, topic_language)
             
             # Обновляем объяснение в базе данных
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('UPDATE questions SET explanation = ? WHERE id = ?', (explanation, question_id))
-                conn.commit()
+            success = self.db.update_question_explanation(question_id, explanation)
             
             text = f"✅ <b>ИИ объяснение сгенерировано</b>\n\n"
             text += f"<b>ID:</b> {question_id}\n"
@@ -1035,29 +1001,9 @@ class QuestionsHandler(AdminBaseHandler):
         logging.info(f"[EDIT_SEARCH] Starting search for: '{search_text}'")
         
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                # Получаем все вопросы и фильтруем в Python для корректной работы с казахскими буквами
-                cursor.execute('''
-                    SELECT q.id, s.name as topic, q.question, q.answer, q.explanation
-                    FROM questions q
-                    JOIN subtopics s ON q.topic_id = s.id
-                    ORDER BY s.name, q.id
-                ''')
-                all_results = cursor.fetchall()
-                logging.info(f"[EDIT_SEARCH] Found {len(all_results)} total questions in database")
-                
-                # Фильтруем результаты в Python для корректной работы с казахскими буквами
-                search_lower = search_text.lower()
-                results = []
-                for row in all_results:
-                    question_lower = row[2].lower()  # row[2] это q.question
-                    if search_lower in question_lower:
-                        results.append(row)
-                        if len(results) >= 10:  # Ограничиваем до 10 результатов
-                            break
-                            
-                logging.info(f"[EDIT_SEARCH] Filtered to {len(results)} matching questions")
+            # Используем database facade вместо прямого SQLite подключения
+            results = self.db.search_questions_for_edit(search_text, limit=10)
+            logging.info(f"[EDIT_SEARCH] Found {len(results)} matching questions")
                             
         except Exception as e:
             logging.error(f"[EDIT_SEARCH] Database error: {e}")
@@ -1212,26 +1158,8 @@ class QuestionsHandler(AdminBaseHandler):
     async def handle_delete_single_question_search(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_text: str) -> None:
         """Обработка поиска для удаления одного вопроса."""
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                # Получаем все вопросы и фильтруем в Python для корректной работы с казахскими буквами
-                cursor.execute('''
-                    SELECT q.id, s.name as topic, q.question
-                    FROM questions q
-                    JOIN subtopics s ON q.topic_id = s.id
-                    ORDER BY s.name, q.id
-                ''')
-                all_results = cursor.fetchall()
-                
-                # Фильтруем результаты в Python для корректной работы с казахскими буквами
-                search_lower = search_text.lower()
-                results = []
-                for row in all_results:
-                    question_lower = row[2].lower()  # row[2] это q.question
-                    if search_lower in question_lower:
-                        results.append(row)
-                        if len(results) >= 10:  # Ограничиваем до 10 результатов
-                            break
+            # Используем database facade вместо прямого SQLite подключения
+            results = self.db.search_questions_for_deletion(search_text, limit=10)
                             
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка поиска: {e}")
@@ -1265,27 +1193,11 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Получаем статистику объяснений
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Подсчет общего количества вопросов
-                cursor.execute("SELECT COUNT(*) FROM questions")
-                total_questions = cursor.fetchone()[0]
-                
-                # Подсчет вопросов с короткими объяснениями (менее 100 символов)
-                cursor.execute("SELECT COUNT(*) FROM questions WHERE LENGTH(explanation) < 100")
-                short_explanations = cursor.fetchone()[0]
-                
-                # Подсчет вопросов без пошагового объяснения
-                cursor.execute("""
-                    SELECT COUNT(*) FROM questions 
-                    WHERE explanation NOT LIKE '%Шаг%' 
-                    AND explanation NOT LIKE '%шаг%'
-                    AND explanation NOT LIKE '%қадам%'
-                    AND explanation NOT LIKE '%ҚАДАМ%'
-                """)
-                no_steps = cursor.fetchone()[0]
-                
+            # Используем database facade вместо прямого SQLite подключения
+            stats = self.db.get_explanation_improvement_stats()
+            total_questions = stats.get('total_questions', 0)
+            short_explanations = stats.get('short_explanations', 0)
+            no_steps = stats.get('no_steps', 0)
         except Exception as e:
             logging.error(f"Error getting explanation stats: {e}")
             total_questions = 0
@@ -1342,38 +1254,8 @@ class QuestionsHandler(AdminBaseHandler):
             await query.edit_message_text("🤖 Начинаю улучшение объяснений...\n\nЭто может занять несколько минут.")
             
             # Получаем вопросы для улучшения
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                
-                if improvement_type == "short":
-                    cursor.execute("""
-                        SELECT q.id, q.question, q.answer, q.explanation, s.name as topic
-                        FROM questions q
-                        JOIN subtopics s ON q.topic_id = s.id
-                        WHERE LENGTH(q.explanation) < 100
-                        ORDER BY q.id
-                    """)
-                elif improvement_type == "no_steps":
-                    cursor.execute("""
-                        SELECT q.id, q.question, q.answer, q.explanation, s.name as topic
-                        FROM questions q
-                        JOIN subtopics s ON q.topic_id = s.id
-                        WHERE q.explanation NOT LIKE '%Шаг%' 
-                        AND q.explanation NOT LIKE '%шаг%'
-                        AND q.explanation NOT LIKE '%қадам%'
-                        AND q.explanation NOT LIKE '%ҚАДАМ%'
-                        ORDER BY q.id
-                    """)
-                else:  # all
-                    cursor.execute("""
-                        SELECT q.id, q.question, q.answer, q.explanation, s.name as topic
-                        FROM questions q
-                        JOIN subtopics s ON q.topic_id = s.id
-                        ORDER BY q.id
-                        LIMIT 50
-                    """)
-                
-                questions_to_improve = cursor.fetchall()
+            # Используем database facade вместо прямого SQLite подключения
+            questions_to_improve = self.db.get_questions_for_explanation_improvement(improvement_type, limit=50)
             
             if not questions_to_improve:
                 await query.edit_message_text("✅ Нет вопросов для улучшения!")
@@ -1410,16 +1292,10 @@ class QuestionsHandler(AdminBaseHandler):
                         improved_explanation != old_explanation):
                         
                         # Сохраняем улучшенное объяснение
-                        with sqlite3.connect(self.db.db_path) as conn:
-                            cursor = conn.cursor()
-                            cursor.execute(
-                                'UPDATE questions SET explanation = ? WHERE id = ?',
-                                (improved_explanation, question_id)
-                            )
-                            conn.commit()
-                        
-                        improved_count += 1
-                        logging.info(f"Improved explanation for question {question_id}")
+                        success = self.db.update_question_explanation(question_id, improved_explanation)
+                        if success:
+                            improved_count += 1
+                            logging.info(f"Improved explanation for question {question_id}")
                     
                 except Exception as e:
                     logging.error(f"Error improving explanation for question {question_id}: {e}")
@@ -1457,7 +1333,7 @@ class QuestionsHandler(AdminBaseHandler):
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML') 
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
 
     # === NEW EDIT FUNCTIONS ===
     
@@ -1469,16 +1345,8 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Получаем доступные темы
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT s.id, s.name, m.name as main_topic
-                    FROM subtopics s
-                    JOIN main_topics m ON s.main_topic_id = m.id
-                    WHERE s.is_active = 1 AND m.is_active = 1
-                    ORDER BY m.name, s.name
-                ''')
-                topics = cursor.fetchall()
+            # Используем database facade вместо прямого SQLite подключения
+            topics = self.db.get_topics_for_editing()
         except Exception as e:
             await query.edit_message_text(f"❌ Ошибка получения тем: {e}")
             return
@@ -1487,12 +1355,8 @@ class QuestionsHandler(AdminBaseHandler):
         text += "Выберите новую тему:"
         
         keyboard = []
-        current_main_topic = None
         
         for topic_id, topic_name, main_topic in topics[:20]:  # Ограничиваем для избежания длинного меню
-            if current_main_topic != main_topic:
-                current_main_topic = main_topic
-                
             keyboard.append([InlineKeyboardButton(
                 f"{main_topic}: {topic_name}",
                 callback_data=f"edit_topic_select_{question_id}_{topic_id}"
@@ -1512,24 +1376,26 @@ class QuestionsHandler(AdminBaseHandler):
         await self.safe_answer_callback(query)
         
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Получаем название новой темы
-                cursor.execute('SELECT name FROM subtopics WHERE id = ?', (new_topic_id,))
-                new_topic_name = cursor.fetchone()[0]
-                
-                # Обновляем тему вопроса
-                cursor.execute('UPDATE questions SET topic_id = ? WHERE id = ?', (new_topic_id, question_id))
-                conn.commit()
-                
+            # Получаем название новой темы
+            new_topic_name = self.db.get_topic_name_by_id_for_edit(new_topic_id)
+            
+            if not new_topic_name:
+                await query.edit_message_text("❌ Тема не найдена.")
+                return
+            
+            # Обновляем тему вопроса
+            success = self.db.update_question_in_database(question_id, 'topic_id', str(new_topic_id))
+            
+            if success:
                 # Автоматически обновляем объяснение
                 await self._auto_update_explanation_after_change(question_id, "topic")
                 
-            text = f"✅ <b>Тема изменена</b>\n\n"
-            text += f"<b>ID вопроса:</b> {question_id}\n"
-            text += f"<b>Новая тема:</b> {new_topic_name}\n"
-            text += f"<b>Объяснение:</b> Автоматически обновлено"
+                text = f"✅ <b>Тема изменена</b>\n\n"
+                text += f"<b>ID вопроса:</b> {question_id}\n"
+                text += f"<b>Новая тема:</b> {new_topic_name}\n"
+                text += f"<b>Объяснение:</b> Автоматически обновлено"
+            else:
+                text = "❌ Ошибка при изменении темы."
             
             keyboard = [
                 [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_question_select_{question_id}")],
@@ -1550,10 +1416,12 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Получаем текущий текст вопроса
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT question FROM questions WHERE id = ?', (question_id,))
-                current_question = cursor.fetchone()[0]
+            # Используем database facade вместо прямого SQLite подключения
+            question_data = self.db.get_question_with_topic_by_id(question_id)
+            if not question_data:
+                await query.edit_message_text("❌ Вопрос не найден.")
+                return
+            current_question = question_data.get('question', '')
         except Exception as e:
             await query.edit_message_text(f"❌ Ошибка получения вопроса: {e}")
             return
@@ -1578,10 +1446,12 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Получаем текущий ответ
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT answer FROM questions WHERE id = ?', (question_id,))
-                current_answer = cursor.fetchone()[0]
+            # Используем database facade вместо прямого SQLite подключения
+            question_data = self.db.get_question_with_topic_by_id(question_id)
+            if not question_data:
+                await query.edit_message_text("❌ Вопрос не найден.")
+                return
+            current_answer = question_data.get('answer', '')
         except Exception as e:
             await query.edit_message_text(f"❌ Ошибка получения ответа: {e}")
             return
@@ -1606,56 +1476,34 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Получаем текущие варианты и правильный ответ
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT incorrect_options, answer FROM questions WHERE id = ?', (question_id,))
-                result = cursor.fetchone()
-                if result:
-                    incorrect_options, correct_answer = result
-                else:
-                    incorrect_options, correct_answer = None, None
+            # Используем database facade вместо прямого SQLite подключения
+            question_data = self.db.get_question_with_topic_by_id(question_id)
+            if not question_data:
+                await query.edit_message_text("❌ Вопрос не найден.")
+                return
+            
+            correct_answer = question_data.get('answer', '')
+            option_a = question_data.get('option_a', '')
+            option_b = question_data.get('option_b', '')
+            option_c = question_data.get('option_c', '')
+            option_d = question_data.get('option_d', '')
+            
         except Exception as e:
             await query.edit_message_text(f"❌ Ошибка получения вариантов: {e}")
             return
         
-        # Парсим варианты ответов
-        options = []
-        if incorrect_options:
-            try:
-                import json
-                # Сначала пробуем JSON формат
-                options_data = json.loads(incorrect_options)
-                if isinstance(options_data, list):
-                    options = options_data
-                elif isinstance(options_data, dict):
-                    options = [options_data.get('A', ''), options_data.get('B', ''), 
-                              options_data.get('C', ''), options_data.get('D', '')]
-            except:
-                # Если JSON не работает, пробуем простой текст с переносами строк
-                try:
-                    # Разбиваем по переносам строк и убираем пустые строки
-                    text_options = [opt.strip() for opt in incorrect_options.split('\n') if opt.strip()]
-                    options = text_options
-                except:
-                    options = []
-        
-        # Добавляем правильный ответ к вариантам для полного отображения
-        all_options = []
-        if correct_answer:
-            all_options.append(correct_answer.strip())
-        if options:
-            for opt in options:
-                if opt.strip() and opt.strip() not in [correct_answer.strip() if correct_answer else ""]:
-                    all_options.append(opt.strip())
+        # Собираем все варианты для отображения
+        all_options = [option_a, option_b, option_c, option_d]
+        all_options = [opt for opt in all_options if opt]  # Убираем пустые
         
         text = f"📋 <b>Изменение вариантов ответов ID {question_id}</b>\n\n"
-        if all_options:  # Проверяем что есть хотя бы один вариант
+        if all_options:
             text += "<b>Текущие варианты:</b>\n"
             labels = ['A', 'B', 'C', 'D']
             for i, option in enumerate(all_options[:4]):
                 if option:
                     # Проверяем, является ли этот вариант правильным ответом
-                    if option.strip() == correct_answer.strip() if correct_answer else False:
+                    if option.strip() == correct_answer.strip():
                         text += f"✅ {labels[i]}) {option} <i>(правильный)</i>\n"
                     else:
                         text += f"❌ {labels[i]}) {option}\n"
@@ -1681,10 +1529,12 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Получаем текущее объяснение
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT explanation FROM questions WHERE id = ?', (question_id,))
-                current_explanation = cursor.fetchone()[0] or "Отсутствует"
+            # Используем database facade вместо прямого SQLite подключения
+            question_data = self.db.get_question_with_topic_by_id(question_id)
+            if not question_data:
+                await query.edit_message_text("❌ Вопрос не найден.")
+                return
+            current_explanation = question_data.get('explanation', '') or "Отсутствует"
         except Exception as e:
             await query.edit_message_text(f"❌ Ошибка получения объяснения: {e}")
             return
@@ -1711,18 +1561,19 @@ class QuestionsHandler(AdminBaseHandler):
             return
         
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('UPDATE questions SET question = ? WHERE id = ?', (new_text, question_id))
-                conn.commit()
+            # Используем database facade вместо прямого SQLite подключения
+            success = self.db.update_question_in_database(question_id, 'question', new_text)
             
-            # Автоматически обновляем объяснение
-            await self._auto_update_explanation_after_change(question_id, "question")
-            
-            text = f"✅ <b>Текст вопроса обновлен</b>\n\n"
-            text += f"<b>ID вопроса:</b> {question_id}\n"
-            text += f"<b>Новый текст:</b> {new_text[:200]}{'...' if len(new_text) > 200 else ''}\n"
-            text += f"<b>Объяснение:</b> Автоматически обновлено"
+            if success:
+                # Автоматически обновляем объяснение
+                await self._auto_update_explanation_after_change(question_id, "question")
+                
+                text = f"✅ <b>Текст вопроса обновлен</b>\n\n"
+                text += f"<b>ID вопроса:</b> {question_id}\n"
+                text += f"<b>Новый текст:</b> {new_text[:200]}{'...' if len(new_text) > 200 else ''}\n"
+                text += f"<b>Объяснение:</b> Автоматически обновлено"
+            else:
+                text = "❌ Ошибка при обновлении текста вопроса."
             
             keyboard = [
                 [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_question_select_{question_id}")],
@@ -1748,18 +1599,19 @@ class QuestionsHandler(AdminBaseHandler):
             return
         
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('UPDATE questions SET answer = ? WHERE id = ?', (new_answer, question_id))
-                conn.commit()
+            # Используем database facade вместо прямого SQLite подключения
+            success = self.db.update_question_in_database(question_id, 'answer', new_answer)
             
-            # Автоматически обновляем объяснение
-            await self._auto_update_explanation_after_change(question_id, "answer")
-            
-            text = f"✅ <b>Правильный ответ обновлен</b>\n\n"
-            text += f"<b>ID вопроса:</b> {question_id}\n"
-            text += f"<b>Новый ответ:</b> {new_answer}\n"
-            text += f"<b>Объяснение:</b> Автоматически обновлено"
+            if success:
+                # Автоматически обновляем объяснение
+                await self._auto_update_explanation_after_change(question_id, "answer")
+                
+                text = f"✅ <b>Правильный ответ обновлен</b>\n\n"
+                text += f"<b>ID вопроса:</b> {question_id}\n"
+                text += f"<b>Новый ответ:</b> {new_answer}\n"
+                text += f"<b>Объяснение:</b> Автоматически обновлено"
+            else:
+                text = "❌ Ошибка при обновлении ответа."
             
             keyboard = [
                 [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_question_select_{question_id}")],
@@ -1786,7 +1638,6 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Парсим варианты ответов
         try:
-            import json
             lines = options_text.strip().split('\n')
             options = {}
             
@@ -1802,24 +1653,22 @@ class QuestionsHandler(AdminBaseHandler):
                 await update.message.reply_text("❌ Неверный формат. Используйте:\nA: вариант A\nB: вариант B\nи т.д.")
                 return
             
-            # Конвертируем в список для сохранения
+            # Обновляем варианты ответов
             options_list = [options.get('A', ''), options.get('B', ''), options.get('C', ''), options.get('D', '')]
-            options_json = json.dumps(options_list)
+            success = self.db.update_question_options(question_id, options_list)
             
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('UPDATE questions SET incorrect_options = ? WHERE id = ?', (options_json, question_id))
-                conn.commit()
-            
-            # Автоматически обновляем объяснение
-            await self._auto_update_explanation_after_change(question_id, "options")
-            
-            text = f"✅ <b>Варианты ответов обновлены</b>\n\n"
-            text += f"<b>ID вопроса:</b> {question_id}\n"
-            text += f"<b>Новые варианты:</b>\n"
-            for label, value in options.items():
-                text += f"{label}: {value}\n"
-            text += f"\n<b>Объяснение:</b> Автоматически обновлено"
+            if success:
+                # Автоматически обновляем объяснение
+                await self._auto_update_explanation_after_change(question_id, "options")
+                
+                text = f"✅ <b>Варианты ответов обновлены</b>\n\n"
+                text += f"<b>ID вопроса:</b> {question_id}\n"
+                text += f"<b>Новые варианты:</b>\n"
+                for label, value in options.items():
+                    text += f"{label}: {value}\n"
+                text += f"\n<b>Объяснение:</b> Автоматически обновлено"
+            else:
+                text = "❌ Ошибка при обновлении вариантов ответов."
             
             keyboard = [
                 [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_question_select_{question_id}")],
@@ -1869,37 +1718,31 @@ class QuestionsHandler(AdminBaseHandler):
         """Автоматически обновляет объяснение после изменения вопроса."""
         try:
             # Получаем данные вопроса
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT q.question, q.answer, q.incorrect_options, s.name as topic
-                    FROM questions q
-                    JOIN subtopics s ON q.topic_id = s.id
-                    WHERE q.id = ?
-                ''', (question_id,))
-                result = cursor.fetchone()
+            # Используем database facade вместо прямого SQLite подключения
+            question_data = self.db.get_question_with_topic_by_id(question_id)
             
-            if not result:
+            if not question_data:
                 return
             
-            question, answer, incorrect_options, topic = result
+            question = question_data.get('question', '')
+            answer = question_data.get('answer', '')
+            topic = question_data.get('topic', '')
             
             # Создаем новое объяснение с помощью ИИ
             from src.services.ai_service import AIService
             ai_service = AIService()
             
+            # Формируем варианты ответов
             options_text = ""
-            if incorrect_options:
-                try:
-                    import json
-                    options_data = json.loads(incorrect_options)
-                    if isinstance(options_data, list):
-                        labels = ['A', 'B', 'C', 'D']
-                        for i, option in enumerate(options_data[:4]):
-                            if option:
-                                options_text += f"{labels[i]}: {option}\n"
-                except:
-                    pass
+            option_a = question_data.get('option_a', '')
+            option_b = question_data.get('option_b', '')
+            option_c = question_data.get('option_c', '')
+            option_d = question_data.get('option_d', '')
+            
+            if option_a: options_text += f"A: {option_a}\n"
+            if option_b: options_text += f"B: {option_b}\n"
+            if option_c: options_text += f"C: {option_c}\n"
+            if option_d: options_text += f"D: {option_d}\n"
             
             new_explanation = await ai_service.generate_explanation(
                 question=question,
