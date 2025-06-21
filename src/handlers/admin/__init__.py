@@ -14,6 +14,13 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKe
 from telegram.ext import ContextTypes
 from src.services.database import Database
 from src.services.question_service import QuestionService
+from .base import AdminBaseHandler
+from .topics import TopicsHandler
+from .sections import SectionsHandler
+from .students import StudentsHandler
+from .admins import AdminsHandler
+from .questions import QuestionsHandler
+from .stats import StatsHandler
 
 class AdminHandlers(AdminBaseHandler):
     """Главный класс для обработки всех админ-функций."""

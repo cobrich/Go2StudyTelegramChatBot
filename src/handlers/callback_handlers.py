@@ -6,6 +6,7 @@ from src.utils.translations import get_message
 from src.config.constants import DEFAULT_QUESTIONS_PER_TEST
 from src.services.ai_service import AIService
 from src.services.topic_manager import TopicManager
+from src.handlers.base_handler import BaseHandler
 import sqlite3
 
 class CallbackHandlers(BaseHandler):

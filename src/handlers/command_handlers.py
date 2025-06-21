@@ -1,5 +1,5 @@
 import logging
-from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 import sqlite3
 import random
