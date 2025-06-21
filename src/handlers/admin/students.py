@@ -8,7 +8,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 import logging
-import sqlite3
 
 class StudentsHandler(AdminBaseHandler):
     """Обработчик для управления учениками."""
