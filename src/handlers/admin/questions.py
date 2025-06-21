@@ -8,6 +8,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 import logging
+import sqlite3
 
 class QuestionsHandler(AdminBaseHandler):
     """Обработчик для управления вопросами."""
@@ -97,44 +98,49 @@ class QuestionsHandler(AdminBaseHandler):
         await self.safe_answer_callback(query)
         
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Общая статистика
-                cursor.execute('SELECT COUNT(*) FROM questions')
-                total_questions = cursor.fetchone()[0]
-                
-                cursor.execute('''
-                    SELECT COUNT(DISTINCT s.name) 
-                    FROM questions q 
-                    JOIN subtopics s ON q.topic_id = s.id
-                ''')
-                unique_topics = cursor.fetchone()[0]
-                
-                cursor.execute('SELECT COUNT(*) FROM questions WHERE explanation IS NOT NULL AND explanation != ""')
-                questions_with_explanations = cursor.fetchone()[0]
-                
-                # Статистика по темам
-                cursor.execute('''
-                    SELECT s.name as topic, COUNT(*) as count 
-                    FROM questions q
-                    JOIN subtopics s ON q.topic_id = s.id
-                    GROUP BY s.name 
-                    ORDER BY count DESC 
-                    LIMIT 10
-                ''')
-                top_topics = cursor.fetchall()
-                
-                text = f"📊 <b>Статистика вопросов</b>\n\n"
-                text += f"📈 <b>Общая статистика:</b>\n"
-                text += f"• Всего вопросов: {total_questions}\n"
-                text += f"• Уникальных тем: {unique_topics}\n"
-                text += f"• С объяснениями: {questions_with_explanations} ({round(questions_with_explanations/total_questions*100 if total_questions > 0 else 0, 1)}%)\n\n"
-                
-                if top_topics:
-                    text += f"🏆 <b>Топ-10 тем по количеству вопросов:</b>\n"
-                    for i, (topic, count) in enumerate(top_topics, 1):
-                        text += f"{i}. {topic}: {count} вопросов\n"
+            # Используем database facade вместо прямого SQLite подключения
+            
+            # Общая статистика
+            all_questions = self.db.get_all_questions()
+            total_questions = len(all_questions)
+            
+            all_topics = self.db.get_all_topics()
+            unique_topics = len(all_topics)
+            
+            # Подсчитываем вопросы с объяснениями (упрощенная версия)
+            questions_with_explanations = 0
+            for question in all_questions:
+                if question.get('explanation') and question['explanation'].strip():
+                    questions_with_explanations += 1
+            
+            # Статистика по темам (упрощенная версия)
+            # Для полной реализации потребуется расширить database facade
+            topic_counts = {}
+            for question in all_questions:
+                topic_id = question.get('topic_id')
+                if topic_id:
+                    # Находим название темы
+                    topic_name = "Неизвестная тема"
+                    for topic in all_topics:
+                        if topic.get('id') == topic_id:
+                            topic_name = topic.get('name', 'Неизвестная тема')
+                            break
+                    
+                    topic_counts[topic_name] = topic_counts.get(topic_name, 0) + 1
+            
+            # Сортируем темы по количеству вопросов
+            top_topics = sorted(topic_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+            
+            text = f"📊 <b>Статистика вопросов</b>\n\n"
+            text += f"📈 <b>Общая статистика:</b>\n"
+            text += f"• Всего вопросов: {total_questions}\n"
+            text += f"• Уникальных тем: {unique_topics}\n"
+            text += f"• С объяснениями: {questions_with_explanations} ({round(questions_with_explanations/total_questions*100 if total_questions > 0 else 0, 1)}%)\n\n"
+            
+            if top_topics:
+                text += f"🏆 <b>Топ-10 тем по количеству вопросов:</b>\n"
+                for i, (topic, count) in enumerate(top_topics, 1):
+                    text += f"{i}. {topic}: {count} вопросов\n"
                 
         except Exception as e:
             logging.error(f"Error getting questions stats: {e}")

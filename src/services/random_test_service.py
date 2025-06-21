@@ -351,34 +351,36 @@ class RandomTestService:
                     # Если есть question_id, получаем тему из базы данных по ID
                     if question_id is not None:
                         try:
-                            with sqlite3.connect(self.db.db_path) as conn:
-                                cursor = conn.cursor()
-                                cursor.execute('''
-                                    SELECT s.name 
-                                    FROM questions q 
-                                    JOIN subtopics s ON q.topic_id = s.id 
-                                    WHERE q.id = ? LIMIT 1
-                                ''', (question_id,))
-                                result = cursor.fetchone()
-                                if result:
-                                    question_topic = result[0]
+                            # Используем database facade вместо прямого SQLite подключения
+                            question_topic_result = self.db.questions.fetch_one(
+                                '''
+                                SELECT s.subtopic_name 
+                                FROM questions q 
+                                JOIN subtopics s ON q.topic_id = s.id 
+                                WHERE q.id = $1 LIMIT 1
+                                ''', 
+                                (question_id,)
+                            )
+                            if question_topic_result:
+                                question_topic = question_topic_result['subtopic_name']
                         except Exception as e:
                             logger.error(f"Ошибка поиска темы вопроса по ID: {e}")
                     
                     # Если тема не указана или не найдена по ID, ищем по тексту вопроса
                     if not question_topic or question_topic == 'Неизвестная тема':
                         try:
-                            with sqlite3.connect(self.db.db_path) as conn:
-                                cursor = conn.cursor()
-                                cursor.execute('''
-                                    SELECT s.name 
-                                    FROM questions q 
-                                    JOIN subtopics s ON q.topic_id = s.id 
-                                    WHERE q.question = ? LIMIT 1
-                                ''', (question_text,))
-                                result = cursor.fetchone()
-                                if result:
-                                    question_topic = result[0]
+                            # Используем database facade вместо прямого SQLite подключения
+                            question_topic_result = self.db.questions.fetch_one(
+                                '''
+                                SELECT s.subtopic_name 
+                                FROM questions q 
+                                JOIN subtopics s ON q.topic_id = s.id 
+                                WHERE q.question_text = $1 LIMIT 1
+                                ''', 
+                                (question_text,)
+                            )
+                            if question_topic_result:
+                                question_topic = question_topic_result['subtopic_name']
                         except Exception as e:
                             logger.error(f"Ошибка поиска темы вопроса: {e}")
                     

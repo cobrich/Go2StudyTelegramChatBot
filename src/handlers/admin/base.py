@@ -75,25 +75,23 @@ class AdminBaseHandler(BaseHandler):
         
         # Получаем статистику для админ-панели
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Количество учеников
-                cursor.execute('SELECT COUNT(*) FROM allowed_users WHERE has_access = 1')
-                students_count = cursor.fetchone()[0]
-                
-                # Количество тем
-                cursor.execute('SELECT COUNT(*) FROM subtopics WHERE is_active = 1')
-                topics_count = cursor.fetchone()[0]
-                
-                # Количество вопросов
-                cursor.execute('SELECT COUNT(*) FROM questions')
-                questions_count = cursor.fetchone()[0]
-                
-                # Количество админов
-                cursor.execute('SELECT COUNT(*) FROM admins')
-                admins_count = cursor.fetchone()[0]
-                
+            # Используем database facade вместо прямого SQLite подключения
+            
+            # Количество учеников
+            students_count = len(self.db.get_all_allowed_users())
+            
+            # Количество тем
+            topics = self.db.get_all_topics(active_only=True)
+            topics_count = len(topics)
+            
+            # Количество вопросов
+            questions = self.db.get_all_questions()
+            questions_count = len(questions)
+            
+            # Количество админов
+            admins = self.db.get_all_admins()
+            admins_count = len(admins)
+            
         except Exception as e:
             logging.error(f"Error getting admin panel stats: {e}")
             students_count = topics_count = questions_count = admins_count = 0

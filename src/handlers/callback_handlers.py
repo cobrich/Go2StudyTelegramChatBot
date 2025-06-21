@@ -278,34 +278,36 @@ class CallbackHandlers(BaseHandler):
                     question_id = question[6]
                     # Получаем тему из базы данных по question_id
                     try:
-                        with sqlite3.connect(self.db.db_path) as conn:
-                            cursor = conn.cursor()
-                            cursor.execute('''
-                                SELECT s.name 
-                                FROM questions q 
-                                JOIN subtopics s ON q.topic_id = s.id 
-                                WHERE q.id = ? LIMIT 1
-                            ''', (question_id,))
-                            result = cursor.fetchone()
-                            if result:
-                                question_topic = result[0]
+                        # Используем database facade вместо прямого SQLite подключения
+                        question_topic_result = self.db.questions.fetch_one(
+                            '''
+                            SELECT s.subtopic_name 
+                            FROM questions q 
+                            JOIN subtopics s ON q.topic_id = s.id 
+                            WHERE q.id = $1 LIMIT 1
+                            ''', 
+                            (question_id,)
+                        )
+                        if question_topic_result:
+                            question_topic = question_topic_result['subtopic_name']
                     except Exception as e:
                         logging.error(f"Error finding question topic by ID: {e}")
                 
                 # Если не нашли тему по ID, ищем по тексту вопроса
                 if not question_topic:
                     try:
-                        with sqlite3.connect(self.db.db_path) as conn:
-                            cursor = conn.cursor()
-                            cursor.execute('''
-                                SELECT s.name 
-                                FROM questions q 
-                                JOIN subtopics s ON q.topic_id = s.id 
-                                WHERE q.question = ? LIMIT 1
-                            ''', (question[0],))
-                            result = cursor.fetchone()
-                            if result:
-                                question_topic = result[0]
+                        # Используем database facade вместо прямого SQLite подключения
+                        question_topic_result = self.db.questions.fetch_one(
+                            '''
+                            SELECT s.subtopic_name 
+                            FROM questions q 
+                            JOIN subtopics s ON q.topic_id = s.id 
+                            WHERE q.question_text = $1 LIMIT 1
+                            ''', 
+                            (question[0],)
+                        )
+                        if question_topic_result:
+                            question_topic = question_topic_result['subtopic_name']
                     except Exception as e:
                         logging.error(f"Error finding question topic: {e}")
                 
