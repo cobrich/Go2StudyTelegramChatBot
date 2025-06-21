@@ -1,7 +1,9 @@
 import logging
 from typing import List, Dict,  Optional
 from difflib import SequenceMatcher
-from src.services.database import get_database_instance
+import os
+import sys
+from src.db import get_database
 from src.services.ai_service import AIService
 
 logger = logging.getLogger(__name__)
@@ -10,7 +12,7 @@ class TopicManager:
     """Сервис для управления темами."""
     
     def __init__(self):
-        self.db = get_database_instance()
+        self.db = get_database()
         self.ai_service = AIService()
         # Кэш для часто используемых данных
         self._topics_cache = None

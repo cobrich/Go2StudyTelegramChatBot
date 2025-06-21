@@ -148,22 +148,18 @@ class DatabaseFacade:
     def _create_main_topic_if_not_exists(self, name: str, language: str) -> int:
         """Create main topic if it doesn't exist and return ID."""
         # Check if exists
-        check_query = f'SELECT id FROM main_topics WHERE name = {self._get_placeholder(1)} AND language = {self._get_placeholder(2)}'
+        check_query = f'SELECT id FROM main_topics WHERE topic_name = {self._get_placeholder(1)} AND language = {self._get_placeholder(2)}'
         existing_id = self.users.fetch_val(check_query, (name, language))
         
         if existing_id:
             return existing_id
         
-        # Get next order index
-        order_query = f'SELECT MAX(order_index) FROM main_topics WHERE language = {self._get_placeholder(1)}'
-        max_order = self.users.fetch_val(order_query, (language,)) or 0
-        
-        # Create main topic
+        # Create main topic (убираем order_index, его нет в новой схеме)
         insert_query = f'''
-            INSERT INTO main_topics (name, language, order_index)
-            VALUES ({self._get_placeholder(1)}, {self._get_placeholder(2)}, {self._get_placeholder(3)})
+            INSERT INTO main_topics (topic_name, language)
+            VALUES ({self._get_placeholder(1)}, {self._get_placeholder(2)})
         '''
-        self.users.execute_query(insert_query, (name, language, max_order + 1))
+        self.users.execute_query(insert_query, (name, language))
         
         # Get the created ID
         return self.users.fetch_val(check_query, (name, language))
@@ -171,18 +167,18 @@ class DatabaseFacade:
     def _create_subtopic_if_not_exists(self, name: str, main_topic_id: int, order_index: int):
         """Create subtopic if it doesn't exist."""
         # Check if exists
-        check_query = f'SELECT id FROM subtopics WHERE name = {self._get_placeholder(1)} AND main_topic_id = {self._get_placeholder(2)}'
+        check_query = f'SELECT id FROM subtopics WHERE subtopic_name = {self._get_placeholder(1)} AND main_topic_id = {self._get_placeholder(2)}'
         existing_id = self.users.fetch_val(check_query, (name, main_topic_id))
         
         if existing_id:
             return
         
-        # Create subtopic
+        # Create subtopic (убираем order_index, его нет в новой схеме)
         insert_query = f'''
-            INSERT INTO subtopics (main_topic_id, name, order_index)
-            VALUES ({self._get_placeholder(1)}, {self._get_placeholder(2)}, {self._get_placeholder(3)})
+            INSERT INTO subtopics (main_topic_id, subtopic_name)
+            VALUES ({self._get_placeholder(1)}, {self._get_placeholder(2)})
         '''
-        self.users.execute_query(insert_query, (main_topic_id, name, order_index))
+        self.users.execute_query(insert_query, (main_topic_id, name))
     
     def _get_placeholder(self, index: int = 1) -> str:
         """Get parameter placeholder for current database type."""

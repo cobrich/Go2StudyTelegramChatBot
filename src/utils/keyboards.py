@@ -1,11 +1,11 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from src.db import get_database
 from src.config.constants import MAIN_MENU_KEYBOARD
-from src.services.database import get_database_instance
 from src.utils.translations import get_message, get_main_menu_keyboard
 
 def _get_db():
     """Получить экземпляр базы данных (синглтон)."""
-    return get_database_instance()
+    return get_database()
 
 def build_topic_selection_keyboard(user_id: int = None) -> InlineKeyboardMarkup:
     """Create InlineKeyboardMarkup for main topic categories selection."""

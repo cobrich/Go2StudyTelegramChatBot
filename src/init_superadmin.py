@@ -11,11 +11,15 @@ import sqlite3
 from datetime import datetime
 import hashlib
 import secrets
+import asyncio
+from typing import Optional
 
-# Добавляем путь к src в PYTHONPATH
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Добавляем корневую директорию проекта в sys.path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-from src.services.database import Database
+from src.db import Database
 
 def main():
     print("=== Инициализация суперадмина ===")

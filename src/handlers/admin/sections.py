@@ -4,10 +4,11 @@
 """
 
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from typing import Dict, List, Optional, Any, Tuple
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 from src.handlers.base_handler import BaseHandler
-from src.services.database import Database
+from src.db import Database
 
 
 class SectionsHandler(BaseHandler):

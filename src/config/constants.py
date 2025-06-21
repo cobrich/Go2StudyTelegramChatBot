@@ -68,9 +68,9 @@ def get_subtopics(main_topic: str):
 def get_active_topics():
     """Получить активные темы из базы данных."""
     try:
-        # Используем синглтон для избежания множественных инициализаций
-        from src.services.database import get_database_instance
-        db = get_database_instance()
+        # Используем новую архитектуру базы данных
+        from src.db import get_database
+        db = get_database()
         return db.get_topic_names(active_only=True)
     except Exception:
         # Fallback к статическому списку если база недоступна

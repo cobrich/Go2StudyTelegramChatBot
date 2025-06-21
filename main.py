@@ -1,4 +1,7 @@
+import asyncio
 import logging
+import os
+import sys
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -9,7 +12,7 @@ from telegram.ext import (
 )
 from telegram.request import HTTPXRequest
 from src.config.constants import TELEGRAM_BOT_TOKEN
-from src.services.database import get_database_instance
+from src.db import get_database
 from src.services.question_service import QuestionService
 from src.services.ai_service import AIService
 from src.handlers.command_handlers import CommandHandlers
@@ -26,7 +29,7 @@ logger = logging.getLogger(__name__)
 def main() -> None:
     """Start the bot."""
     # Initialize services
-    db = get_database_instance()
+    db = get_database()
     ai_service = AIService()
     question_service = QuestionService(db, ai_service)
     

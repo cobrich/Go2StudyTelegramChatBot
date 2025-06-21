@@ -1,7 +1,12 @@
 """
-Database Models and SQL Definitions
+Database Models - Улучшенная схема базы данных
 
-Contains all SQL table definitions and database schema management.
+Изменения:
+- allowed_users: user_id как PRIMARY KEY
+- test_results: добавлен topic_id, убрано дублирование date/timestamp
+- user_errors: убрано дублирующее поле topic
+- Добавлены updated_at поля для аудита
+- Оптимизированы индексы
 """
 
 import logging
@@ -11,7 +16,7 @@ from .connection_manager import get_connection_manager, DatabaseType
 logger = logging.getLogger(__name__)
 
 class DatabaseModels:
-    """Database schema definitions for both SQLite and PostgreSQL"""
+    """Определения схемы базы данных для SQLite и PostgreSQL"""
     
     def __init__(self):
         self.connection_manager = get_connection_manager()
@@ -34,21 +39,22 @@ class DatabaseModels:
                     full_name TEXT,
                     is_super_admin BOOLEAN DEFAULT FALSE,
                     created_by BIGINT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''',
             
             'allowed_users': '''
                 CREATE TABLE IF NOT EXISTS allowed_users (
-                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT PRIMARY KEY,
                     username TEXT UNIQUE,
                     full_name TEXT,
-                    grade INTEGER,
-                    added_by BIGINT,
+                    grade INTEGER CHECK (grade IN (5, 6)),
+                    added_by BIGINT REFERENCES admins(user_id),
                     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     is_active BOOLEAN DEFAULT FALSE,
-                    user_id BIGINT,
-                    language TEXT DEFAULT 'ru',
+                    language TEXT DEFAULT 'ru' CHECK (language IN ('ru', 'kk')),
                     current_topic TEXT,
                     last_activity TIMESTAMP,
                     has_access BOOLEAN DEFAULT TRUE
@@ -58,68 +64,65 @@ class DatabaseModels:
             'main_topics': '''
                 CREATE TABLE IF NOT EXISTS main_topics (
                     id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    language TEXT DEFAULT 'ru',
+                    topic_name TEXT NOT NULL,
+                    language TEXT NOT NULL CHECK (language IN ('ru', 'kk')),
                     is_active BOOLEAN DEFAULT TRUE,
-                    created_by BIGINT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    order_index INTEGER DEFAULT 0
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(topic_name, language)
                 )
             ''',
             
             'subtopics': '''
                 CREATE TABLE IF NOT EXISTS subtopics (
                     id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    main_topic_id INTEGER NOT NULL,
-                    description TEXT,
+                    subtopic_name TEXT NOT NULL,
+                    main_topic_id INTEGER NOT NULL REFERENCES main_topics(id) ON DELETE CASCADE,
                     is_active BOOLEAN DEFAULT TRUE,
-                    created_by BIGINT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    order_index INTEGER DEFAULT 0,
-                    FOREIGN KEY (main_topic_id) REFERENCES main_topics(id)
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(subtopic_name, main_topic_id)
                 )
             ''',
             
             'questions': '''
                 CREATE TABLE IF NOT EXISTS questions (
                     id SERIAL PRIMARY KEY,
-                    topic_id INTEGER NOT NULL,
-                    question TEXT NOT NULL,
-                    answer TEXT NOT NULL,
-                    explanation TEXT,
-                    incorrect_options TEXT,
-                    question_type TEXT DEFAULT 'standard',
-                    source TEXT DEFAULT 'db',
-                    image_path TEXT,
+                    question_text TEXT NOT NULL,
+                    option_a TEXT NOT NULL,
+                    option_b TEXT NOT NULL,
+                    option_c TEXT NOT NULL,
+                    option_d TEXT NOT NULL,
+                    correct_answer TEXT NOT NULL CHECK (correct_answer IN ('A', 'B', 'C', 'D')),
+                    topic_id INTEGER NOT NULL REFERENCES subtopics(id) ON DELETE CASCADE,
+                    source TEXT DEFAULT 'manual',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (topic_id) REFERENCES subtopics(id)
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''',
             
             'test_results': '''
                 CREATE TABLE IF NOT EXISTS test_results (
                     id SERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    topic TEXT NOT NULL,
-                    percentage REAL NOT NULL,
-                    date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    user_id BIGINT NOT NULL REFERENCES allowed_users(user_id),
+                    topic_id INTEGER NOT NULL REFERENCES subtopics(id),
+                    percentage REAL NOT NULL CHECK (percentage >= 0 AND percentage <= 100),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''',
             
             'user_errors': '''
                 CREATE TABLE IF NOT EXISTS user_errors (
                     id SERIAL PRIMARY KEY,
-                    user_id BIGINT NOT NULL,
-                    question_id INTEGER NOT NULL,
-                    topic TEXT NOT NULL,
+                    user_id BIGINT NOT NULL REFERENCES allowed_users(user_id),
+                    question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
                     user_answer TEXT NOT NULL,
                     correct_answer TEXT NOT NULL,
                     error_count INTEGER DEFAULT 1,
                     first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(user_id, question_id)
                 )
             '''
@@ -133,82 +136,78 @@ class DatabaseModels:
                     user_id INTEGER PRIMARY KEY,
                     username TEXT,
                     full_name TEXT,
-                    is_super_admin BOOLEAN DEFAULT 0,
+                    is_super_admin INTEGER DEFAULT 0,
                     created_by INTEGER,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''',
             
             'allowed_users': '''
                 CREATE TABLE IF NOT EXISTS allowed_users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER PRIMARY KEY,
                     username TEXT UNIQUE,
-                    full_name TEXT,
-                    grade INTEGER,
-                    added_by INTEGER,
+                    full_name TEXT NOT NULL,
+                    grade INTEGER CHECK (grade IN (5, 6)),
+                    added_by INTEGER REFERENCES admins(user_id),
                     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    is_active BOOLEAN DEFAULT 0,
-                    user_id INTEGER,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active INTEGER DEFAULT 0,
                     language TEXT DEFAULT "ru",
                     current_topic TEXT,
                     last_activity TIMESTAMP,
-                    has_access BOOLEAN DEFAULT 1,
-                    FOREIGN KEY (added_by) REFERENCES admins(user_id)
+                    has_access INTEGER DEFAULT 1
                 )
             ''',
             
             'main_topics': '''
                 CREATE TABLE IF NOT EXISTS main_topics (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
+                    topic_name TEXT NOT NULL,
                     language TEXT DEFAULT "ru",
-                    is_active BOOLEAN DEFAULT 1,
-                    created_by INTEGER,
+                    is_active INTEGER DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    order_index INTEGER DEFAULT 0,
-                    FOREIGN KEY (created_by) REFERENCES admins(user_id)
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(topic_name, language)
                 )
             ''',
             
             'subtopics': '''
                 CREATE TABLE IF NOT EXISTS subtopics (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    main_topic_id INTEGER NOT NULL,
-                    description TEXT,
-                    is_active BOOLEAN DEFAULT 1,
-                    created_by INTEGER,
+                    subtopic_name TEXT NOT NULL,
+                    main_topic_id INTEGER NOT NULL REFERENCES main_topics(id),
+                    is_active INTEGER DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    order_index INTEGER DEFAULT 0,
-                    FOREIGN KEY (main_topic_id) REFERENCES main_topics(id),
-                    FOREIGN KEY (created_by) REFERENCES admins(user_id)
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(subtopic_name, main_topic_id)
                 )
             ''',
             
             'questions': '''
                 CREATE TABLE IF NOT EXISTS questions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    topic_id INTEGER NOT NULL,
-                    question TEXT NOT NULL,
-                    answer TEXT NOT NULL,
-                    explanation TEXT,
-                    incorrect_options TEXT,
-                    question_type TEXT DEFAULT 'standard',
-                    source TEXT DEFAULT 'db',
-                    image_path TEXT,
+                    question_text TEXT NOT NULL,
+                    option_a TEXT NOT NULL,
+                    option_b TEXT NOT NULL,
+                    option_c TEXT NOT NULL,
+                    option_d TEXT NOT NULL,
+                    correct_answer TEXT NOT NULL,
+                    topic_id INTEGER NOT NULL REFERENCES subtopics(id),
+                    source TEXT DEFAULT 'manual',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (topic_id) REFERENCES subtopics(id)
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''',
             
             'test_results': '''
                 CREATE TABLE IF NOT EXISTS test_results (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    topic TEXT NOT NULL,
+                    user_id INTEGER NOT NULL REFERENCES allowed_users(user_id),
+                    topic_id INTEGER NOT NULL REFERENCES subtopics(id),
                     percentage REAL NOT NULL,
-                    date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES allowed_users(user_id)
                 )
             ''',
@@ -216,15 +215,14 @@ class DatabaseModels:
             'user_errors': '''
                 CREATE TABLE IF NOT EXISTS user_errors (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    question_id INTEGER NOT NULL,
-                    topic TEXT NOT NULL,
+                    user_id INTEGER NOT NULL REFERENCES allowed_users(user_id),
+                    question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
                     user_answer TEXT NOT NULL,
                     correct_answer TEXT NOT NULL,
                     error_count INTEGER DEFAULT 1,
                     first_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_error_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(user_id, question_id)
                 )
             '''
@@ -236,13 +234,23 @@ class DatabaseModels:
             'CREATE INDEX IF NOT EXISTS idx_allowed_users_user_id ON allowed_users(user_id)',
             'CREATE INDEX IF NOT EXISTS idx_questions_topic_id ON questions(topic_id)',
             'CREATE INDEX IF NOT EXISTS idx_test_results_user_id ON test_results(user_id)',
-            'CREATE INDEX IF NOT EXISTS idx_test_results_timestamp ON test_results(timestamp)',
+            'CREATE INDEX IF NOT EXISTS idx_test_results_topic_id ON test_results(topic_id)',
             'CREATE INDEX IF NOT EXISTS idx_user_errors_user_id ON user_errors(user_id)',
             'CREATE INDEX IF NOT EXISTS idx_user_errors_question_id ON user_errors(question_id)',
             'CREATE INDEX IF NOT EXISTS idx_subtopics_main_topic_id ON subtopics(main_topic_id)',
             'CREATE INDEX IF NOT EXISTS idx_allowed_users_is_active ON allowed_users(is_active)',
             'CREATE INDEX IF NOT EXISTS idx_main_topics_language ON main_topics(language)',
-            'CREATE INDEX IF NOT EXISTS idx_questions_source ON questions(source)'
+            'CREATE INDEX IF NOT EXISTS idx_questions_source ON questions(source)',
+            'CREATE INDEX IF NOT EXISTS idx_test_results_created_at ON test_results(created_at)',
+            'CREATE INDEX IF NOT EXISTS idx_user_topic_results ON test_results(user_id, topic_id)',
+            'CREATE INDEX IF NOT EXISTS idx_user_question_errors ON user_errors(user_id, question_id)',
+            'CREATE INDEX IF NOT EXISTS idx_active_topics ON subtopics(is_active, main_topic_id)',
+            'CREATE INDEX IF NOT EXISTS idx_active_main_topics ON main_topics(is_active, language)',
+            'CREATE INDEX IF NOT EXISTS idx_allowed_users_grade ON allowed_users(grade)',
+            'CREATE INDEX IF NOT EXISTS idx_allowed_users_language ON allowed_users(language)',
+            'CREATE INDEX IF NOT EXISTS idx_questions_correct_answer ON questions(correct_answer)',
+            'CREATE INDEX IF NOT EXISTS idx_test_results_percentage ON test_results(percentage)',
+            'CREATE INDEX IF NOT EXISTS idx_allowed_users_has_access ON allowed_users(has_access)'
         ]
         return indexes
     

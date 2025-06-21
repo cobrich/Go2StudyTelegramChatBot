@@ -8,7 +8,8 @@ from telegram.ext import ContextTypes
 import tempfile
 import json
 import time
-from src.services.database import Database, get_database_instance
+from pathlib import Path
+from src.db import Database, get_database
 from src.services.ai_service import AIService
 import fitz  # PyMuPDF
 from PIL import Image
@@ -25,7 +26,7 @@ class PDFProcessor:
             os.makedirs(output_dir)
         
         # Инициализируем базу данных для получения списка доступных тем
-        self.db = get_database_instance()
+        self.db = get_database()
         
         # Паттерн для поиска заголовков тем
         self.topic_header_pattern = r'Тема:\s*([^(]+)\((\d+)\)'
@@ -799,7 +800,7 @@ def add_questions_to_db(questions: List[Dict], db: Database) -> Dict[str, int]:
             print(f"[AI][{idx}/{total}] Генерирую объяснение для вопроса...")
             try:
                 # Определяем язык темы
-                db_instance = get_database_instance()
+                db_instance = get_database()
                 topic_language = db_instance.get_topic_language(topic)
                 
                 detailed_explanation = ai_service.generate_detailed_explanation(
@@ -902,7 +903,7 @@ def main():
             db_stats = {'saved_count': 0, 'topic_stats': {}}
             if questions:
                 print(f"\n🔄 Добавляю {len(questions)} вопросов в базу данных...")
-                db = get_database_instance()
+                db = get_database()
                 db_stats = add_questions_to_db(questions, db)
                 print(f"✅ Вопросы успешно добавлены в базу данных")
             

@@ -24,7 +24,7 @@ class QuestionRepository(BaseRepository):
         where_clause = 'WHERE st.is_active = TRUE AND mt.is_active = TRUE' if active_only else ''
         
         query = f'''
-            SELECT st.id, st.name, mt.name as main_topic, st.is_active, st.created_at,
+            SELECT st.id, st.subtopic_name as name, mt.topic_name as main_topic, st.is_active, st.created_at,
                    COALESCE(q.question_count, 0) as question_count
             FROM subtopics st
             JOIN main_topics mt ON st.main_topic_id = mt.id
@@ -34,7 +34,7 @@ class QuestionRepository(BaseRepository):
                 GROUP BY topic_id
             ) q ON st.id = q.topic_id
             {where_clause}
-            ORDER BY mt.order_index, st.order_index
+            ORDER BY mt.id, st.id
         '''
         
         topics = self.fetch_all(query)
@@ -50,11 +50,11 @@ class QuestionRepository(BaseRepository):
         where_clause = 'AND st.is_active = TRUE AND mt.is_active = TRUE' if active_only else ''
         
         query = f'''
-            SELECT mt.name as main_topic, st.name as subtopic, st.id
+            SELECT mt.topic_name as main_topic, st.subtopic_name as subtopic, st.id
             FROM main_topics mt
             JOIN subtopics st ON mt.id = st.main_topic_id
             WHERE mt.language = {self._get_placeholder(1)} {where_clause}
-            ORDER BY mt.order_index, st.order_index
+            ORDER BY mt.id, st.id
         '''
         
         rows = self.fetch_all(query, (language,))
@@ -83,27 +83,23 @@ class QuestionRepository(BaseRepository):
         try:
             # Find main topic ID
             if main_topic_name:
-                main_topic_query = f'SELECT id FROM main_topics WHERE name = {self._get_placeholder(1)}'
+                main_topic_query = f'SELECT id FROM main_topics WHERE topic_name = {self._get_placeholder(1)}'
                 main_topic_id = self.fetch_val(main_topic_query, (main_topic_name,))
                 if not main_topic_id:
                     return False
             else:
                 # Use first available main topic
-                main_topic_query = f'SELECT id FROM main_topics WHERE is_active = {self._get_placeholder(1)} ORDER BY order_index LIMIT 1'
+                main_topic_query = f'SELECT id FROM main_topics WHERE is_active = {self._get_placeholder(1)} ORDER BY id LIMIT 1'
                 main_topic_id = self.fetch_val(main_topic_query, (self._get_boolean_value(True),))
                 if not main_topic_id:
                     return False
             
-            # Get next order index
-            order_query = f'SELECT MAX(order_index) FROM subtopics WHERE main_topic_id = {self._get_placeholder(1)}'
-            max_order = self.fetch_val(order_query, (main_topic_id,)) or 0
-            
-            # Insert subtopic
+            # Insert subtopic (убираем order_index, его нет в новой схеме)
             insert_query = f'''
-                INSERT INTO subtopics (main_topic_id, name, order_index)
-                VALUES ({self._get_placeholder(1)}, {self._get_placeholder(2)}, {self._get_placeholder(3)})
+                INSERT INTO subtopics (main_topic_id, subtopic_name)
+                VALUES ({self._get_placeholder(1)}, {self._get_placeholder(2)})
             '''
-            self.execute_query(insert_query, (main_topic_id, name, max_order + 1))
+            self.execute_query(insert_query, (main_topic_id, name))
             return True
         except Exception as e:
             logger.error(f"Error adding topic: {e}")
@@ -116,7 +112,7 @@ class QuestionRepository(BaseRepository):
             params = []
             
             if name is not None:
-                updates.append(f"name = {self._get_placeholder(len(params) + 1)}")
+                updates.append(f"subtopic_name = {self._get_placeholder(len(params) + 1)}")
                 params.append(name)
             if is_active is not None:
                 updates.append(f"is_active = {self._get_placeholder(len(params) + 1)}")
@@ -142,12 +138,12 @@ class QuestionRepository(BaseRepository):
     
     def get_topic_id_by_name(self, topic_name: str) -> Optional[int]:
         """Get topic ID by name."""
-        query = f'SELECT id FROM subtopics WHERE name = {self._get_placeholder(1)}'
+        query = f'SELECT id FROM subtopics WHERE subtopic_name = {self._get_placeholder(1)}'
         return self.fetch_val(query, (topic_name,))
     
     def get_topic_name_by_id(self, topic_id: int) -> Optional[str]:
         """Get topic name by ID."""
-        query = f'SELECT name FROM subtopics WHERE id = {self._get_placeholder(1)}'
+        query = f'SELECT subtopic_name FROM subtopics WHERE id = {self._get_placeholder(1)}'
         return self.fetch_val(query, (topic_id,))
     
     # ============== QUESTION METHODS ==============
@@ -155,25 +151,26 @@ class QuestionRepository(BaseRepository):
     def get_tasks_for_topic(self, topic: str, limit: int = 20) -> List[Dict]:
         """Get tasks for specific topic by name."""
         query = f'''
-            SELECT q.id, q.question, q.answer, q.explanation, q.incorrect_options, 
-                   q.question_type, q.source, q.image_path, s.name as topic_name
+            SELECT q.id, q.question_text as question, q.correct_answer as answer, 
+                   q.option_a, q.option_b, q.option_c, q.option_d,
+                   q.source, s.subtopic_name as topic_name
             FROM questions q
             JOIN subtopics s ON q.topic_id = s.id
-            WHERE s.name = {self._get_placeholder(1)} AND s.is_active = {self._get_placeholder(2)}
+            WHERE s.subtopic_name = {self._get_placeholder(1)} AND s.is_active = {self._get_placeholder(2)}
             ORDER BY RANDOM()
             LIMIT {self._get_placeholder(3)}
         '''
         
         questions = self.fetch_all(query, (topic, self._get_boolean_value(True), limit))
         
-        # Process incorrect_options
+        # Format for compatibility - создаем explanation и incorrect_options
         for question in questions:
-            if question.get('incorrect_options'):
-                try:
-                    if isinstance(question['incorrect_options'], str):
-                        question['incorrect_options'] = json.loads(question['incorrect_options'])
-                except (json.JSONDecodeError, TypeError):
-                    question['incorrect_options'] = question['incorrect_options'].split('\n') if question['incorrect_options'] else []
+            question['explanation'] = f"Правильный ответ: {question['answer']}"
+            question['incorrect_options'] = [
+                opt for opt in [question['option_a'], question['option_b'], 
+                               question['option_c'], question['option_d']]
+                if opt != question['answer']
+            ]
         
         return questions
     
@@ -343,7 +340,7 @@ class QuestionRepository(BaseRepository):
         query = f'''
             SELECT s.name, 
                    COALESCE(q.question_count, 0) as question_count,
-                   m.name as main_topic
+                   m.topic_name as main_topic
             FROM subtopics s
             JOIN main_topics m ON s.main_topic_id = m.id
             LEFT JOIN (
@@ -352,7 +349,7 @@ class QuestionRepository(BaseRepository):
                 GROUP BY topic_id
             ) q ON s.id = q.topic_id
             {where_clause}
-            ORDER BY m.order_index, s.order_index
+            ORDER BY m.id, s.id
         '''
         
         topics = self.fetch_all(query)
@@ -392,7 +389,7 @@ class QuestionRepository(BaseRepository):
         where_clause = f'AND is_active = {self._get_placeholder(2)}' if active_only else ''
         
         query = f'''
-            SELECT id, name, order_index, language, is_active
+            SELECT id, topic_name, order_index, language, is_active
             FROM main_topics
             WHERE language = {self._get_placeholder(1)} {where_clause}
             ORDER BY order_index
@@ -406,15 +403,15 @@ class QuestionRepository(BaseRepository):
         where_clause = 'AND mt.is_active = TRUE AND (st.is_active = TRUE OR st.is_active IS NULL)' if active_only else ''
         
         query = f'''
-            SELECT mt.name as main_topic, mt.id as main_topic_id,
-                   st.name as subtopic, st.id as subtopic_id, st.order_index,
+            SELECT mt.topic_name as main_topic, mt.id as main_topic_id,
+                   st.subtopic_name as subtopic, st.id as subtopic_id, st.order_index,
                    COUNT(q.id) as question_count
             FROM main_topics mt
             LEFT JOIN subtopics st ON mt.id = st.main_topic_id
             LEFT JOIN questions q ON st.id = q.topic_id
             WHERE mt.language = {self._get_placeholder(1)} {where_clause}
-            GROUP BY mt.name, mt.id, st.name, st.id, st.order_index
-            ORDER BY mt.order_index, st.order_index
+            GROUP BY mt.topic_name, mt.id, st.subtopic_name, st.id, st.order_index
+            ORDER BY mt.id, st.id
         '''
         
         rows = self.fetch_all(query, (language,))

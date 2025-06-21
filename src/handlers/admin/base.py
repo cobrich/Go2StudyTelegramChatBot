@@ -9,7 +9,6 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from services.database import Database, get_database_instance
 from services.question_service import QuestionService
 from services.pdf_processor import PDFProcessor, add_questions_to_db
 import logging
@@ -18,9 +17,11 @@ import asyncio
 import sqlite3
 from handlers.base_handler import BaseHandler
 from services.topic_manager import TopicManager
-from typing import Dict, List
+from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 from services.ai_service import AIService
+from src.db import get_database
+from src.db import Database
 
 class AdminBaseHandler(BaseHandler):
     """Базовый класс для всех админ-хендлеров."""

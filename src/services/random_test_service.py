@@ -5,7 +5,7 @@
 
 import random
 from typing import List, Dict, Any, Optional
-from .database import Database
+from src.db import Database
 import logging
 from src.utils.translations import get_message
 import sqlite3

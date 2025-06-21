@@ -1,6 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from src.services.database import Database
+from src.db import Database
 from src.services.question_service import QuestionService
 from src.utils.keyboards import get_main_menu_markup
 from src.utils.translations import get_message
