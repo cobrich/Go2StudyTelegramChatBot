@@ -5,15 +5,22 @@
 
 import random
 from typing import List, Dict, Any, Optional
-from src.db import Database
+from src.db import get_database
 import logging
 from src.utils.translations import get_message
+import asyncio
+from datetime import datetime
+from src.services.question_service import QuestionService
+from src.services.ai_service import AIService
+from src.config.constants import DEFAULT_QUESTIONS_PER_TEST
 
 logger = logging.getLogger(__name__)
 
 class RandomTestService:
-    def __init__(self, db: Database):
-        self.db = db
+    def __init__(self):
+        self.db = get_database()
+        self.ai_service = AIService()
+        self.question_service = QuestionService(self.db, self.ai_service)
     
     def generate_random_test(self, user_id: int, question_count: int = 10) -> List[Dict[str, Any]]:
         """

@@ -11,6 +11,14 @@ from src.config.constants import HELP_TEXT, TOPICS
 from src.services.random_test_service import RandomTestService
 
 class CommandHandlers(BaseHandler):
+    def __init__(self, db=None, question_service=None):
+        super().__init__()
+        # Переопределяем db и question_service если переданы
+        if db:
+            self.db = db
+        if question_service:
+            self.question_service = question_service
+
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command."""
         user = update.effective_user

@@ -1,20 +1,19 @@
 """
-Модуль управления разделами (main_topics) для админ-панели.
-Поддерживает создание, редактирование, удаление разделов с языковой поддержкой.
+Модуль для управления разделами (секциями) в админ-панели.
+Включает создание, редактирование и удаление разделов.
 """
 
-import logging
-from typing import Dict, List, Optional, Any, Tuple
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from .base import AdminBaseHandler
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from src.handlers.base_handler import BaseHandler
-from src.db import Database
 
-class SectionsHandler(BaseHandler):
-    """Обработчик управления разделами."""
+import logging
+
+class SectionsHandler(AdminBaseHandler):
+    """Обработчик для управления разделами."""
     
-    def __init__(self, db: Database, question_service):
-        super().__init__(db, question_service)
+    def __init__(self):
+        super().__init__()
         self.sections_mapping = {}  # Для хранения mapping разделов
     
     async def sections_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -9,7 +9,7 @@ import tempfile
 import json
 import time
 from pathlib import Path
-from src.db import Database, get_database
+from src.db import get_database
 from src.services.ai_service import AIService
 import fitz  # PyMuPDF
 from PIL import Image

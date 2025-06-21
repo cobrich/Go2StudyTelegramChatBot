@@ -9,6 +9,14 @@ from src.services.topic_manager import TopicManager
 from src.handlers.base_handler import BaseHandler
 
 class CallbackHandlers(BaseHandler):
+    def __init__(self, db=None, question_service=None):
+        super().__init__()
+        # Переопределяем db и question_service если переданы
+        if db:
+            self.db = db
+        if question_service:
+            self.question_service = question_service
+
     async def _delete_previous_bot_message(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Удаляет предыдущее сообщение бота, если оно сохранено в контексте."""
         try:
@@ -1180,3 +1188,42 @@ class CallbackHandlers(BaseHandler):
                 await query.message.edit_text(error_text, reply_markup=keyboard)
             except Exception:
                 await query.message.reply_text(error_text, reply_markup=keyboard) 
+
+    async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Main callback handler that routes to specific handlers based on callback data."""
+        query = update.callback_query
+        callback_data = query.data
+        
+        # Route to specific handlers based on callback data
+        if callback_data.startswith('topic_') or callback_data.startswith('retake_'):
+            await self.handle_topic_selection(update, context)
+        elif callback_data.startswith('answer_'):
+            await self.handle_answer(update, context)
+        elif callback_data == 'continue':
+            await self.handle_continue(update, context)
+        elif callback_data == 'show_results':
+            await self.handle_show_results(update, context)
+        elif callback_data.startswith('show_explanation_'):
+            await self.handle_show_explanation(update, context)
+        elif callback_data == 'back_to_results':
+            await self.handle_back_to_results(update, context)
+        elif callback_data == 'back_to_topics':
+            await self.handle_back_to_topics(update, context)
+        elif callback_data.startswith('prev_question_'):
+            await self.handle_prev_question(update, context)
+        elif callback_data.startswith('next_question_'):
+            await self.handle_next_question(update, context)
+        elif callback_data == 'main_menu':
+            await self.handle_main_menu(update, context)
+        elif callback_data.startswith('main_topic_'):
+            await self.handle_main_topic_selection(update, context)
+        elif callback_data == 'back_to_main_topics':
+            await self.handle_back_to_main_topics(update, context)
+        elif callback_data == 'retry_random_test':
+            await self.handle_retry_random_test(update, context)
+        else:
+            # Default handling for unknown callbacks
+            try:
+                await self.safe_answer_callback(query)
+            except Exception:
+                pass 

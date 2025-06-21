@@ -1,30 +1,33 @@
 #!/usr/bin/env python3
 """
-Скрипт для инициализации суперадмина.
-Запустите этот скрипт один раз для создания первого суперадмина.
+Скрипт для инициализации суперадминистратора
+
+Создает первого суперадминистратора в системе.
+Запускается только один раз при первоначальной настройке.
 """
 
-import sys
 import os
-import logging
-
-from datetime import datetime
-import hashlib
-import secrets
+import sys
 import asyncio
-from typing import Optional
+from pathlib import Path
 
-# Добавляем корневую директорию проекта в sys.path
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+# Добавляем корневую директорию в путь
+root_dir = Path(__file__).parent
+sys.path.insert(0, str(root_dir))
 
-from src.db import Database
+# Загружаем переменные окружения
+from dotenv import load_dotenv
+load_dotenv()
 
-def main():
-    print("=== Инициализация суперадмина ===")
+# Импортируем нашу базу данных
+from src.db import get_database
+
+def init_superadmin():
+    """Инициализация суперадминистратора"""
+    print("🔧 Инициализация суперадминистратора...")
     
-    db = Database()
+    # Подключаемся к базе данных
+    db = get_database()
     
     # Проверяем, есть ли уже суперадмин
     admins = db.get_all_admins()
@@ -70,4 +73,4 @@ def main():
         print(f"\n❌ Ошибка при создании суперадмина. Возможно, пользователь с ID {user_id} уже является админом.")
 
 if __name__ == "__main__":
-    main() 
+    init_superadmin() 

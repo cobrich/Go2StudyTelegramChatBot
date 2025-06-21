@@ -1,15 +1,15 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from src.db import Database
+from src.db import get_database
 from src.services.question_service import QuestionService
 from src.utils.keyboards import get_main_menu_markup
 from src.utils.translations import get_message
 import logging
 
 class BaseHandler:
-    def __init__(self, db: Database, question_service: QuestionService):
-        self.db = db
-        self.question_service = question_service
+    def __init__(self):
+        self.db = get_database()
+        self.question_service = QuestionService()
 
     async def safe_answer_callback(self, query) -> None:
         """Safely answer callback query, ignoring expired queries."""
