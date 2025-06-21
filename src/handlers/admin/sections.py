@@ -10,7 +10,6 @@ from telegram.ext import ContextTypes
 from src.handlers.base_handler import BaseHandler
 from src.db import Database
 
-
 class SectionsHandler(BaseHandler):
     """Обработчик управления разделами."""
     

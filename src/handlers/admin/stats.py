@@ -6,7 +6,7 @@
 from .base import AdminBaseHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-import sqlite3
+
 import logging
 from datetime import datetime, timedelta
 
@@ -131,8 +131,7 @@ class StatsHandler(AdminBaseHandler):
         except Exception as e:
             logging.error(f"Error getting general stats: {e}")
             text = "❌ Ошибка при получении статистики."
-            
-        
+
         keyboard = [
             [InlineKeyboardButton("📋 История пользователей", callback_data="admin_user_history")],
             [InlineKeyboardButton("🔙 Назад", callback_data="admin_panel")]

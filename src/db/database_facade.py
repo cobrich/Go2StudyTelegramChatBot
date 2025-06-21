@@ -1,5 +1,5 @@
 """
-Database Facade
+Database Facade for Supabase
 
 Provides unified interface to all database operations through repositories.
 This maintains compatibility with the existing Database class interface.
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class DatabaseFacade:
     """
-    Unified database interface that maintains compatibility with existing Database class.
+    Unified Supabase database interface that maintains compatibility with existing Database class.
     
     This facade delegates operations to appropriate repositories while maintaining
     the same method signatures as the original Database class.
@@ -33,175 +33,10 @@ class DatabaseFacade:
         self.questions = QuestionRepository()
         self.statistics = StatisticsRepository()
         
-        # Initialize database schema
-        self._init_database()
-    
-    def _init_database(self):
-        """Initialize database schema if needed."""
-        try:
-            # Skip initialization for PostgreSQL if tables already exist
-            if self.connection_manager.is_postgresql():
-                logger.info("Skipping database initialization for PostgreSQL (tables should be created by init_supabase.py)")
-                return
-            
-            # Create tables for SQLite only
-            table_definitions = self.models.get_table_definitions()
-            self._init_sqlite_schema(table_definitions)
-            
-            # Initialize topic structure for SQLite only
-            self._init_topic_structure()
-            
-            logger.info("Database initialized successfully")
-        except Exception as e:
-            logger.error(f"Error initializing database: {e}")
-            raise
-    
-    def _init_postgresql_schema(self, table_definitions: Dict[str, str]):
-        """Initialize PostgreSQL schema."""
-        import asyncio
-        
-        async def create_tables():
-            # Initialize pool only when needed
-            if not self.connection_manager._pool:
-                await self.connection_manager.initialize_pool()
-                
-            async with self.connection_manager.get_async_connection() as conn:
-                for table_name, table_sql in table_definitions.items():
-                    try:
-                        await conn.execute(table_sql)
-                        logger.info(f"Created/verified table: {table_name}")
-                    except Exception as e:
-                        logger.error(f"Error creating table {table_name}: {e}")
-                        raise
-        
-        # Check if we can use existing event loop or need to create new one
-        try:
-            loop = asyncio.get_running_loop()
-            if loop.is_running():
-                # Schedule for later execution to avoid conflicts
-                asyncio.create_task(create_tables())
-                return
-        except RuntimeError:
-            pass
-        
-        # Run in new event loop if no active loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(create_tables())
-        finally:
-            loop.close()
-    
-    def _init_sqlite_schema(self, table_definitions: Dict[str, str]):
-        """Initialize SQLite schema."""
-        with self.connection_manager.get_sync_connection() as conn:
-            cursor = conn.cursor()
-            for table_name, table_sql in table_definitions.items():
-                try:
-                    cursor.execute(table_sql)
-                    logger.info(f"Created/verified table: {table_name}")
-                except Exception as e:
-                    logger.error(f"Error creating table {table_name}: {e}")
-                    raise
-            conn.commit()
-    
-    def _init_topic_structure(self):
-        """Initialize basic topic structure for both languages."""
-        try:
-            # Skip topic initialization for PostgreSQL to avoid event loop conflicts
-            if self.connection_manager.is_postgresql():
-                logger.info("Skipping topic structure initialization for PostgreSQL (avoiding event loop conflicts)")
-                return
-                
-            # Initialize Russian topics
-            self._init_language_topics('ru')
-            # Initialize Kazakh topics  
-            self._init_language_topics('kk')
-            logger.info("Topic structure initialized")
-        except Exception as e:
-            logger.error(f"Error initializing topic structure: {e}")
-    
-    def _init_language_topics(self, language: str):
-        """Initialize topics for specific language."""
-        topics_data = {
-            'ru': {
-                'Математика': [
-                    'Алгебра', 'Геометрия', 'Арифметика', 'Тригонометрия'
-                ],
-                'Физика': [
-                    'Механика', 'Термодинамика', 'Электричество', 'Оптика'
-                ],
-                'Химия': [
-                    'Органическая химия', 'Неорганическая химия', 'Аналитическая химия'
-                ],
-                'Биология': [
-                    'Ботаника', 'Зоология', 'Анатомия', 'Генетика'
-                ]
-            },
-            'kk': {
-                'Математика': [
-                    'Алгебра', 'Геометрия', 'Арифметика', 'Тригонометрия'
-                ],
-                'Физика': [
-                    'Механика', 'Термодинамика', 'Электр', 'Оптика'
-                ],
-                'Химия': [
-                    'Органикалық химия', 'Бейорганикалық химия', 'Аналитикалық химия'
-                ],
-                'Биология': [
-                    'Ботаника', 'Зоология', 'Анатомия', 'Генетика'
-                ]
-            }
-        }
-        
-        if language not in topics_data:
-            return
-        
-        for main_topic_name, subtopics in topics_data[language].items():
-            # Create main topic if not exists
-            main_topic_id = self._create_main_topic_if_not_exists(main_topic_name, language)
-            
-            # Create subtopics
-            for index, subtopic_name in enumerate(subtopics):
-                self._create_subtopic_if_not_exists(subtopic_name, main_topic_id, index + 1)
-    
-    def _create_main_topic_if_not_exists(self, name: str, language: str) -> int:
-        """Create main topic if it doesn't exist and return ID."""
-        # Check if exists
-        check_query = f'SELECT id FROM main_topics WHERE topic_name = {self._get_placeholder(1)} AND language = {self._get_placeholder(2)}'
-        existing_id = self.users.fetch_val(check_query, (name, language))
-        
-        if existing_id:
-            return existing_id
-        
-        # Create main topic (убираем order_index, его нет в новой схеме)
-        insert_query = f'''
-            INSERT INTO main_topics (topic_name, language)
-            VALUES ({self._get_placeholder(1)}, {self._get_placeholder(2)})
-        '''
-        self.users.execute_query(insert_query, (name, language))
-        
-        # Get the created ID
-        return self.users.fetch_val(check_query, (name, language))
-    
-    def _create_subtopic_if_not_exists(self, name: str, main_topic_id: int, order_index: int):
-        """Create subtopic if it doesn't exist."""
-        # Check if exists
-        check_query = f'SELECT id FROM subtopics WHERE subtopic_name = {self._get_placeholder(1)} AND main_topic_id = {self._get_placeholder(2)}'
-        existing_id = self.users.fetch_val(check_query, (name, main_topic_id))
-        
-        if existing_id:
-            return
-        
-        # Create subtopic (убираем order_index, его нет в новой схеме)
-        insert_query = f'''
-            INSERT INTO subtopics (main_topic_id, subtopic_name)
-            VALUES ({self._get_placeholder(1)}, {self._get_placeholder(2)})
-        '''
-        self.users.execute_query(insert_query, (main_topic_id, name))
+        logger.info("DatabaseFacade initialized for Supabase")
     
     def _get_placeholder(self, index: int = 1) -> str:
-        """Get parameter placeholder for current database type."""
+        """Get parameter placeholder for PostgreSQL."""
         return self.users._get_placeholder(index)
     
     # ============== COMPATIBILITY METHODS ==============
@@ -256,7 +91,6 @@ class DatabaseFacade:
     def set_user_access(self, user_id: int, has_access: bool) -> bool:
         return self.users.set_user_access(user_id, has_access)
     
-    # User Registration Methods
     def add_allowed_user(self, username: str, full_name: str, grade: int, added_by: int, 
                         user_id: int = None, language: str = "ru") -> bool:
         return self.users.add_allowed_user(username, full_name, grade, added_by, user_id, language)
@@ -271,14 +105,12 @@ class DatabaseFacade:
     def remove_allowed_user_by_id(self, user_id: int) -> bool:
         return self.users.remove_allowed_user_by_id(user_id)
     
-    # User Listing Methods
     def get_all_allowed_users(self) -> List[Dict]:
         return self.users.get_all_allowed_users()
     
     def get_allowed_user_by_id(self, user_id: int) -> Optional[Dict]:
         return self.users.get_allowed_user_by_id(user_id)
     
-    # User Data Cleanup Methods
     def delete_all_user_data(self, user_id: int) -> bool:
         return self.users.delete_all_user_data(user_id)
     
@@ -307,7 +139,7 @@ class DatabaseFacade:
     def get_admin_info(self, user_id: int) -> Optional[Dict]:
         return self.admins.get_admin_info(user_id)
     
-    # Topic and Question Methods
+    # Topic Methods
     def get_all_topics(self, active_only: bool = True) -> List[Dict]:
         return self.questions.get_all_topics(active_only)
     
@@ -348,12 +180,12 @@ class DatabaseFacade:
     def get_recent_unique_topics(self, user_id: int, unique_limit: int = 5, history_limit: int = 20) -> List[Tuple[str, int]]:
         return self.statistics.get_recent_unique_topics(user_id, unique_limit, history_limit)
     
-    # Error Tracking Methods
+    # Error Methods
     def add_user_error(self, user_id: int, topic: str, question_text: str,
                       user_answer_text: str, correct_answer_text: str,
                       explanation_text: str) -> None:
-        return self.statistics.add_user_error(user_id, topic, question_text, 
-                                           user_answer_text, correct_answer_text, explanation_text)
+        return self.statistics.add_user_error(user_id, topic, question_text,
+                                            user_answer_text, correct_answer_text, explanation_text)
     
     def get_error_tasks_for_user(self, user_id: int, topic: str, limit: int = 10) -> List[Dict]:
         return self.statistics.get_error_tasks_for_user(user_id, topic, limit)
@@ -377,7 +209,7 @@ class DatabaseFacade:
     def get_class_statistics(self, grade: int = None) -> Dict:
         return self.statistics.get_class_statistics(grade)
     
-    # Additional compatibility methods that might be needed
+    # Utility Methods
     def register_user(self, user_id: int, username: str) -> None:
         return self.users.register_user(user_id, username)
     
@@ -393,12 +225,9 @@ class DatabaseFacade:
     def get_all_ai_questions(self) -> List[Dict]:
         return self.questions.get_all_ai_questions()
 
-# Create a singleton instance for backward compatibility
-_database_instance = None
-
 def get_database() -> DatabaseFacade:
-    """Get singleton database instance."""
-    global _database_instance
-    if _database_instance is None:
-        _database_instance = DatabaseFacade()
-    return _database_instance 
+    """Get global database facade instance"""
+    global _database_facade
+    if '_database_facade' not in globals():
+        _database_facade = DatabaseFacade()
+    return _database_facade 

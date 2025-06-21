@@ -13,7 +13,7 @@ from src.db import Database, get_database
 from src.services.ai_service import AIService
 import fitz  # PyMuPDF
 from PIL import Image
-import sqlite3
+
 import sys
 
 # Добавляем путь к src в PYTHONPATH для корректных импортов

@@ -6,7 +6,7 @@
 from .base import AdminBaseHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-import sqlite3
+
 import logging
 
 class StudentsHandler(AdminBaseHandler):

@@ -7,7 +7,6 @@ from src.config.constants import DEFAULT_QUESTIONS_PER_TEST
 from src.services.ai_service import AIService
 from src.services.topic_manager import TopicManager
 from src.handlers.base_handler import BaseHandler
-import sqlite3
 
 class CallbackHandlers(BaseHandler):
     async def _delete_previous_bot_message(self, context: ContextTypes.DEFAULT_TYPE) -> None:

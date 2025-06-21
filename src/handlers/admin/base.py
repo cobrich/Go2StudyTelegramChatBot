@@ -14,7 +14,7 @@ from services.pdf_processor import PDFProcessor, add_questions_to_db
 import logging
 import tempfile
 import asyncio
-import sqlite3
+
 from handlers.base_handler import BaseHandler
 from services.topic_manager import TopicManager
 from typing import Dict, List, Optional, Any, Tuple

@@ -7,7 +7,7 @@
 import sys
 import os
 import logging
-import sqlite3
+
 from datetime import datetime
 import hashlib
 import secrets

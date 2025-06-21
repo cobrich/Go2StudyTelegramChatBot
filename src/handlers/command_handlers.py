@@ -1,7 +1,7 @@
 import logging
 from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
-import sqlite3
+
 import random
 import asyncio
 from src.handlers.base_handler import BaseHandler
