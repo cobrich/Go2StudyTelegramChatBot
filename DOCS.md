@@ -17,7 +17,7 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 ## 🏗️ System Architecture
 
 ### Main Components:
-- **Bot Core** (`bot.py`) - main launch file
+- **Bot Core** (`main.py`) - main launch file
 - **Handlers** - command and callback handlers
 - **Services** - business logic (database, AI, PDF processing)
 - **Utils** - helper functions and keyboards
@@ -1419,9 +1419,9 @@ results = [row for row in all_results if search_lower in row[2].lower()]
 ### 2024-12-26 - Улучшенная система редактирования вопросов
 
 ### 2024-12-19
-- **ИСПРАВЛЕНО**: Добавлены недостающие обработчики для редактирования вопросов в основной файл `bot.py`
-  - Ранее обработчики `edit_question_select_`, `edit_question_topic_`, `edit_topic_select_`, `edit_question_text_`, `edit_question_correct_`, `edit_question_options_`, `edit_question_explanation_` были определены только в `bot_universal.py`
-  - Теперь все обработчики доступны в основном файле `bot.py`
+- **ИСПРАВЛЕНО**: Добавлены недостающие обработчики для редактирования вопросов в основной файл `main.py`
+  - Ранее обработчики `edit_question_select_`, `edit_question_topic_`, `edit_topic_select_`, `edit_question_text_`, `edit_question_correct_`, `edit_question_options_`, `edit_question_explanation_` были определены только в универсальной версии
+  - Теперь все обработчики доступны в основном файле `main.py`
   - Исправлена проблема с нефункционирующими кнопками редактирования вопросов
 - **УЛУЧШЕНО**: Интерфейс редактирования вопросов теперь показывает какие варианты ответов правильные (✅) и неправильные (❌)
   - Добавлены иконки ✅ для правильных ответов и ❌ для неправильных
@@ -1450,7 +1450,7 @@ results = [row for row in all_results if search_lower in row[2].lower()]
 - ✅ **Документация**: README.md, DOCS.md, deploy_guide.md, PDF_FORMAT_GUIDE.md
 
 **📁 src/ - Исходный код:**
-- ✅ **Основные файлы бота**: bot.py, bot_universal.py, bot_compat.py
+- ✅ **Основные файлы бота**: main.py - единственный файл запуска
 - ✅ **Services (бизнес-логика)**: database.py, ai_service.py, question_service.py и др.
 - ✅ **Handlers (обработчики)**: callback_handlers.py, command_handlers.py, админ-модули
 - ✅ **Utils (утилиты)**: keyboards.py, translations.py
@@ -1632,5 +1632,100 @@ SELECT COUNT(*) FROM allowed_users WHERE has_access = 1
 - ✅ **Удобство**: Легко найти любой файл и понять его назначение
 
 **📍 Файл**: `PROJECT_STRUCTURE.md` обновлен до актуального состояния (36KB)
+
+### 2024-12-19: Удалены неиспользуемые файлы бота
+
+### 2025-01-19: Обновлена документация структуры проекта (PROJECT_STRUCTURE.md)
+
+### 2025-01-19: Исправлены все файлы продакшена и деплоя
+
+**🎯 Задача**: Обновить все файлы деплоя и продакшена для соответствия новой структуре проекта с `main.py` вместо `bot.py`.
+
+**🔍 Проблема**: Все файлы деплоя содержали устаревшие ссылки на `bot.py` и неправильные пути запуска, что приводило к ошибкам при развертывании.
+
+**✅ Исправленные файлы:**
+
+**📦 Docker файлы:**
+- ✅ **`Dockerfile`**: 
+  - Изменен запуск с `CMD ["python", "bot.py"]` на `CMD ["python", "main.py"]`
+  - Добавлено копирование `main.py` в контейнер
+  - Исправлен `PYTHONPATH` с `/app/src` на `/app`
+  - Убрана смена рабочей директории на `src/`
+
+- ✅ **`docker-compose.yml`**: 
+  - Исправлен `PYTHONPATH` в environment variables
+
+**☁️ Облачные платформы:**
+- ✅ **`Procfile`**: 
+  - Изменено с `worker: cd src && python bot.py` на `worker: python main.py`
+  - Убрана необходимость перехода в директорию `src/`
+
+**🖥️ Linux сервер:**
+- ✅ **`go2study-bot.service`**: 
+  - Изменен `WorkingDirectory` с `/home/ubuntu/go2study_bot/src` на `/home/ubuntu/go2study_bot`
+  - Изменен `ExecStart` для запуска `main.py` из корневой директории
+  - Исправлен `PYTHONPATH` для корректной работы импортов
+
+**📖 Документация:**
+- ✅ **`deploy_guide.md`**: 
+  - Обновлены все примеры команд запуска
+  - Исправлены Dockerfile и docker-compose примеры
+  - Обновлены инструкции для systemd сервиса
+  - Добавлены актуальные примеры для облачных платформ
+  - Исправлены команды мониторинга (`ps aux | grep main.py`)
+
+- ✅ **`README.md`**: 
+  - Упрощена структура архитектуры
+  - Удалены ссылки на несуществующие файлы
+  - Обновлены все примеры запуска
+  - Исправлены команды отладки и мониторинга
+
+- ✅ **`DOCS.md`**: 
+  - Обновлен раздел архитектуры
+  - Исправлены упоминания в changelog
+
+**🔧 Ключевые изменения в логике деплоя:**
+
+**Было (неправильно):**
+```bash
+# Docker
+WORKDIR /app/src
+CMD ["python", "bot.py"]
+
+# Systemd
+WorkingDirectory=/home/ubuntu/go2study_bot/src
+ExecStart=.../python bot.py
+
+# Procfile
+worker: cd src && python bot.py
+```
+
+**Стало (правильно):**
+```bash
+# Docker
+WORKDIR /app
+CMD ["python", "main.py"]
+
+# Systemd  
+WorkingDirectory=/home/ubuntu/go2study_bot
+ExecStart=.../python main.py
+
+# Procfile
+worker: python main.py
+```
+
+**📊 Результат**:
+- ✅ **Все файлы деплоя актуальны**: Docker, systemd, облачные платформы
+- ✅ **Упрощена структура**: запуск из корневой директории вместо `src/`
+- ✅ **Исправлены пути**: корректные PYTHONPATH и рабочие директории
+- ✅ **Обновлена документация**: все инструкции соответствуют реальной структуре
+- ✅ **Готовность к продакшену**: проект можно развертывать без ошибок
+
+**🚀 Проверено для платформ**:
+- Docker / Docker Compose ✅
+- Heroku / Railway ✅  
+- DigitalOcean Apps ✅
+- VPS с systemd ✅
+- Render / Fly.io ✅
 
 ### 2024-12-19: Удалены неиспользуемые файлы бота

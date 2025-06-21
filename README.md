@@ -1,37 +1,40 @@
-# Go2Study Bot 🤖📚
+# 🤖 Go2Study Bot
 
-Telegram-бот для изучения математики с поддержкой ИИ, тестирования и административными функциями.
+Telegram бот для изучения математики с адаптивной системой обучения, ИИ-генерацией вопросов и многоязычной поддержкой.
 
-## ⚡ Быстрая установка
+## ✨ Основные функции
 
-### Метод 1: Автоматическая установка (Рекомендуется)
+### 🎯 Для учеников
+- **Адаптивное тестирование** с фокусом на слабые места
+- **ИИ-генерация вопросов** для персонализированного обучения
+- **Отслеживание прогресса** и детальная аналитика
+- **Повторение ошибок** для закрепления материала
+- **Многоязычность** (русский/казахский)
+
+### 👨‍💼 Для администраторов
+- **Управление пользователями** через систему whitelist
+- **Загрузка вопросов** из PDF файлов
+- **Статистика и аналитика** по всем ученикам
+- **Управление темами** и контентом
+- **Система ролей** (супер-админ/админ)
+
+## 🚀 Быстрый старт
+
+### 1. Установка зависимостей
 ```bash
-# Клонируйте репозиторий
-git clone <repository-url>
-cd go2study_bot
-
-# Запустите автоматическую установку
-python setup.py
+# Автоматическая установка всех зависимостей
+python3 setup.py
 ```
 
-### Метод 2: Ручная установка
+### 2. Настройка .env
 ```bash
-# Клонируйте репозиторий
-git clone <repository-url>
-cd go2study_bot
-
-# Создайте виртуальное окружение
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# или
-venv\Scripts\activate     # Windows
-
-# Установите зависимости
-pip install -r requirements.txt
-
-# Настройте переменные окружения
 cp .env.template .env
-# Отредактируйте .env файл и добавьте ваши API ключи
+# Отредактируйте .env файл, добавив ваши API ключи
+```
+
+### 3. Запуск
+```bash
+python main.py
 ```
 
 ## 🔧 Совместимость версий
@@ -42,24 +45,10 @@ cp .env.template .env
 - `python-telegram-bot 20.x` (Рекомендуется)
 - `python-telegram-bot 21.x+` (Экспериментально)
 
-**🚀 Запуск для разных версий:**
+**🚀 Запуск:**
 
-#### Версия 20.x (Стабильная)
 ```bash
-cd src
-python bot.py
-```
-
-#### Версия 21.x+ (Универсальная)
-```bash
-cd src
-python bot_universal.py
-```
-
-#### Автоопределение версии
-```bash
-cd src
-python bot_compat.py
+python main.py
 ```
 
 ## 📋 Требования
@@ -89,35 +78,25 @@ GEMINI_MODEL=gemini-pro
 
 ### 2. Настройка супер-администратора
 ```bash
-# Получите ваш user_id
-python -c "
-import sys; sys.path.append('src')
-from services.database import Database
-db = Database()
-# Замените на ваши данные
-user_id = 1234567890
-username = 'your_username'
-full_name = 'Your Full Name'
-db.add_admin(user_id, username, full_name, is_super=True)
-print('Super admin added!')
-"
+# Инициализация супер-админа
+python src/init_superadmin.py
 ```
 
 ## 🚀 Запуск
 
 ### Обычный запуск
 ```bash
-cd src && python bot.py
+python main.py
 ```
 
 ### Фоновый запуск (Linux/Mac)
 ```bash
-cd src && nohup python bot.py > bot.log 2>&1 &
+nohup python main.py > bot.log 2>&1 &
 ```
 
 ### Проверка статуса
 ```bash
-ps aux | grep bot.py
+ps aux | grep main.py
 ```
 
 ## 🔨 Решение проблем
@@ -126,7 +105,7 @@ ps aux | grep bot.py
 ```bash
 # Если получаете RuntimeError: ExtBot is not properly initialized
 pip install "python-telegram-bot==20.8"
-cd src && python bot.py
+python main.py
 ```
 
 ### Конфликт версий
@@ -167,10 +146,8 @@ pip install "google-generativeai<1.0.0"
 
 ```
 go2study_bot/
+├── main.py                 # Основной файл запуска
 ├── src/
-│   ├── bot.py              # Основной бот (v20.x)
-│   ├── bot_universal.py    # Универсальная версия
-│   ├── bot_compat.py       # Модуль совместимости
 │   ├── config/             # Конфигурация
 │   ├── handlers/           # Обработчики команд
 │   ├── services/           # Бизнес-логика
@@ -206,7 +183,7 @@ grep ERROR bot.log | tail -10
 ### Отладка
 ```bash
 # Запуск с подробным логированием
-cd src && python -u bot.py
+python -u main.py
 ```
 
 ### База данных

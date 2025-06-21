@@ -32,11 +32,10 @@ cp .env.template .env
 nano .env  # Заполните TELEGRAM_BOT_TOKEN и GEMINI_API_KEY
 
 # 6. Инициализация супер-админа
-cd src
-python3 init_superadmin.py
+python3 src/init_superadmin.py
 
 # 7. Запуск бота
-python3 bot.py
+python3 main.py
 ```
 
 #### Настройка как системный сервис:
@@ -55,11 +54,11 @@ After=network.target
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/home/ubuntu/go2study_bot/src
-ExecStart=/home/ubuntu/go2study_bot/venv/bin/python bot.py
+WorkingDirectory=/home/ubuntu/go2study_bot
+ExecStart=/home/ubuntu/go2study_bot/venv/bin/python main.py
 Restart=always
 RestartSec=10
-Environment=PYTHONPATH=/home/ubuntu/go2study_bot/src
+Environment=PYTHONPATH=/home/ubuntu/go2study_bot
 
 [Install]
 WantedBy=multi-user.target
@@ -98,6 +97,7 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 COPY setup.py .
 COPY src/ ./src/
+COPY main.py .
 COPY .env.template .
 
 # Установка Python зависимостей
@@ -108,8 +108,7 @@ RUN useradd -m -u 1000 botuser && chown -R botuser:botuser /app
 USER botuser
 
 # Запуск
-WORKDIR /app/src
-CMD ["python", "bot.py"]
+CMD ["python", "main.py"]
 ```
 
 #### Docker Compose:
@@ -126,7 +125,7 @@ services:
       - ./data:/app/data
       - ./.env:/app/.env
     environment:
-      - PYTHONPATH=/app/src
+      - PYTHONPATH=/app
 ```
 
 ```bash
@@ -144,7 +143,7 @@ docker-compose logs -f
 #### Heroku:
 ```bash
 # Создание Procfile
-echo "worker: cd src && python bot.py" > Procfile
+echo "worker: python main.py" > Procfile
 
 # Деплой
 heroku create your-bot-name
@@ -169,8 +168,7 @@ git push heroku main
 
 ### 1. Инициализация супер-админа:
 ```bash
-cd src
-python3 init_superadmin.py
+python3 src/init_superadmin.py
 # Введите ваш Telegram user_id, username и ФИО
 ```
 
@@ -197,10 +195,10 @@ sudo systemctl status go2study-bot
 docker-compose ps
 
 # Процессы
-ps aux | grep bot.py
+ps aux | grep main.py
 ```
 
-### Просмотр логов:
+### Логи:
 ```bash
 # Системный сервис
 sudo journalctl -u go2study-bot -f
@@ -208,103 +206,100 @@ sudo journalctl -u go2study-bot -f
 # Docker
 docker-compose logs -f
 
-# Файловые логи
-tail -f bot.log
+# Прямой запуск
+tail -f nohup.out
 ```
 
-### Обновление бота:
+### Перезапуск:
 ```bash
-# Остановка
-sudo systemctl stop go2study-bot
+# Системный сервис
+sudo systemctl restart go2study-bot
 
-# Обновление кода
-git pull origin main
+# Docker
+docker-compose restart
 
-# Установка новых зависимостей (если есть)
-python3 setup.py
-
-# Запуск
-sudo systemctl start go2study-bot
-```
-
-### Резервное копирование:
-```bash
-# Создание бэкапа базы данных
-cp math_bot.db math_bot_backup_$(date +%Y%m%d).db
-
-# Автоматический бэкап (добавить в crontab)
-0 2 * * * cp /path/to/go2study_bot/math_bot.db /path/to/backups/math_bot_$(date +\%Y\%m\%d).db
+# Прямой запуск
+pkill -f main.py
+python3 main.py
 ```
 
 ---
 
-## 🔐 Безопасность
+## 🚨 Решение проблем
 
-### Настройка файрвола:
+### Ошибки запуска:
 ```bash
-# UFW (Ubuntu)
-sudo ufw allow ssh
-sudo ufw allow 80
-sudo ufw allow 443
-sudo ufw enable
+# Проверка зависимостей
+python3 -m pip install -r requirements.txt
+
+# Проверка .env файла
+cat .env
+
+# Проверка структуры проекта
+ls -la
 ```
 
-### SSL сертификат (если нужен веб-интерфейс):
+### Проблемы с базой данных:
 ```bash
-# Certbot
-sudo apt install certbot
-sudo certbot certonly --standalone -d yourdomain.com
+# Создание резервной копии
+cp math_bot.db math_bot.db.backup
+
+# Пересоздание БД
+rm math_bot.db
+python3 src/services/database.py
 ```
 
-### Обновления безопасности:
+### Проблемы с правами:
 ```bash
-# Автоматические обновления
-sudo apt install unattended-upgrades
-sudo dpkg-reconfigure unattended-upgrades
+# Исправление прав доступа
+chmod +x main.py
+chown -R $USER:$USER .
 ```
+
+---
+
+## 📋 Чеклист деплоя
+
+### Перед деплоем:
+- [ ] API ключи получены и добавлены в .env
+- [ ] Сервер соответствует требованиям
+- [ ] Код протестирован локально
+
+### После деплоя:
+- [ ] Бот отвечает на команду /start
+- [ ] Супер-админ создан и имеет доступ
+- [ ] Системный сервис настроен (для VPS)
+- [ ] Мониторинг настроен
+- [ ] Резервное копирование настроено
+
+### Безопасность:
+- [ ] .env файл не попадает в git
+- [ ] Права доступа к файлам ограничены
+- [ ] Firewall настроен (если нужно)
+- [ ] SSL сертификат установлен (для веб-интерфейса)
 
 ---
 
 ## 💰 Стоимость хостинга
 
-### VPS провайдеры:
-- **DigitalOcean**: $5-10/месяц
-- **Vultr**: $3.50-6/месяц  
-- **Linode**: $5-10/месяц
-- **Hetzner**: €3-5/месяц
+### VPS провайдеры (месяц):
+- **Vultr**: от $3.50 (1GB RAM, 1 vCPU)
+- **DigitalOcean**: от $4 (1GB RAM, 1 vCPU)  
+- **Hetzner**: от €3.29 (1GB RAM, 1 vCPU)
+- **Contabo**: от €3.99 (4GB RAM, 2 vCPU)
 
-### Облачные платформы:
-- **Heroku**: $7/месяц (Hobby)
-- **Railway**: $5/месяц
-- **DigitalOcean Apps**: $5/месяц
+### Cloud платформы (месяц):
+- **Heroku**: $7 (Hobby tier)
+- **Railway**: $5 (Pro plan)
+- **Render**: $7 (Starter)
+- **DigitalOcean Apps**: $5 (Basic)
 
----
-
-## 📞 Поддержка
-
-### Если что-то не работает:
-1. Проверьте логи: `sudo journalctl -u go2study-bot -f`
-2. Проверьте статус: `sudo systemctl status go2study-bot`
-3. Перезапустите: `sudo systemctl restart go2study-bot`
-4. Проверьте .env файл с токенами
-
-### Частые проблемы:
-- **Бот не отвечает**: Проверьте TELEGRAM_BOT_TOKEN
-- **ИИ не работает**: Проверьте GEMINI_API_KEY
-- **База данных**: Проверьте права доступа к файлу math_bot.db
+### Рекомендации:
+- **Для начала**: Vultr или DigitalOcean VPS
+- **Для простоты**: Railway или Heroku
+- **Для экономии**: Hetzner или Contabo
+- **Для масштабирования**: DigitalOcean Apps
 
 ---
 
-## ✅ Чек-лист готовности
-
-- [ ] Сервер настроен и обновлен
-- [ ] Python 3.8+ установлен
-- [ ] Проект склонирован и настроен
-- [ ] .env файл заполнен корректными токенами
-- [ ] Супер-админ инициализирован
-- [ ] Бот запущен и отвечает
-- [ ] Системный сервис настроен (опционально)
-- [ ] Мониторинг настроен
-- [ ] Резервное копирование настроено
-
-**Ваш бот готов к работе! 🎉** 
+*Руководство обновлено: 2025-01-19* 

@@ -12,6 +12,7 @@ WORKDIR /app
 COPY requirements.txt .
 COPY setup.py .
 COPY src/ ./src/
+COPY main.py .
 COPY .env.template .
 
 # Установка Python зависимостей
@@ -24,15 +25,12 @@ USER botuser
 # Создание директории для данных
 RUN mkdir -p /app/data
 
-# Установка рабочей директории
-WORKDIR /app/src
-
 # Переменные окружения
-ENV PYTHONPATH=/app/src
+ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
 # Порт (если понадобится веб-интерфейс)
 EXPOSE 8000
 
 # Команда запуска
-CMD ["python", "bot.py"] 
+CMD ["python", "main.py"] 
