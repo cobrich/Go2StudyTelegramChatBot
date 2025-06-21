@@ -516,8 +516,10 @@ class CommandHandlers(BaseHandler):
                 # Импортируем админ-хендлеры
                 from handlers.admin import AdminHandlers
                 from services.question_service import QuestionService
+                from services.ai_service import AIService
                 
-                admin_handlers = AdminHandlers(self.db, QuestionService(self.db))
+                ai_service = AIService()
+                admin_handlers = AdminHandlers(self.db, QuestionService(self.db, ai_service))
                 await admin_handlers.admin_panel(update, context)
             else:
                 no_admin_text = "❌ У вас нет прав администратора." if user_language == 'ru' else "❌ Сізде әкімші құқығы жоқ."
