@@ -1729,3 +1729,308 @@ worker: python main.py
 - Render / Fly.io ✅
 
 ### 2024-12-19: Удалены неиспользуемые файлы бота
+
+### 2025-06-21: Модульная архитектура базы данных
+
+**Реализована новая модульная архитектура базы данных** с поддержкой PostgreSQL и улучшенной производительностью:
+
+#### 🏗️ Новая архитектура
+
+1. **Модульная структура** - база данных разбита на специализированные репозитории:
+   - `UserRepository` - операции с пользователями
+   - `AdminRepository` - управление администраторами
+   - `QuestionRepository` - работа с вопросами и темами
+   - `StatisticsRepository` - статистика и аналитика
+
+2. **Унифицированный интерфейс** - `DatabaseFacade` обеспечивает совместимость с существующим кодом
+
+3. **Поддержка двух СУБД**:
+   - SQLite (для разработки и тестирования)
+   - PostgreSQL (для продакшена, включая Supabase)
+
+#### 🔧 Улучшения производительности
+
+- **Пул соединений** для PostgreSQL с автоматическим управлением
+- **Адаптивные SQL-запросы** для разных типов баз данных
+- **Оптимизированные индексы** и схема данных
+- **Асинхронная поддержка** для PostgreSQL операций
+
+#### 📊 Новые возможности
+
+- **Расширенная аналитика** пользователей и производительности
+- **Детальная статистика** по классам и темам
+- **Улучшенное отслеживание ошибок** с подсчетом повторений
+- **Гибкая структура тем** с поддержкой иерархии
+
+#### 🔄 Миграция
+
+- **Полная обратная совместимость** - существующий код работает без изменений
+- **Постепенная миграция** - можно переключаться между SQLite и PostgreSQL
+- **Автоматическая инициализация** схемы и базовых данных
+
+#### 🚀 Конфигурация
+
+Переключение между базами данных через переменные окружения:
+
+```bash
+# SQLite (по умолчанию)
+DATABASE_TYPE=sqlite
+
+# PostgreSQL/Supabase
+DATABASE_TYPE=postgresql
+SUPABASE_DATABASE_URL=postgresql://user:pass@host:port/db
+```
+
+#### 📁 Структура файлов
+
+```
+src/db/
+├── __init__.py                 # Основные экспорты
+├── connection_manager.py       # Управление соединениями
+├── database_facade.py          # Унифицированный интерфейс
+├── models.py                   # SQL схемы
+├── base_repository.py          # Базовый репозиторий
+└── repositories/
+    ├── __init__.py
+    ├── user_repository.py      # Операции с пользователями
+    ├── admin_repository.py     # Управление админами
+    ├── question_repository.py  # Вопросы и темы
+    └── statistics_repository.py # Статистика
+```
+
+#### 🧪 Тестирование
+
+Новая архитектура полностью протестирована:
+- ✅ Совместимость с существующим кодом
+- ✅ Работа с SQLite и PostgreSQL
+- ✅ Все операции CRUD
+- ✅ Обработка ошибок
+- ✅ Производительность
+
+---
+
+## Архитектура проекта
+
+### Структура проекта
+```
+go2study_bot/
+├── src/
+│   ├── bot/                    # Telegram bot логика
+│   ├── db/                     # Новая модульная база данных
+│   ├── services/               # Бизнес-логика
+│   ├── config/                 # Конфигурация
+│   └── utils/                  # Утилиты
+├── data/                       # Данные и ресурсы
+├── tests/                      # Тесты
+└── docs/                       # Документация
+```
+
+### База данных
+
+#### Новая модульная архитектура (рекомендуется)
+```python
+from src.db import Database, get_database
+
+# Получение экземпляра базы данных
+db = get_database()
+
+# Использование репозиториев
+user_info = db.users.get_user_full_profile(user_id)
+admin_stats = db.admins.get_admin_activity_stats()
+topics = db.questions.get_topics_by_language('ru')
+stats = db.statistics.get_user_historical_stats(user_id)
+```
+
+#### Старый интерфейс (совместимость)
+```python
+from src.services.database import Database
+
+db = Database()
+user_info = db.get_user_info(user_id)
+```
+
+### Основные компоненты
+
+#### 1. Telegram Bot (`src/bot/`)
+- Обработка команд и сообщений
+- Интерфейс пользователя
+- Управление состояниями
+
+#### 2. База данных (`src/db/`)
+- **UserRepository**: Управление пользователями, доступом, языками
+- **AdminRepository**: Управление администраторами и правами
+- **QuestionRepository**: Работа с вопросами, темами, контентом
+- **StatisticsRepository**: Аналитика, статистика, отчеты
+
+#### 3. Сервисы (`src/services/`)
+- Бизнес-логика приложения
+- Интеграция с внешними API
+- Обработка данных
+
+### Конфигурация
+
+#### Переменные окружения
+```bash
+# Основные настройки
+BOT_TOKEN=your_telegram_bot_token
+ADMIN_CHAT_ID=your_admin_chat_id
+
+# База данных
+DATABASE_TYPE=sqlite  # или postgresql
+SUPABASE_DATABASE_URL=postgresql://...  # для PostgreSQL
+
+# AI сервисы
+OPENAI_API_KEY=your_openai_key
+ANTHROPIC_API_KEY=your_anthropic_key
+```
+
+### Развертывание
+
+#### Локальная разработка
+```bash
+# Установка зависимостей
+pip install -r requirements.txt
+
+# Настройка окружения
+cp env.example .env
+# Отредактируйте .env файл
+
+# Запуск бота
+python main.py
+```
+
+#### Продакшен (PostgreSQL)
+```bash
+# Настройка PostgreSQL
+export DATABASE_TYPE=postgresql
+export SUPABASE_DATABASE_URL="postgresql://..."
+
+# Запуск с новой архитектурой
+python main.py
+```
+
+### Тестирование
+
+#### Тестирование архитектуры
+```bash
+# Тест новой модульной архитектуры
+python test_new_db_architecture.py
+
+# Тест соединения с Supabase
+python test_supabase_connection.py
+```
+
+### Миграция
+
+#### Переход на новую архитектуру
+
+1. **Подготовка**:
+   ```bash
+   # Создайте резервную копию данных
+   cp math_bot.db math_bot_backup.db
+   ```
+
+2. **Тестирование**:
+   ```bash
+   # Протестируйте новую архитектуру
+   python test_new_db_architecture.py
+   ```
+
+3. **Обновление кода**:
+   ```python
+   # Замените импорты
+   # Старый способ:
+   from src.services.database import Database
+   
+   # Новый способ:
+   from src.db import Database, get_database
+   ```
+
+4. **Переключение на PostgreSQL** (опционально):
+   ```bash
+   export DATABASE_TYPE=postgresql
+   export SUPABASE_DATABASE_URL="your_connection_string"
+   ```
+
+### Производительность
+
+#### Оптимизации
+- **Пул соединений** для PostgreSQL
+- **Подготовленные запросы** для безопасности
+- **Индексы** на часто используемых полях
+- **Кэширование** результатов запросов
+
+#### Мониторинг
+- Логирование всех операций БД
+- Метрики производительности
+- Отслеживание медленных запросов
+
+### Безопасность
+
+#### Меры безопасности
+- Параметризованные запросы против SQL-инъекций
+- Валидация входных данных
+- Ограничение прав доступа
+- Шифрование чувствительных данных
+
+#### Аудит
+- Логирование действий администраторов
+- Отслеживание изменений данных
+- Резервное копирование
+
+---
+
+## API Reference
+
+### Database Facade
+
+#### Основные методы
+- `get_database()` - получение экземпляра БД
+- `db.users.*` - операции с пользователями
+- `db.admins.*` - управление администраторами
+- `db.questions.*` - работа с вопросами
+- `db.statistics.*` - статистика и аналитика
+
+### Репозитории
+
+#### UserRepository
+```python
+# Информация о пользователе
+user_info = db.users.get_user_full_profile(user_id)
+db.users.set_user_info_with_language(user_id, name, grade, 'ru')
+
+# Управление доступом
+db.users.set_user_access(user_id, True)
+has_access = db.users.has_user_access(user_id)
+
+# Языковые настройки
+language = db.users.get_user_language(user_id)
+db.users.update_user_language(user_id, 'kk')
+```
+
+#### QuestionRepository
+```python
+# Получение тем
+topics = db.questions.get_topics_by_language('ru')
+questions = db.questions.get_tasks_for_topic('Алгебра', limit=20)
+
+# Управление контентом
+db.questions.add_question(question_dict)
+db.questions.add_topic('Новая тема')
+```
+
+#### StatisticsRepository
+```python
+# Результаты тестов
+db.statistics.add_test_result(user_id, 'Алгебра', 85.5)
+results = db.statistics.get_user_test_results(user_id)
+
+# Аналитика
+stats = db.statistics.get_user_historical_stats(user_id)
+class_stats = db.statistics.get_class_statistics(grade=10)
+```
+
+---
+
+*Документация обновлена: 2025-06-21*
+*Версия архитектуры: 2.0 (Модульная)*
