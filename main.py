@@ -28,16 +28,6 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     """Start the bot."""
-    # Initialize services
-    db = get_database()
-    ai_service = AIService()
-    question_service = QuestionService(db, ai_service)
-    
-    # Initialize handlers
-    command_handlers = CommandHandlers(db, question_service)
-    callback_handlers = CallbackHandlers(db, question_service)
-    admin_handlers = AdminHandlers(db, question_service)
-    
     # Create custom request with increased timeouts
     request = HTTPXRequest(
         connection_pool_size=8,
@@ -56,8 +46,18 @@ def main() -> None:
         pool_timeout=60.0
     )
     
-    # Create the Application with custom requests
+    # Create the Application with custom requests FIRST
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).request(request).get_updates_request(get_updates_request).build()
+    
+    # Initialize services (database is already initialized by init_supabase.py)
+    db = get_database()
+    ai_service = AIService()
+    question_service = QuestionService(db, ai_service)
+    
+    # Initialize handlers
+    command_handlers = CommandHandlers(db, question_service)
+    callback_handlers = CallbackHandlers(db, question_service)
+    admin_handlers = AdminHandlers(db, question_service)
     
     # Add command handlers
     application.add_handler(CommandHandler("start", command_handlers.start))

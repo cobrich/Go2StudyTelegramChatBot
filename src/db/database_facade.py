@@ -39,15 +39,16 @@ class DatabaseFacade:
     def _init_database(self):
         """Initialize database schema if needed."""
         try:
-            # Create tables
-            table_definitions = self.models.get_table_definitions()
-            
+            # Skip initialization for PostgreSQL if tables already exist
             if self.connection_manager.is_postgresql():
-                self._init_postgresql_schema(table_definitions)
-            else:
-                self._init_sqlite_schema(table_definitions)
+                logger.info("Skipping database initialization for PostgreSQL (tables should be created by init_supabase.py)")
+                return
             
-            # Initialize topic structure
+            # Create tables for SQLite only
+            table_definitions = self.models.get_table_definitions()
+            self._init_sqlite_schema(table_definitions)
+            
+            # Initialize topic structure for SQLite only
             self._init_topic_structure()
             
             logger.info("Database initialized successfully")
@@ -60,6 +61,10 @@ class DatabaseFacade:
         import asyncio
         
         async def create_tables():
+            # Initialize pool only when needed
+            if not self.connection_manager._pool:
+                await self.connection_manager.initialize_pool()
+                
             async with self.connection_manager.get_async_connection() as conn:
                 for table_name, table_sql in table_definitions.items():
                     try:
@@ -69,7 +74,17 @@ class DatabaseFacade:
                         logger.error(f"Error creating table {table_name}: {e}")
                         raise
         
-        # Run in new event loop
+        # Check if we can use existing event loop or need to create new one
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                # Schedule for later execution to avoid conflicts
+                asyncio.create_task(create_tables())
+                return
+        except RuntimeError:
+            pass
+        
+        # Run in new event loop if no active loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -93,6 +108,11 @@ class DatabaseFacade:
     def _init_topic_structure(self):
         """Initialize basic topic structure for both languages."""
         try:
+            # Skip topic initialization for PostgreSQL to avoid event loop conflicts
+            if self.connection_manager.is_postgresql():
+                logger.info("Skipping topic structure initialization for PostgreSQL (avoiding event loop conflicts)")
+                return
+                
             # Initialize Russian topics
             self._init_language_topics('ru')
             # Initialize Kazakh topics  

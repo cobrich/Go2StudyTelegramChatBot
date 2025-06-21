@@ -62,6 +62,16 @@ class ConnectionManager:
         """Initialize connection pool for PostgreSQL"""
         if self.db_type == DatabaseType.POSTGRESQL and not self._pool:
             try:
+                # Check if we're in the main thread and have an active event loop
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop.is_closed():
+                        raise RuntimeError("Event loop is closed")
+                except RuntimeError:
+                    # No event loop running, create a new one
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
                 self._pool = await asyncpg.create_pool(
                     self.connection_string,
                     min_size=min_size,
