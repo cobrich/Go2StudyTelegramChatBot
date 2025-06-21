@@ -1,8 +1,8 @@
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict,  Optional
 from difflib import SequenceMatcher
-from services.database import get_database_instance
-from services.ai_service import AIService
+from src.services.database import get_database_instance
+from src.services.ai_service import AIService
 
 logger = logging.getLogger(__name__)
 

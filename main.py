@@ -8,13 +8,13 @@ from telegram.ext import (
     filters
 )
 from telegram.request import HTTPXRequest
-from config.constants import TELEGRAM_BOT_TOKEN
-from services.database import get_database_instance
-from services.question_service import QuestionService
-from services.ai_service import AIService
-from handlers.command_handlers import CommandHandlers
-from handlers.callback_handlers import CallbackHandlers
-from handlers.admin import AdminHandlers
+from src.config.constants import TELEGRAM_BOT_TOKEN
+from src.services.database import get_database_instance
+from src.services.question_service import QuestionService
+from src.services.ai_service import AIService
+from src.handlers.command_handlers import CommandHandlers
+from src.handlers.callback_handlers import CallbackHandlers
+from src.handlers.admin import AdminHandlers
 
 # Configure logging
 logging.basicConfig(

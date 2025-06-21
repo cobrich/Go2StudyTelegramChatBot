@@ -3,11 +3,11 @@
 Поддерживает создание, редактирование, удаление разделов с языковой поддержкой.
 """
 
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from typing import Dict, List, Any, Optional
-from handlers.base_handler import BaseHandler
-from services.database import Database
+from src.handlers.base_handler import BaseHandler
+from src.services.database import Database
 
 
 class SectionsHandler(BaseHandler):

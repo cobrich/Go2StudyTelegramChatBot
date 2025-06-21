@@ -1,9 +1,9 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from services.database import Database
-from services.question_service import QuestionService
-from utils.keyboards import get_main_menu_markup
-from utils.translations import get_message
+from src.services.database import Database
+from src.services.question_service import QuestionService
+from src.utils.keyboards import get_main_menu_markup
+from src.utils.translations import get_message
 import logging
 
 class BaseHandler:

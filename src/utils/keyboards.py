@@ -1,7 +1,7 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
-from config.constants import MAIN_MENU_KEYBOARD
-from services.database import get_database_instance
-from utils.translations import get_message, get_main_menu_keyboard
+from src.config.constants import MAIN_MENU_KEYBOARD
+from src.services.database import get_database_instance
+from src.utils.translations import get_message, get_main_menu_keyboard
 
 def _get_db():
     """Получить экземпляр базы данных (синглтон)."""

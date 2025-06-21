@@ -7,7 +7,7 @@ import random
 from typing import List, Dict, Any, Optional
 from .database import Database
 import logging
-from utils.translations import get_message
+from src.utils.translations import get_message
 import sqlite3
 
 logger = logging.getLogger(__name__)

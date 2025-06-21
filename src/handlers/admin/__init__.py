@@ -1,19 +1,19 @@
 """
-Главный класс AdminHandlers, объединяющий все модули админ-панели.
+Административная панель для управления ботом
 """
-
-from .base import AdminBaseHandler
-from .topics import TopicsHandler
-from .sections import SectionsHandler
-from .students import StudentsHandler
-from .admins import AdminsHandler
-from .questions import QuestionsHandler
-from .stats import StatsHandler
-from telegram import Update
-from telegram.ext import ContextTypes
-from services.database import Database
-from services.question_service import QuestionService
 import logging
+import sqlite3
+import time
+import asyncio
+import io
+import tempfile
+import os
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Any, Tuple
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram.ext import ContextTypes
+from src.services.database import Database
+from src.services.question_service import QuestionService
 
 class AdminHandlers(AdminBaseHandler):
     """Главный класс для обработки всех админ-функций."""

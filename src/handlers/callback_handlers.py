@@ -1,12 +1,11 @@
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import ContextTypes
 import logging
-from .base_handler import BaseHandler
-from utils.keyboards import get_main_menu_markup, build_topic_selection_keyboard, build_subtopic_selection_keyboard, build_question_keyboard, build_results_keyboard, build_continue_keyboard
-from utils.translations import get_message
-from config.constants import DEFAULT_QUESTIONS_PER_TEST
-from services.ai_service import AIService
-from services.topic_manager import TopicManager
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes
+from src.utils.keyboards import get_main_menu_markup, build_topic_selection_keyboard, build_subtopic_selection_keyboard, build_question_keyboard, build_results_keyboard, build_continue_keyboard
+from src.utils.translations import get_message
+from src.config.constants import DEFAULT_QUESTIONS_PER_TEST
+from src.services.ai_service import AIService
+from src.services.topic_manager import TopicManager
 import sqlite3
 
 class CallbackHandlers(BaseHandler):
@@ -1080,7 +1079,7 @@ class CallbackHandlers(BaseHandler):
             await query.message.reply_text(preparing_text)
         
         # Generate retry test using RandomTestService
-        from services.random_test_service import RandomTestService
+        from src.services.random_test_service import RandomTestService
         random_test_service = RandomTestService(self.db)
         questions_data = random_test_service.generate_retry_test(user_id, 10)
         
@@ -1137,7 +1136,7 @@ class CallbackHandlers(BaseHandler):
         
         # Display first question
         if questions:
-            from utils.keyboards import build_question_keyboard
+            from src.utils.keyboards import build_question_keyboard
             
             question = questions[0]
             keyboard = build_question_keyboard(question[3], 0, 0, len(questions), user_id, is_random_test=True)

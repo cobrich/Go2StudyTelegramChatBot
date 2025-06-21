@@ -1,9 +1,8 @@
 import logging
 import google.generativeai as genai
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, List
 import re
-from config.constants import GEMINI_API_KEY, GEMINI_MODEL, MAX_OPTION_LENGTH
-import json
+from src.config.constants import GEMINI_API_KEY, GEMINI_MODEL, MAX_OPTION_LENGTH
 
 class ImprovedAIService:
     def __init__(self):

@@ -293,8 +293,8 @@ class QuestionsHandler(AdminBaseHandler):
             import tempfile
             import os
             import asyncio
-            from services.pdf_processor import PDFProcessor
-            from services.ai_service import AIService
+            from src.services.pdf_processor import PDFProcessor
+            from src.services.ai_service import AIService
             
             # Скачиваем файл
             file = await context.bot.get_file(update.message.document.file_id)
@@ -709,7 +709,7 @@ class QuestionsHandler(AdminBaseHandler):
             # Генерируем объяснение с помощью ИИ
             await query.edit_message_text("🤖 Генерирую объяснение с помощью ИИ...")
             
-            from services.ai_service import AIService
+            from src.services.ai_service import AIService
             ai_service = AIService()
             
             # Определяем язык темы
@@ -881,7 +881,7 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Инициализируем AI сервис для генерации объяснения
         try:
-            from services.ai_service import AIService
+            from src.services.ai_service import AIService
             ai_service = AIService()
             
             # Определяем язык темы
@@ -1408,7 +1408,7 @@ class QuestionsHandler(AdminBaseHandler):
                 return
             
             # Инициализируем AI сервис
-            from services.ai_service import AIService
+            from src.services.ai_service import AIService
             ai_service = AIService()
             
             improved_count = 0

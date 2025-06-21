@@ -6,11 +6,16 @@
 
 import sys
 import os
+import logging
+import sqlite3
+from datetime import datetime
+import hashlib
+import secrets
 
 # Добавляем путь к src в PYTHONPATH
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from services.database import Database
+from src.services.database import Database
 
 def main():
     print("=== Инициализация суперадмина ===")

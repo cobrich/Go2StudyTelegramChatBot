@@ -1,14 +1,14 @@
-from telegram import Update, ReplyKeyboardRemove
-from telegram.ext import ContextTypes
 import logging
-from handlers.base_handler import BaseHandler
-from utils.keyboards import get_main_menu_markup, build_topic_selection_keyboard, build_question_keyboard
-from utils.translations import get_message, get_language_change_warning
-from config.constants import HELP_TEXT, TOPICS
-from services.random_test_service import RandomTestService
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes
 import sqlite3
 import random
 import asyncio
+from src.handlers.base_handler import BaseHandler
+from src.utils.keyboards import get_main_menu_markup, build_topic_selection_keyboard, build_question_keyboard
+from src.utils.translations import get_message, get_language_change_warning
+from src.config.constants import HELP_TEXT, TOPICS
+from src.services.random_test_service import RandomTestService
 
 class CommandHandlers(BaseHandler):
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -514,9 +514,9 @@ class CommandHandlers(BaseHandler):
                     return
                 
                 # Импортируем админ-хендлеры
-                from handlers.admin import AdminHandlers
-                from services.question_service import QuestionService
-                from services.ai_service import AIService
+                from src.handlers.admin import AdminHandlers
+                from src.services.question_service import QuestionService
+                from src.services.ai_service import AIService
                 
                 ai_service = AIService()
                 admin_handlers = AdminHandlers(self.db, QuestionService(self.db, ai_service))

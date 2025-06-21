@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Утилиты для работы с переводами интерфейса
+Модуль для работы с переводами и локализацией
 """
-
-from config.constants import MAIN_MENU_KEYBOARD
-from config.messages_kk import MESSAGES_KK, MAIN_MENU_KK, LANGUAGE_CHANGE_WARNING_KK
+import logging
+from src.config.constants import MAIN_MENU_KEYBOARD
+from src.config.messages_kk import MESSAGES_KK, MAIN_MENU_KK, LANGUAGE_CHANGE_WARNING_KK
 
 # Русские сообщения (по умолчанию)
 MESSAGES_RU = {

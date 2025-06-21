@@ -69,7 +69,7 @@ def get_active_topics():
     """Получить активные темы из базы данных."""
     try:
         # Используем синглтон для избежания множественных инициализаций
-        from services.database import get_database_instance
+        from src.services.database import get_database_instance
         db = get_database_instance()
         return db.get_topic_names(active_only=True)
     except Exception:
@@ -135,4 +135,4 @@ HELP_TEXT = """
 • Если бот "завис" или работает странно, используй /reset
 
 Удачи в изучении математики! 🎓 Ты справишься! 💪
-""" 
+"""

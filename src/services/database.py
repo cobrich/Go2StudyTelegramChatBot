@@ -2171,9 +2171,9 @@ class Database:
         """Создает казахские версии основных разделов (если они еще не созданы)."""
         try:
             try:
-                from config.constants_kk import TOPIC_HIERARCHY_KK
+                from src.config.constants_kk import TOPIC_HIERARCHY_KK
             except ImportError:
-                print("[ERROR] config.constants_kk не найден")
+                print("[ERROR] src.config.constants_kk не найден")
                 return False
             
             with sqlite3.connect(self.db_path) as conn:
@@ -2219,9 +2219,9 @@ class Database:
         """Создает русские версии основных разделов (если они еще не созданы)."""
         try:
             try:
-                from config.constants import TOPIC_HIERARCHY
+                from src.config.constants import TOPIC_HIERARCHY
             except ImportError:
-                print("[ERROR] config.constants не найден")
+                print("[ERROR] src.config.constants не найден")
                 return False
             
             with sqlite3.connect(self.db_path) as conn:
@@ -3158,3 +3158,21 @@ class Database:
             return False
         
         return self.rename_topic_by_id(topic_id, new_name)
+
+    def get_topic_hierarchy_kk(self) -> Dict[str, Any]:
+        """Получает иерархию тем на казахском языке"""
+        try:
+            from src.config.constants_kk import TOPIC_HIERARCHY_KK
+            return TOPIC_HIERARCHY_KK
+        except ImportError:
+            logging.warning("Failed to import TOPIC_HIERARCHY_KK, using empty dict")
+            return {}
+
+    def get_topic_hierarchy_ru(self) -> Dict[str, Any]:
+        """Получает иерархию тем на русском языке"""
+        try:
+            from src.config.constants import TOPIC_HIERARCHY
+            return TOPIC_HIERARCHY
+        except ImportError:
+            logging.warning("Failed to import TOPIC_HIERARCHY, using empty dict")
+            return {}

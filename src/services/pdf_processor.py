@@ -1,17 +1,22 @@
-import os
 import logging
-import fitz  # PyMuPDF
+import os
 import re
+from typing import List, Dict, Any, Optional, Tuple
+import PyPDF2
+from telegram import Update
+from telegram.ext import ContextTypes
+import tempfile
+import json
+import time
+from src.services.database import Database, get_database_instance
+from src.services.ai_service import AIService
+import fitz  # PyMuPDF
 from PIL import Image
-from typing import List, Dict, Optional, Tuple
 import sqlite3
 import sys
 
 # Добавляем путь к src в PYTHONPATH для корректных импортов
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-from services.database import Database, get_database_instance
-from services.ai_service import AIService
 
 class PDFProcessor:
     def __init__(self, output_dir: str = "question_images"):
