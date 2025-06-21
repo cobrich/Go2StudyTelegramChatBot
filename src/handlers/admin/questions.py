@@ -7,6 +7,25 @@
 все еще содержат SQLite подключения и требуют полной реализации в репозиториях.
 
 TODO: Реализовать недостающие методы в repositories для полного перехода на Supabase.
+
+🔄 СТАТУС МИГРАЦИИ:
+- ✅ questions_stats() - переведен на facade
+- ✅ delete_questions_start() - переведен на facade  
+- ✅ handle_search_questions() - переведен на facade
+- ✅ handle_edit_question_id() - переведен на facade
+- ⚠️ ~19 методов остаются с SQLite - требуют реализации в QuestionRepository
+
+📋 НЕОБХОДИМЫЕ МЕТОДЫ В QuestionRepository:
+- search_questions() ✅ (уже объявлен в facade)
+- get_question_by_id() ✅ (уже объявлен в facade)
+- update_question_explanation() ✅ (уже объявлен в facade)
+- delete_questions_by_topic_id() ✅ (уже объявлен в facade)
+- get_questions_without_explanation()
+- get_questions_with_short_explanation()
+- update_question_text()
+- update_question_correct_answer()
+- update_question_options()
+- update_question_topic()
 """
 
 from .base import AdminBaseHandler
@@ -779,27 +798,9 @@ class QuestionsHandler(AdminBaseHandler):
     async def handle_search_questions(self, update: Update, context: ContextTypes.DEFAULT_TYPE, search_text: str) -> None:
         """Обработка поиска вопросов."""
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                # Получаем все вопросы и фильтруем в Python для корректной работы с казахскими буквами
-                cursor.execute('''
-                    SELECT q.id, s.name as topic, q.question, q.answer, q.explanation
-                    FROM questions q
-                    JOIN subtopics s ON q.topic_id = s.id
-                    ORDER BY s.name, q.id
-                ''')
-                all_results = cursor.fetchall()
-                
-                # Фильтруем результаты в Python для корректной работы с казахскими буквами
-                search_lower = search_text.lower()
-                results = []
-                for row in all_results:
-                    question_lower = row[2].lower()  # row[2] это q.question
-                    if search_lower in question_lower:
-                        results.append(row)
-                        if len(results) >= 20:  # Ограничиваем до 20 результатов
-                            break
-                            
+            # Используем database facade вместо прямого SQLite подключения
+            results = self.db.search_questions(search_text, limit=20)
+            
         except Exception as e:
             await update.message.reply_text(f"❌ Ошибка поиска: {e}")
             context.user_data.pop('admin_action', None)
@@ -811,8 +812,11 @@ class QuestionsHandler(AdminBaseHandler):
         
         text = f"🔍 <b>Найдено {len(results)} вопросов</b>\n\n"
         
-        for i, (q_id, topic, question, answer, explanation) in enumerate(results, 1):
-            short_question = question[:80] + "..." if len(question) > 80 else question
+        for i, question in enumerate(results, 1):
+            q_id = question.get('id', 'N/A')
+            topic = question.get('topic', 'Неизвестная тема')
+            question_text = question.get('question', question.get('question_text', ''))
+            short_question = question_text[:80] + "..." if len(question_text) > 80 else question_text
             text += f"<b>ID {q_id}</b> | {topic}\n{short_question}\n\n"
         
         # Добавляем кнопки навигации
@@ -1110,71 +1114,36 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Получаем информацию о вопросе
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT s.name as topic, q.question, q.answer, q.explanation, q.incorrect_options, q.topic_id
-                    FROM questions q 
-                    JOIN subtopics s ON q.topic_id = s.id 
-                    WHERE q.id = ?
-                ''', (question_id,))
-                result = cursor.fetchone()
+            # Используем database facade вместо прямого SQLite подключения
+            question_data = self.db.get_question_by_id(question_id)
+            
+            if not question_data:
+                await query.edit_message_text(f"❌ Вопрос с ID {question_id} не найден. Попробуйте другой ID:")
+                return
+            
+            topic = question_data.get('topic', 'Неизвестная тема')
+            question = question_data.get('question', question_data.get('question_text', ''))
+            answer = question_data.get('answer', question_data.get('correct_answer', ''))
+            explanation = question_data.get('explanation', '')
+            incorrect_options = question_data.get('incorrect_options', '')
+            topic_id = question_data.get('topic_id')
+            
         except Exception as e:
             await query.edit_message_text(f"❌ Ошибка получения вопроса: {e}")
             context.user_data.pop('admin_action', None)
             return
-        
-        if not result:
-            await query.edit_message_text(f"❌ Вопрос с ID {question_id} не найден. Попробуйте другой ID:")
-            return
-        
-        topic, question, answer, explanation, incorrect_options, topic_id = result
-        
-        # Парсим варианты ответов
-        options = []
-        if incorrect_options:
-            try:
-                import json
-                # Сначала пробуем JSON формат
-                options_data = json.loads(incorrect_options)
-                if isinstance(options_data, list):
-                    options = options_data
-                elif isinstance(options_data, dict):
-                    options = [options_data.get('A', ''), options_data.get('B', ''), 
-                              options_data.get('C', ''), options_data.get('D', '')]
-            except:
-                # Если JSON не работает, пробуем простой текст с переносами строк
-                try:
-                    # Разбиваем по переносам строк и убираем пустые строки
-                    text_options = [opt.strip() for opt in incorrect_options.split('\n') if opt.strip()]
-                    options = text_options
-                except:
-                    options = []
-        
-        # Добавляем правильный ответ к вариантам для полного отображения
-        all_options = []
-        if answer:
-            all_options.append(answer.strip())
-        if options:
-            for opt in options:
-                if opt.strip() and opt.strip() not in [answer.strip() if answer else ""]:
-                    all_options.append(opt.strip())
         
         text = f"✏️ <b>Редактирование вопроса ID {question_id}</b>\n\n"
         text += f"<b>Тема:</b> {topic}\n"
         text += f"<b>Вопрос:</b> {question[:200]}{'...' if len(question) > 200 else ''}\n"
         text += f"<b>Правильный ответ:</b> {answer}\n"
         
-        if all_options:  # Проверяем что есть хотя бы один вариант
+        if incorrect_options:
             text += "<b>Варианты ответов:</b>\n"
             labels = ['A', 'B', 'C', 'D']
-            for i, option in enumerate(all_options[:4]):
-                if option:
-                    # Проверяем, является ли этот вариант правильным ответом
-                    if option.strip() == answer.strip() if answer else False:
-                        text += f"✅ {labels[i]}) {option} <i>(правильный)</i>\n"
-                    else:
-                        text += f"❌ {labels[i]}) {option}\n"
+            for i, option in enumerate(incorrect_options.split('\n')):
+                if option.strip():
+                    text += f"{labels[i]}) {option}\n"
         else:
             text += "<b>Варианты ответов:</b> Отсутствуют\n"
         

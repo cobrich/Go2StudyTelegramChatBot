@@ -399,36 +399,291 @@ class QuestionRepository(BaseRepository):
         return self.fetch_all(query, params)
     
     def get_full_topic_structure_by_language(self, language: str, active_only: bool = True) -> Dict[str, List[Dict]]:
-        """Get complete topic structure for specific language."""
-        where_clause = 'AND mt.is_active = TRUE AND (st.is_active = TRUE OR st.is_active IS NULL)' if active_only else ''
+        """Get full topic structure with subtopics for specific language."""
+        where_clause = 'AND st.is_active = TRUE AND mt.is_active = TRUE' if active_only else ''
         
         query = f'''
-            SELECT mt.topic_name as main_topic, mt.id as main_topic_id,
-                   st.subtopic_name as subtopic, st.id as subtopic_id, st.order_index,
-                   COUNT(q.id) as question_count
+            SELECT mt.topic_name as main_topic, st.subtopic_name as subtopic, 
+                   st.id, COALESCE(q.question_count, 0) as question_count
             FROM main_topics mt
-            LEFT JOIN subtopics st ON mt.id = st.main_topic_id
-            LEFT JOIN questions q ON st.id = q.topic_id
+            JOIN subtopics st ON mt.id = st.main_topic_id
+            LEFT JOIN (
+                SELECT topic_id, COUNT(*) as question_count
+                FROM questions
+                GROUP BY topic_id
+            ) q ON st.id = q.topic_id
             WHERE mt.language = {self._get_placeholder(1)} {where_clause}
-            GROUP BY mt.topic_name, mt.id, st.subtopic_name, st.id, st.order_index
             ORDER BY mt.id, st.id
         '''
         
         rows = self.fetch_all(query, (language,))
         
-        structure = {}
+        # Group by main topic
+        topics_dict = {}
         for row in rows:
             main_topic = row['main_topic']
-            if main_topic not in structure:
-                structure[main_topic] = []
-            
-            if row['subtopic']:  # If subtopic exists
-                structure[main_topic].append({
-                    'id': row['subtopic_id'],
-                    'name': row['subtopic'],
-                    'order_index': row['order_index'],
-                    'question_count': row['question_count'] or 0,
-                    'has_questions': (row['question_count'] or 0) > 0
-                })
+            if main_topic not in topics_dict:
+                topics_dict[main_topic] = []
+            topics_dict[main_topic].append({
+                'id': row['id'],
+                'name': row['subtopic'],
+                'question_count': row['question_count']
+            })
         
-        return structure 
+        return topics_dict
+    
+    # ============== MISSING METHODS FOR ADMIN FUNCTIONALITY ==============
+    
+    def search_questions(self, search_term: str, limit: int = 50) -> List[Dict]:
+        """Search questions by text (stub implementation)."""
+        try:
+            # Простой поиск по тексту вопроса
+            query = f'''
+                SELECT q.id, q.question_text as question, q.correct_answer as answer, 
+                       q.explanation, s.subtopic_name as topic
+                FROM questions q
+                LEFT JOIN subtopics s ON q.topic_id = s.id
+                WHERE LOWER(q.question_text) LIKE {self._get_placeholder(1)}
+                ORDER BY q.created_at DESC
+                LIMIT {self._get_placeholder(2)}
+            '''
+            
+            search_pattern = f"%{search_term.lower()}%"
+            results = self.fetch_all(query, (search_pattern, limit))
+            
+            logger.info(f"Found {len(results)} questions matching '{search_term}'")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error searching questions: {e}")
+            return []
+    
+    def get_question_by_id(self, question_id: int) -> Optional[Dict]:
+        """Get question by ID (stub implementation)."""
+        try:
+            query = f'''
+                SELECT q.id, q.question_text as question, q.correct_answer as answer,
+                       q.explanation, q.option_a, q.option_b, q.option_c, q.option_d,
+                       q.topic_id, s.subtopic_name as topic
+                FROM questions q
+                LEFT JOIN subtopics s ON q.topic_id = s.id
+                WHERE q.id = {self._get_placeholder(1)}
+            '''
+            
+            result = self.fetch_one(query, (question_id,))
+            if result:
+                # Формируем incorrect_options из опций
+                incorrect_options = []
+                for opt in [result.get('option_a'), result.get('option_b'), 
+                           result.get('option_c'), result.get('option_d')]:
+                    if opt and opt != result.get('answer'):
+                        incorrect_options.append(opt)
+                
+                result['incorrect_options'] = '\n'.join(incorrect_options)
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting question by ID {question_id}: {e}")
+            return None
+    
+    def update_question_explanation(self, question_id: int, explanation: str) -> bool:
+        """Update question explanation (stub implementation)."""
+        try:
+            query = f'''
+                UPDATE questions 
+                SET explanation = {self._get_placeholder(1)}
+                WHERE id = {self._get_placeholder(2)}
+            '''
+            
+            self.execute_query(query, (explanation, question_id))
+            logger.info(f"Updated explanation for question {question_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating question explanation: {e}")
+            return False
+    
+    def update_question_text(self, question_id: int, question_text: str) -> bool:
+        """Update question text (stub implementation)."""
+        try:
+            query = f'''
+                UPDATE questions 
+                SET question_text = {self._get_placeholder(1)}
+                WHERE id = {self._get_placeholder(2)}
+            '''
+            
+            self.execute_query(query, (question_text, question_id))
+            logger.info(f"Updated text for question {question_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating question text: {e}")
+            return False
+    
+    def update_question_correct_answer(self, question_id: int, correct_answer: str) -> bool:
+        """Update question correct answer (stub implementation)."""
+        try:
+            query = f'''
+                UPDATE questions 
+                SET correct_answer = {self._get_placeholder(1)}
+                WHERE id = {self._get_placeholder(2)}
+            '''
+            
+            self.execute_query(query, (correct_answer, question_id))
+            logger.info(f"Updated correct answer for question {question_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating question correct answer: {e}")
+            return False
+    
+    def update_question_options(self, question_id: int, options: List[str]) -> bool:
+        """Update question options (stub implementation)."""
+        try:
+            # Предполагаем что options это список из 4 элементов [A, B, C, D]
+            option_a = options[0] if len(options) > 0 else ''
+            option_b = options[1] if len(options) > 1 else ''
+            option_c = options[2] if len(options) > 2 else ''
+            option_d = options[3] if len(options) > 3 else ''
+            
+            query = f'''
+                UPDATE questions 
+                SET option_a = {self._get_placeholder(1)},
+                    option_b = {self._get_placeholder(2)},
+                    option_c = {self._get_placeholder(3)},
+                    option_d = {self._get_placeholder(4)}
+                WHERE id = {self._get_placeholder(5)}
+            '''
+            
+            self.execute_query(query, (option_a, option_b, option_c, option_d, question_id))
+            logger.info(f"Updated options for question {question_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating question options: {e}")
+            return False
+    
+    def update_question_topic(self, question_id: int, topic_id: int) -> bool:
+        """Update question topic (stub implementation)."""
+        try:
+            query = f'''
+                UPDATE questions 
+                SET topic_id = {self._get_placeholder(1)}
+                WHERE id = {self._get_placeholder(2)}
+            '''
+            
+            self.execute_query(query, (topic_id, question_id))
+            logger.info(f"Updated topic for question {question_id} to topic {topic_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating question topic: {e}")
+            return False
+    
+    def delete_questions_by_topic_id(self, topic_id: int) -> int:
+        """Delete all questions for a topic and return count (stub implementation)."""
+        try:
+            # Сначала получаем количество вопросов
+            count_query = f'SELECT COUNT(*) FROM questions WHERE topic_id = {self._get_placeholder(1)}'
+            count = self.fetch_val(count_query, (topic_id,))
+            
+            if count and count > 0:
+                # Удаляем вопросы
+                delete_query = f'DELETE FROM questions WHERE topic_id = {self._get_placeholder(1)}'
+                self.execute_query(delete_query, (topic_id,))
+                logger.info(f"Deleted {count} questions for topic {topic_id}")
+                return count
+            
+            return 0
+            
+        except Exception as e:
+            logger.error(f"Error deleting questions for topic {topic_id}: {e}")
+            return 0
+    
+    def get_questions_without_explanation(self, limit: int = 50) -> List[Dict]:
+        """Get questions without explanations (stub implementation)."""
+        try:
+            query = f'''
+                SELECT q.id, q.question_text as question, q.correct_answer as answer,
+                       s.subtopic_name as topic
+                FROM questions q
+                LEFT JOIN subtopics s ON q.topic_id = s.id
+                WHERE q.explanation IS NULL OR q.explanation = ''
+                ORDER BY q.created_at DESC
+                LIMIT {self._get_placeholder(1)}
+            '''
+            
+            return self.fetch_all(query, (limit,))
+            
+        except Exception as e:
+            logger.error(f"Error getting questions without explanation: {e}")
+            return []
+    
+    def get_questions_with_short_explanation(self, max_length: int = 50, limit: int = 50) -> List[Dict]:
+        """Get questions with short explanations (stub implementation)."""
+        try:
+            query = f'''
+                SELECT q.id, q.question_text as question, q.correct_answer as answer,
+                       q.explanation, s.subtopic_name as topic
+                FROM questions q
+                LEFT JOIN subtopics s ON q.topic_id = s.id
+                WHERE LENGTH(q.explanation) < {self._get_placeholder(1)} AND q.explanation IS NOT NULL
+                ORDER BY q.created_at DESC
+                LIMIT {self._get_placeholder(2)}
+            '''
+            
+            return self.fetch_all(query, (max_length, limit))
+            
+        except Exception as e:
+            logger.error(f"Error getting questions with short explanation: {e}")
+            return []
+    
+    def get_questions_by_language(self, language: str) -> List[Dict]:
+        """Get questions available for specific language (stub implementation)."""
+        try:
+            query = f'''
+                SELECT q.id, q.question_text as question, q.correct_answer as answer,
+                       q.explanation, s.subtopic_name as topic
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                JOIN main_topics mt ON s.main_topic_id = mt.id
+                WHERE mt.language = {self._get_placeholder(1)} AND s.is_active = {self._get_placeholder(2)}
+                ORDER BY q.created_at DESC
+            '''
+            
+            return self.fetch_all(query, (language, self._get_boolean_value(True)))
+            
+        except Exception as e:
+            logger.error(f"Error getting questions by language {language}: {e}")
+            return []
+    
+    def get_subtopics_by_main_topic(self, main_topic_name: str, user_language: str = None) -> List[Dict]:
+        """Get subtopics for a main topic (stub implementation)."""
+        try:
+            where_clause = ''
+            params = [main_topic_name]
+            
+            if user_language:
+                where_clause = f'AND mt.language = {self._get_placeholder(2)}'
+                params.append(user_language)
+            
+            query = f'''
+                SELECT s.id, s.subtopic_name as name, 
+                       COALESCE(q.question_count, 0) as question_count
+                FROM subtopics s
+                JOIN main_topics mt ON s.main_topic_id = mt.id
+                LEFT JOIN (
+                    SELECT topic_id, COUNT(*) as question_count
+                    FROM questions
+                    GROUP BY topic_id
+                ) q ON s.id = q.topic_id
+                WHERE mt.topic_name = {self._get_placeholder(1)} {where_clause}
+                ORDER BY s.id
+            '''
+            
+            return self.fetch_all(query, tuple(params))
+            
+        except Exception as e:
+            logger.error(f"Error getting subtopics for main topic {main_topic_name}: {e}")
+            return [] 
