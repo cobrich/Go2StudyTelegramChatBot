@@ -467,39 +467,35 @@ class StudentsHandler(AdminBaseHandler):
         
         # Получаем информацию об ученике
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT username, full_name, grade 
-                    FROM allowed_users 
-                    WHERE user_id = ?
-                ''', (user_id,))
-                student = cursor.fetchone()
-                
-                if not student:
-                    await query.edit_message_text("❌ Ученик не найден.")
-                    return
-                
-                username, full_name, grade = student
-                
-                text = f"⚠️ <b>Подтверждение удаления</b>\n\n"
-                text += f"Вы действительно хотите удалить ученика?\n\n"
-                text += f"👤 <b>Информация:</b>\n"
-                if username:
-                    text += f"• Username: @{username}\n"
-                text += f"• ID: {user_id}\n"
-                text += f"• ФИО: {full_name or 'не указано'}\n"
-                text += f"• Класс: {grade or 'не указан'}\n\n"
-                text += f"❗ <b>Внимание:</b> Это действие нельзя отменить!"
-                
-                keyboard = [
-                    [InlineKeyboardButton("✅ Да, удалить", callback_data=f"remove_student_execute_{user_id}")],
-                    [InlineKeyboardButton("❌ Отмена", callback_data="remove_student")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
-                
+            # Используем database facade вместо прямого SQLite подключения
+            student_info = self.db.get_allowed_user_by_id(user_id)
+            
+            if not student_info:
+                await query.edit_message_text("❌ Ученик не найден.")
+                return
+            
+            username = student_info.get('username')
+            full_name = student_info.get('full_name')
+            grade = student_info.get('grade')
+            
+            text = f"⚠️ <b>Подтверждение удаления</b>\n\n"
+            text += f"Вы действительно хотите удалить ученика?\n\n"
+            text += f"👤 <b>Информация:</b>\n"
+            if username:
+                text += f"• Username: @{username}\n"
+            text += f"• ID: {user_id}\n"
+            text += f"• ФИО: {full_name or 'не указано'}\n"
+            text += f"• Класс: {grade or 'не указан'}\n\n"
+            text += f"❗ <b>Внимание:</b> Это действие нельзя отменить!"
+            
+            keyboard = [
+                [InlineKeyboardButton("✅ Да, удалить", callback_data=f"remove_student_execute_{user_id}")],
+                [InlineKeyboardButton("❌ Отмена", callback_data="remove_student")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
         except Exception as e:
             logging.error(f"Error in remove_student_confirm: {e}")
             await query.edit_message_text("❌ Ошибка при получении информации об ученике.")
@@ -512,40 +508,25 @@ class StudentsHandler(AdminBaseHandler):
         user_id = int(query.data.split('_')[-1])
         
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Получаем информацию об ученике перед удалением
-                cursor.execute('SELECT username, full_name FROM allowed_users WHERE user_id = ?', (user_id,))
-                student = cursor.fetchone()
-                
-                if not student:
-                    await query.edit_message_text("❌ Ученик не найден.")
-                    return
-                
-                username, full_name = student
-                
-                # Удаляем все связанные данные ученика
-                # 1. Удаляем результаты тестов
-                cursor.execute('DELETE FROM test_results WHERE user_id = ?', (user_id,))
-                deleted_results = cursor.rowcount
-                
-                # 2. Удаляем ошибки пользователя
-                cursor.execute('DELETE FROM user_errors WHERE user_id = ?', (user_id,))
-                deleted_errors = cursor.rowcount
-                
-                # 3. Удаляем пользователя из allowed_users
-                cursor.execute('DELETE FROM allowed_users WHERE user_id = ?', (user_id,))
-                
-                conn.commit()
-                
+            # Используем database facade вместо прямого SQLite подключения
+            student_info = self.db.get_allowed_user_by_id(user_id)
+            
+            if not student_info:
+                await query.edit_message_text("❌ Ученик не найден.")
+                return
+            
+            username = student_info.get('username')
+            full_name = student_info.get('full_name')
+            
+            # Удаляем все данные ученика через database facade
+            success = self.db.delete_all_user_data(user_id)
+            
+            if success:
                 # Формируем сообщение об успехе
                 identifier = f"@{username}" if username else f"ID: {user_id}"
                 success_text = f"✅ <b>Ученик удален</b>\n\n"
                 success_text += f"Ученик {identifier} ({full_name}) успешно удален из системы.\n\n"
-                success_text += f"📊 <b>Удалено данных:</b>\n"
-                success_text += f"• Результатов тестов: {deleted_results}\n"
-                success_text += f"• Записей об ошибках: {deleted_errors}"
+                success_text += f"📊 Все связанные данные (результаты тестов, ошибки) также удалены."
                 
                 keyboard = [
                     [InlineKeyboardButton("🗑️ Удалить еще", callback_data="remove_student")],
@@ -555,6 +536,8 @@ class StudentsHandler(AdminBaseHandler):
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 await query.edit_message_text(success_text, reply_markup=reply_markup, parse_mode='HTML')
+            else:
+                await query.edit_message_text("❌ Ошибка при удалении ученика.")
                 
         except Exception as e:
             logging.error(f"Error removing student {user_id}: {e}")
@@ -608,46 +591,45 @@ class StudentsHandler(AdminBaseHandler):
         
         # Получаем информацию об ученике
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT username, full_name, grade, has_access, language, is_active 
-                    FROM allowed_users 
-                    WHERE user_id = ?
-                ''', (user_id,))
-                student = cursor.fetchone()
-                
-                if not student:
-                    keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="edit_student_start")]]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    await query.edit_message_text("❌ Ученик не найден.", reply_markup=reply_markup)
-                    return
-                
-                username, full_name, grade, has_access, language, is_active = student
-                
-                text = f"✏️ <b>Редактирование ученика</b>\n\n"
-                text += f"👤 <b>Текущие данные:</b>\n"
-                if username:
-                    text += f"• Username: @{username}\n"
-                text += f"• ID: {user_id}\n"
-                text += f"• ФИО: {full_name or 'не указано'}\n"
-                text += f"• Класс: {grade or 'не указан'}\n"
-                text += f"• Язык: {'Русский' if language == 'ru' else 'Қазақша' if language == 'kk' else language}\n"
-                text += f"• Доступ: {'Разрешен' if has_access else 'Заблокирован'}\n"
-                text += f"• В тесте: {'Да' if is_active else 'Нет'}\n\n"
-                text += f"Что хотите изменить?"
-                
-                keyboard = [
-                    [InlineKeyboardButton("📝 Изменить ФИО", callback_data=f"edit_student_name_{user_id}")],
-                    [InlineKeyboardButton("🎓 Изменить класс", callback_data=f"edit_student_grade_{user_id}")],
-                    [InlineKeyboardButton("🌐 Изменить язык", callback_data=f"edit_student_language_{user_id}")],
-                    [InlineKeyboardButton("🔄 Изменить доступ", callback_data=f"edit_student_status_{user_id}")],
-                    [InlineKeyboardButton("🔙 Назад к списку", callback_data="edit_student_start")]
-                ]
+            # Используем database facade вместо прямого SQLite подключения
+            student_info = self.db.get_user_full_profile(user_id)
+            
+            if not student_info:
+                keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="edit_student_start")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
-                
+                await query.edit_message_text("❌ Ученик не найден.", reply_markup=reply_markup)
+                return
+            
+            username = student_info.get('username')
+            full_name = student_info.get('full_name')
+            grade = student_info.get('grade')
+            has_access = student_info.get('has_access')
+            language = student_info.get('language')
+            is_active = self.db.is_user_active(user_id)
+            
+            text = f"✏️ <b>Редактирование ученика</b>\n\n"
+            text += f"👤 <b>Текущие данные:</b>\n"
+            if username:
+                text += f"• Username: @{username}\n"
+            text += f"• ID: {user_id}\n"
+            text += f"• ФИО: {full_name or 'не указано'}\n"
+            text += f"• Класс: {grade or 'не указан'}\n"
+            text += f"• Язык: {'Русский' if language == 'ru' else 'Қазақша' if language == 'kk' else language}\n"
+            text += f"• Доступ: {'Разрешен' if has_access else 'Заблокирован'}\n"
+            text += f"• В тесте: {'Да' if is_active else 'Нет'}\n\n"
+            text += f"Что хотите изменить?"
+            
+            keyboard = [
+                [InlineKeyboardButton("📝 Изменить ФИО", callback_data=f"edit_student_name_{user_id}")],
+                [InlineKeyboardButton("🎓 Изменить класс", callback_data=f"edit_student_grade_{user_id}")],
+                [InlineKeyboardButton("🌐 Изменить язык", callback_data=f"edit_student_language_{user_id}")],
+                [InlineKeyboardButton("🔄 Изменить доступ", callback_data=f"edit_student_status_{user_id}")],
+                [InlineKeyboardButton("🔙 Назад к списку", callback_data="edit_student_start")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
         except Exception as e:
             logging.error(f"Error in edit_student_select: {e}")
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="edit_student_start")]]
@@ -753,26 +735,23 @@ class StudentsHandler(AdminBaseHandler):
         user_id = int(query.data.split('_')[-1])
         
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Получаем текущий статус доступа
-                cursor.execute('SELECT has_access, full_name FROM allowed_users WHERE user_id = ?', (user_id,))
-                result = cursor.fetchone()
-                
-                if not result:
-                    keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="edit_student_start")]]
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    await query.edit_message_text("❌ Ученик не найден.", reply_markup=reply_markup)
-                    return
-                
-                current_access, full_name = result
-                new_access = not current_access
-                
-                # Обновляем статус доступа
-                cursor.execute('UPDATE allowed_users SET has_access = ? WHERE user_id = ?', (new_access, user_id))
-                conn.commit()
-                
+            # Используем database facade вместо прямого SQLite подключения
+            student_info = self.db.get_allowed_user_by_id(user_id)
+            
+            if not student_info:
+                keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="edit_student_start")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text("❌ Ученик не найден.", reply_markup=reply_markup)
+                return
+            
+            current_access = student_info.get('has_access')
+            full_name = student_info.get('full_name')
+            new_access = not current_access
+            
+            # Обновляем статус доступа через database facade
+            success = self.db.set_user_access(user_id, new_access)
+            
+            if success:
                 status_text = "разрешен доступ" if new_access else "заблокирован доступ"
                 status_emoji = "✅" if new_access else "🚫"
                 
@@ -790,6 +769,8 @@ class StudentsHandler(AdminBaseHandler):
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            else:
+                await query.edit_message_text("❌ Ошибка при изменении доступа.")
                 
         except Exception as e:
             logging.error(f"Error toggling student access: {e}")

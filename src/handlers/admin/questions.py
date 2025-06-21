@@ -1,6 +1,12 @@
 """
 Модуль для управления вопросами в админ-панели.
 Включает загрузку PDF, добавление, редактирование, удаление вопросов.
+
+⚠️ ВНИМАНИЕ: Этот файл частично переведен на Supabase архитектуру.
+Основная логика использует database facade, но некоторые сложные операции
+все еще содержат SQLite подключения и требуют полной реализации в репозиториях.
+
+TODO: Реализовать недостающие методы в repositories для полного перехода на Supabase.
 """
 
 from .base import AdminBaseHandler
@@ -223,16 +229,10 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Получаем список тем с количеством вопросов для удаления
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT s.name as topic, COUNT(*) as count
-                    FROM questions q
-                    JOIN subtopics s ON q.topic_id = s.id
-                    GROUP BY s.name 
-                    ORDER BY s.name
-                """)
-                topics_with_counts = cursor.fetchall()
+            # Используем database facade вместо прямого SQLite подключения
+            topics_with_counts = self.db.get_topics_with_question_counts(active_only=False)
+            # Преобразуем в формат (name, count)
+            topics_with_counts = [(topic['name'], topic['question_count']) for topic in topics_with_counts if topic['question_count'] > 0]
         except Exception as e:
             logging.error(f"Error getting topics for deletion: {e}")
             topics_with_counts = []
@@ -1208,10 +1208,7 @@ class QuestionsHandler(AdminBaseHandler):
         
         try:
             # Обновляем объяснение в базе данных
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('UPDATE questions SET explanation = ? WHERE id = ?', (new_explanation, question_id))
-                conn.commit()
+            success = self.db.update_question_explanation(question_id, new_explanation)
             
             text = f"✅ <b>Объяснение обновлено</b>\n\n"
             text += f"<b>ID вопроса:</b> {question_id}\n"
@@ -1879,10 +1876,7 @@ class QuestionsHandler(AdminBaseHandler):
             return
         
         try:
-            with sqlite3.connect(self.db.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('UPDATE questions SET explanation = ? WHERE id = ?', (new_explanation, question_id))
-                conn.commit()
+            success = self.db.update_question_explanation(question_id, new_explanation)
             
             text = f"✅ <b>Объяснение обновлено</b>\n\n"
             text += f"<b>ID вопроса:</b> {question_id}\n"
@@ -1946,10 +1940,7 @@ class QuestionsHandler(AdminBaseHandler):
             )
             
             if new_explanation:
-                with sqlite3.connect(self.db.db_path) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute('UPDATE questions SET explanation = ? WHERE id = ?', (new_explanation, question_id))
-                    conn.commit()
+                success = self.db.update_question_explanation(question_id, new_explanation)
                     
         except Exception as e:
             logging.error(f"Error auto-updating explanation: {e}")

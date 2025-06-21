@@ -224,6 +224,92 @@ class DatabaseFacade:
     
     def get_all_ai_questions(self) -> List[Dict]:
         return self.questions.get_all_ai_questions()
+    
+    # Additional methods for questions management
+    def search_questions(self, search_term: str, limit: int = 50) -> List[Dict]:
+        """Search questions by text"""
+        return self.questions.search_questions(search_term, limit)
+    
+    def get_question_by_id(self, question_id: int) -> Optional[Dict]:
+        """Get question by ID"""
+        return self.questions.get_question_by_id(question_id)
+    
+    def update_question_explanation(self, question_id: int, explanation: str) -> bool:
+        """Update question explanation"""
+        return self.questions.update_question_explanation(question_id, explanation)
+    
+    def update_question_text(self, question_id: int, question_text: str) -> bool:
+        """Update question text"""
+        return self.questions.update_question_text(question_id, question_text)
+    
+    def update_question_correct_answer(self, question_id: int, correct_answer: str) -> bool:
+        """Update question correct answer"""
+        return self.questions.update_question_correct_answer(question_id, correct_answer)
+    
+    def update_question_options(self, question_id: int, options: List[str]) -> bool:
+        """Update question options"""
+        return self.questions.update_question_options(question_id, options)
+    
+    def update_question_topic(self, question_id: int, topic_id: int) -> bool:
+        """Update question topic"""
+        return self.questions.update_question_topic(question_id, topic_id)
+    
+    def delete_questions_by_topic_id(self, topic_id: int) -> int:
+        """Delete all questions for a topic and return count"""
+        return self.questions.delete_questions_by_topic_id(topic_id)
+    
+    def get_questions_without_explanation(self, limit: int = 50) -> List[Dict]:
+        """Get questions without explanations"""
+        return self.questions.get_questions_without_explanation(limit)
+    
+    def get_questions_with_short_explanation(self, max_length: int = 50, limit: int = 50) -> List[Dict]:
+        """Get questions with short explanations"""
+        return self.questions.get_questions_with_short_explanation(max_length, limit)
+    
+    def get_questions_by_user_language(self, user_id: int) -> List[Dict]:
+        """Get questions available for user based on their language"""
+        user_language = self.get_user_language(user_id)
+        return self.questions.get_questions_by_language(user_language)
+    
+    def get_main_topics_by_language(self, language: str, active_only: bool = True) -> List[Dict]:
+        """Get main topics by language"""
+        return self.questions.get_main_topics_by_language(language, active_only)
+    
+    def get_subtopics_by_main_topic(self, main_topic_name: str, user_language: str = None) -> List[Dict]:
+        """Get subtopics for a main topic"""
+        return self.questions.get_subtopics_by_main_topic(main_topic_name, user_language)
+    
+    # Additional methods for user management
+    def update_allowed_user_by_id(self, user_id: int, **kwargs) -> bool:
+        """Update allowed user by ID with any fields"""
+        return self.users.update_allowed_user_by_id(user_id, **kwargs)
+    
+    def clear_user_test_activity(self, user_id: int) -> None:
+        """Clear user test activity (current topic)"""
+        return self.users.clear_user_test_activity(user_id)
+    
+    def clear_user_data_on_language_change(self, user_id: int) -> None:
+        """Clear user data when language changes"""
+        return self.users.clear_user_data_on_language_change(user_id)
+    
+    def check_user_access(self, user_id: int, username: str = None) -> bool:
+        """Check if user has access to the bot"""
+        return self.users.check_user_access(user_id, username)
+    
+    # Additional methods for error tracking with question IDs
+    def add_user_error_by_question_id(self, user_id: int, question_id: int, topic: str,
+                                     user_answer_text: str, correct_answer_text: str) -> None:
+        """Add user error by question ID"""
+        return self.statistics.add_user_error_by_question_id(user_id, question_id, topic,
+                                                           user_answer_text, correct_answer_text)
+    
+    def decrement_error_count_by_question_id(self, user_id: int, question_id: int) -> None:
+        """Decrement error count by question ID"""
+        return self.statistics.decrement_error_count_by_question_id(user_id, question_id)
+    
+    def get_explanation_fuzzy_by_question_text(self, question_text: str) -> Optional[str]:
+        """Get explanation using fuzzy search"""
+        return self.questions.get_explanation_fuzzy_by_question_text(question_text)
 
 def get_database() -> DatabaseFacade:
     """Get global database facade instance"""
