@@ -322,17 +322,22 @@ class SyncTopicRepository(SyncBaseRepository):
                 for subtopic in subtopic_results:
                     subtopic_id = subtopic['id']
                     
-                    # Delete questions for this subtopic
-                    delete_questions_query = "DELETE FROM questions WHERE topic_id = %s"
-                    self.execute_query(delete_questions_query, (subtopic_id,))
-                    
-                    # Delete user errors for this subtopic
-                    delete_errors_query = "DELETE FROM user_errors WHERE topic = (SELECT subtopic_name FROM subtopics WHERE id = %s)"
+                    # Delete user errors for questions in this subtopic first
+                    delete_errors_query = """
+                        DELETE FROM user_errors 
+                        WHERE question_id IN (
+                            SELECT id FROM questions WHERE topic_id = %s
+                        )
+                    """
                     self.execute_query(delete_errors_query, (subtopic_id,))
                     
                     # Delete test results for this subtopic
-                    delete_results_query = "DELETE FROM test_results WHERE topic = (SELECT subtopic_name FROM subtopics WHERE id = %s)"
+                    delete_results_query = "DELETE FROM test_results WHERE topic_id = %s"
                     self.execute_query(delete_results_query, (subtopic_id,))
+                    
+                    # Delete questions for this subtopic
+                    delete_questions_query = "DELETE FROM questions WHERE topic_id = %s"
+                    self.execute_query(delete_questions_query, (subtopic_id,))
                 
                 # Delete all subtopics for this main topic
                 delete_subtopics_query = "DELETE FROM subtopics WHERE main_topic_id = %s"

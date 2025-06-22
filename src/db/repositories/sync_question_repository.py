@@ -19,13 +19,13 @@ class SyncQuestionRepository(SyncBaseRepository):
         
         try:
             if active_only:
-                query = "SELECT name FROM subtopics WHERE is_active = %s ORDER BY order_index"
+                query = "SELECT subtopic_name FROM subtopics WHERE is_active = %s ORDER BY subtopic_name"
                 result = self.fetch_all(query, (True,))
             else:
-                query = "SELECT name FROM subtopics ORDER BY order_index"
+                query = "SELECT subtopic_name FROM subtopics ORDER BY subtopic_name"
                 result = self.fetch_all(query)
             
-            topic_names = [row['name'] for row in result]
+            topic_names = [row['subtopic_name'] for row in result]
             logger.info(f"📊 Found {len(topic_names)} topics")
             return topic_names
             
@@ -41,10 +41,10 @@ class SyncQuestionRepository(SyncBaseRepository):
             query = """
                 SELECT q.id, q.question_text as question, q.correct_answer as answer,
                        q.explanation, q.incorrect_options, q.image_path, q.source,
-                       s.name as topic
+                       s.subtopic_name as topic
                 FROM questions q
                 JOIN subtopics s ON q.topic_id = s.id
-                WHERE s.name = %s AND s.is_active = %s
+                WHERE s.subtopic_name = %s AND s.is_active = %s
                 ORDER BY RANDOM()
                 LIMIT %s
             """
