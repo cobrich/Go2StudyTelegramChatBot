@@ -1441,22 +1441,61 @@ class QuestionsHandler(AdminBaseHandler):
         question_id = int(query.data.split('_')[-1])
         await self.safe_answer_callback(query)
         
-        # Получаем доступные темы
+        # Сначала получаем информацию о текущем вопросе
         try:
-            # Используем database facade вместо прямого SQLite подключения
-            topics = self.db.get_topics_for_editing()
+            question_data = self.db.get_question_with_topic_by_id(question_id)
+            if not question_data:
+                await query.edit_message_text("❌ Вопрос не найден.")
+                return
+            
+            current_topic = question_data.get('topic', '')
+            # Получаем раздел (main_topic) для текущей темы вопроса
+            main_topic, language = self.db.get_main_topic_and_language_for_subtopic(current_topic)
+            
+            if not main_topic:
+                # Если не удалось определить раздел, показываем все темы как раньше
+                topics = self.db.get_topics_for_editing()
+                section_info = "Все разделы"
+            else:
+                # Получаем только темы из того же раздела
+                subtopics = self.db.get_subtopics_by_main_topic(main_topic)
+                # Преобразуем в формат (topic_id, topic_name, main_topic)
+                topics = []
+                all_topics = self.db.get_all_topics(active_only=True)
+                for subtopic in subtopics:
+                    for topic in all_topics:
+                        if topic['name'] == subtopic:
+                            topics.append((topic['id'], topic['name'], main_topic))
+                            break
+                section_info = f"раздела '{main_topic}'"
+                
         except Exception as e:
             await query.edit_message_text(f"❌ Ошибка получения тем: {e}")
             return
         
+        if not topics:
+            text = f"📝 <b>Изменение темы вопроса ID {question_id}</b>\n\n"
+            text += f"❌ В {section_info} нет доступных тем для изменения."
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_question_select_{question_id}")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            return
+        
         text = f"📝 <b>Изменение темы вопроса ID {question_id}</b>\n\n"
-        text += "Выберите новую тему:"
+        text += f"<b>Текущая тема:</b> {current_topic}\n"
+        text += f"<b>Раздел:</b> {main_topic if main_topic else 'Неизвестный'}\n\n"
+        text += f"Выберите новую тему из {section_info}:"
         
         keyboard = []
         
-        for topic_id, topic_name, main_topic in topics[:20]:  # Ограничиваем для избежания длинного меню
+        for topic_id, topic_name, main_topic_name in topics[:20]:  # Ограничиваем для избежания длинного меню
+            # Показываем только название темы, так как раздел уже указан выше
+            display_name = topic_name
+            if topic_name == current_topic:
+                display_name += " ✅ (текущая)"
+            
             keyboard.append([InlineKeyboardButton(
-                f"{main_topic}: {topic_name}",
+                display_name,
                 callback_data=f"edit_question_topic_select_{question_id}_{topic_id}"
             )])
         
