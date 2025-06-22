@@ -126,17 +126,34 @@ class SyncStatisticsRepository(SyncBaseRepository):
                       user_answer_text: str, correct_answer_text: str, explanation_text: str) -> bool:
         """Add user error (sync) - OPTIMIZED"""
         try:
+            # Сначала найдем question_id по тексту вопроса
+            find_question_query = """
+                SELECT q.id 
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE q.question_text = %s AND s.subtopic_name = %s
+                LIMIT 1
+            """
+            question_result = self.fetch_one(find_question_query, (question_text, topic))
+            
+            if not question_result:
+                logger.warning(f"Question not found for text: {question_text[:50]}...")
+                return False
+            
+            question_id = question_result['id']
+            
             # Быстрая вставка без дополнительных проверок
             query = """
-                INSERT INTO user_errors (user_id, topic, question_text, user_answer_text, correct_answer_text, explanation_text, error_count)
-                VALUES (%s, %s, %s, %s, %s, %s, 1)
-                ON CONFLICT (user_id, question_text) 
+                INSERT INTO user_errors (user_id, question_id, user_answer, correct_answer, error_count)
+                VALUES (%s, %s, %s, %s, 1)
+                ON CONFLICT (user_id, question_id) 
                 DO UPDATE SET 
                     error_count = user_errors.error_count + 1,
-                    user_answer_text = EXCLUDED.user_answer_text,
+                    user_answer = EXCLUDED.user_answer,
+                    last_error_date = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
             """
-            self.execute_query(query, (user_id, topic, question_text, user_answer_text, correct_answer_text, explanation_text))
+            self.execute_query(query, (user_id, question_id, user_answer_text, correct_answer_text))
             return True
             
         except Exception as e:
@@ -149,15 +166,16 @@ class SyncStatisticsRepository(SyncBaseRepository):
         try:
             # Быстрая вставка без дополнительных проверок
             query = """
-                INSERT INTO user_errors (user_id, question_id, topic, user_answer_text, correct_answer_text, error_count)
-                VALUES (%s, %s, %s, %s, %s, 1)
+                INSERT INTO user_errors (user_id, question_id, user_answer, correct_answer, error_count)
+                VALUES (%s, %s, %s, %s, 1)
                 ON CONFLICT (user_id, question_id) 
                 DO UPDATE SET 
                     error_count = user_errors.error_count + 1,
-                    user_answer_text = EXCLUDED.user_answer_text,
+                    user_answer = EXCLUDED.user_answer,
+                    last_error_date = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
             """
-            self.execute_query(query, (user_id, question_id, topic, user_answer_text, correct_answer_text))
+            self.execute_query(query, (user_id, question_id, user_answer_text, correct_answer_text))
             return True
             
         except Exception as e:
@@ -338,18 +356,34 @@ class SyncStatisticsRepository(SyncBaseRepository):
             return
         
         try:
-            # Удаляем одну ошибку для данного вопроса
-            query = """
-                DELETE FROM user_errors
-                WHERE user_id = %s AND question_text = %s
-                AND id = (
-                    SELECT id FROM user_errors
-                    WHERE user_id = %s AND question_text = %s
-                    ORDER BY error_date DESC
-                    LIMIT 1
-                )
+            # Сначала найдем question_id по тексту вопроса
+            find_question_query = """
+                SELECT id FROM questions WHERE question_text = %s LIMIT 1
             """
-            self.execute_query(query, (user_id, question_text, user_id, question_text))
+            question_result = self.fetch_one(find_question_query, (question_text,))
+            
+            if not question_result:
+                logger.warning(f"Question not found for decrement: {question_text[:50]}...")
+                return
+            
+            question_id = question_result['id']
+            
+            # Уменьшаем счетчик ошибок или удаляем запись если count = 1
+            query = """
+                UPDATE user_errors 
+                SET error_count = error_count - 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = %s AND question_id = %s AND error_count > 1
+            """
+            self.execute_query(query, (user_id, question_id))
+            
+            # Удаляем записи с error_count = 0
+            delete_query = """
+                DELETE FROM user_errors 
+                WHERE user_id = %s AND question_id = %s AND error_count <= 1
+            """
+            self.execute_query(delete_query, (user_id, question_id))
+            
             logger.info(f"✅ Error count decremented for student {user_id}")
             
         except Exception as e:
@@ -365,14 +399,23 @@ class SyncStatisticsRepository(SyncBaseRepository):
             return
         
         try:
-            # Сначала получаем текст вопроса
-            question_query = "SELECT question_text FROM questions WHERE id = %s"
-            question_data = self.fetch_one(question_query, (question_id,))
+            # Уменьшаем счетчик ошибок или удаляем запись если count = 1
+            query = """
+                UPDATE user_errors 
+                SET error_count = error_count - 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = %s AND question_id = %s AND error_count > 1
+            """
+            self.execute_query(query, (user_id, question_id))
             
-            if question_data:
-                self.decrement_error_count(user_id, question_data['question_text'])
-            else:
-                logger.warning(f"⚠️ Question {question_id} not found for error decrement")
+            # Удаляем записи с error_count = 0
+            delete_query = """
+                DELETE FROM user_errors 
+                WHERE user_id = %s AND question_id = %s AND error_count <= 1
+            """
+            self.execute_query(delete_query, (user_id, question_id))
+            
+            logger.info(f"✅ Error count decremented for student {user_id}")
                 
         except Exception as e:
             logger.error(f"❌ Error decrementing error count by question ID: {e}")

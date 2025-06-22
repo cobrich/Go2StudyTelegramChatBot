@@ -395,7 +395,7 @@ class SyncDatabaseFacade:
                       explanation_text: str) -> None:
         """Add user error (sync)"""
         self.statistics.add_user_error(user_id, topic, question_text, 
-                                     user_answer_text, correct_answer_text)
+                                     user_answer_text, correct_answer_text, explanation_text)
         self._clear_cache_for_user(user_id)
     
     def add_user_error_by_question_id(self, user_id: int, question_id: int, topic: str,

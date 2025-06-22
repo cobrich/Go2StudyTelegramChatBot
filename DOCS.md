@@ -784,3 +784,42 @@ ue.error_count
 - Добавлена обработка ошибок без блокировки пользователя
 
 ### ✅ 22.06.2025 - Исправлена критическая ошибка отображения вариантов ответов
+
+**🎯 ПРОБЛЕМА**: 
+- При неправильном ответе возникала ошибка `TypeError: SyncStatisticsRepository.add_user_error() missing 1 required positional argument: 'explanation_text'`
+- Методы обработки ошибок пользователей не соответствовали реальной структуре таблицы `user_errors` в БД
+
+**🔍 АНАЛИЗ**:
+- В `sync_database_facade.py` метод `add_user_error` принимал 6 параметров, но передавал только 5 в statistics repository
+- Реальная структура таблицы `user_errors` НЕ содержит колонки `topic`, `question_text`, `explanation_text`
+- Фактическая структура: `user_id`, `question_id`, `user_answer`, `correct_answer`, `error_count`, `first_error_date`, `last_error_date`
+- Методы пытались использовать несуществующие колонки
+
+**✅ РЕШЕНИЕ - Приведение в соответствие с реальной структурой БД**:
+
+**🔧 Исправлен `sync_database_facade.py`**:
+- ✅ Добавлен недостающий параметр `explanation_text` в вызов `statistics.add_user_error()`
+
+**🔧 Исправлен `sync_statistics_repository.py`**:
+- ✅ **add_user_error()**: сначала находит `question_id` по тексту вопроса, затем использует правильные колонки БД
+- ✅ **add_user_error_by_question_id()**: использует правильные колонки `user_answer`, `correct_answer` вместо `user_answer_text`, `correct_answer_text`
+- ✅ **decrement_error_count()**: работает через `question_id` вместо несуществующего `question_text`
+- ✅ **decrement_error_count_by_question_id()**: прямая работа с `question_id` без промежуточных запросов
+
+**🔧 Оптимизированная логика обработки ошибок**:
+- ✅ **ON CONFLICT**: используется правильный UNIQUE constraint `(user_id, question_id)`
+- ✅ **Автоматические поля**: обновляются `last_error_date` и `updated_at` при конфликте
+- ✅ **Декремент**: уменьшает `error_count` или удаляет запись если count ≤ 1
+
+**🎯 РЕЗУЛЬТАТ**:
+- ❌ Ошибка `TypeError: missing 'explanation_text' argument` устранена
+- ✅ Все методы работают с реальной структурой БД
+- ✅ Корректная обработка ошибок пользователей без падений
+- ✅ Оптимизированные SQL-запросы с правильными constraint
+- ✅ Правильное отслеживание счетчика ошибок
+
+**📊 Техническая статистика**:
+- Исправлено 4 метода в statistics repository
+- Приведены в соответствие все SQL-запросы с user_errors
+- Убраны обращения к 3 несуществующим колонкам
+- Добавлена корректная обработка foreign key constraints
