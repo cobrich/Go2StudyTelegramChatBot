@@ -16,6 +16,12 @@ class UserRepository(BaseRepository):
     def __init__(self):
         super().__init__()
     
+    def _get_fallback_value(self):
+        """Get fallback value when database is unreachable"""
+        # Для пользовательских операций возвращаем пустые списки/словари
+        # Это позволит системе работать без данных
+        return []
+    
     # ============== USER ACTIVITY METHODS ==============
     
     def set_user_active(self, user_id: int, topic: str) -> None:

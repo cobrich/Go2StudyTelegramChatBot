@@ -16,6 +16,11 @@ class StatisticsRepository(BaseRepository):
     def __init__(self):
         super().__init__()
     
+    def _get_fallback_value(self):
+        """Get fallback value when database is unreachable"""
+        # Для статистики возвращаем пустые списки
+        return []
+    
     # ============== TEST RESULTS METHODS ==============
     
     def add_test_result(self, user_id: int, topic: str, percentage: float) -> None:

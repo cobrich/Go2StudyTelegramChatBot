@@ -321,7 +321,7 @@ class DatabaseFacade:
     
     def check_user_access(self, user_id: int, username: str = None) -> bool:
         """Check if user has access to the bot"""
-        return self.users.check_user_access(user_id, username)
+        return self.users.has_user_access(user_id)
     
     # Additional methods for error tracking with question IDs
     def add_user_error_by_question_id(self, user_id: int, question_id: int, topic: str,

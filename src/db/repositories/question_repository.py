@@ -17,6 +17,11 @@ class QuestionRepository(BaseRepository):
     def __init__(self):
         super().__init__()
     
+    def _get_fallback_value(self):
+        """Get fallback value when database is unreachable"""
+        # Для вопросов возвращаем пустые списки
+        return []
+    
     # ============== TOPIC METHODS ==============
     
     def get_all_topics(self, active_only: bool = True) -> List[Dict]:

@@ -16,6 +16,12 @@ class AdminRepository(BaseRepository):
     def __init__(self):
         super().__init__()
     
+    def _get_fallback_value(self):
+        """Get fallback value when database is unreachable"""
+        # Для админских операций возвращаем False (нет доступа)
+        # Это безопасно - лучше заблокировать доступ, чем дать его всем
+        return False
+    
     # ============== ADMIN CHECK METHODS ==============
     
     def is_super_admin(self, user_id: int) -> bool:
