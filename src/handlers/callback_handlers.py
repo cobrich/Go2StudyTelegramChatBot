@@ -789,10 +789,25 @@ class CallbackHandlers(BaseHandler):
             logging.error(f"Error in query.answer() (main_menu): {e}")
         
         user_id = query.from_user.id
-        user_language = self.db.get_user_language(user_id)
         
-        # Проверяем доступ пользователя перед отправкой главного меню
-        if not self.db.check_user_access(user_id, query.from_user.username):
+        # 🚀 ОПТИМИЗАЦИЯ: Делаем ОДИН запрос вместо четырех
+        # Получаем всю информацию о пользователе за один раз
+        user_info = self.db.get_user_by_id(user_id)  # Один запрос получает всё
+        
+        if not user_info:
+            # Пользователь не найден в БД
+            user_language = 'ru'  # default
+            await query.message.edit_text(
+                get_message('no_access', user_language, 
+                          user_id=user_id, 
+                          username=query.from_user.username or 'не указан')
+            )
+            return
+        
+        user_language = user_info.get('language', 'ru')
+        
+        # Проверяем доступ используя уже полученную информацию
+        if not user_info.get('has_access', False):
             await query.message.edit_text(
                 get_message('no_access', user_language, 
                           user_id=user_id, 
@@ -806,21 +821,20 @@ class CallbackHandlers(BaseHandler):
         # Очищаем флаг выбора темы
         context.user_data.pop('in_topic_selection', None)
         
-        # Формируем приветственное сообщение как в /start
+        # Проверяем, является ли пользователь админом (один запрос)
         is_admin = self.db.is_admin(user_id)
         
         if not is_admin:
-            # Для обычных пользователей
-            user_info = self.db.get_user_info(user_id)
-            welcome_name = user_info.get('full_name') if user_info else query.from_user.first_name or "пользователь"
-            grade_text = f", {user_info.get('grade')} класс" if user_info and user_info.get('grade') else ""
+            # Для обычных пользователей - используем уже полученную информацию
+            welcome_name = user_info.get('full_name') if user_info.get('full_name') else query.from_user.first_name or "пользователь"
+            grade_text = f", {user_info.get('grade')} класс" if user_info.get('grade') else ""
             if user_language == 'kk':
-                grade_text = f", {user_info.get('grade')} сынып" if user_info and user_info.get('grade') else ""
-                welcome_text = get_message('welcome', user_language, name=welcome_name, grade=user_info.get('grade') if user_info else '') + "\n\n" + get_message('bot_description', user_language)
+                grade_text = f", {user_info.get('grade')} сынып" if user_info.get('grade') else ""
+                welcome_text = get_message('welcome', user_language, name=welcome_name, grade=user_info.get('grade') if user_info.get('grade') else '') + "\n\n" + get_message('bot_description', user_language)
             else:
                 welcome_text = f"👋 Привет, {welcome_name}{grade_text}!\n\n📚 Я бот для изучения математики. Выбери действие:"
         else:
-            # Для админов
+            # Для админов - получаем информацию из таблицы admins
             admin_info = self.db.get_admin_info(user_id)
             welcome_name = admin_info['full_name'] if admin_info and admin_info.get('full_name') else query.from_user.first_name or "администратор"
             if user_language == 'kk':
