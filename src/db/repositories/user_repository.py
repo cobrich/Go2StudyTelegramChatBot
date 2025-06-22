@@ -182,13 +182,19 @@ class UserRepository(BaseRepository):
     
     def is_user_allowed_by_id(self, user_id: int) -> bool:
         """Check if user is allowed by user_id and has access."""
+        logger.debug(f"🔍 UserRepository.is_user_allowed_by_id: проверяем user_id={user_id}")
         query = f'SELECT has_access FROM allowed_users WHERE user_id = {self._get_placeholder(1)}'
         result = self.fetch_val(query, (user_id,))
-        return bool(result)
+        allowed_result = bool(result)
+        logger.debug(f"📊 UserRepository.is_user_allowed_by_id: query result={result}, allowed={allowed_result}")
+        return allowed_result
     
     def has_user_access(self, user_id: int) -> bool:
         """Check if user has access to the system."""
-        return self.is_user_allowed_by_id(user_id)
+        logger.debug(f"🔍 UserRepository.has_user_access: проверяем user_id={user_id}")
+        result = self.is_user_allowed_by_id(user_id)
+        logger.debug(f"📊 UserRepository.has_user_access: result={result}")
+        return result
     
     def set_user_access(self, user_id: int, has_access: bool) -> bool:
         """Set user access status (enable/disable user)."""

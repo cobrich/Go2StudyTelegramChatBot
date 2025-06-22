@@ -365,12 +365,34 @@ class DatabaseFacade:
     
     def check_user_access(self, user_id: int, username: str = None) -> bool:
         """Check if user has access to the bot"""
-        # Сначала проверяем, является ли пользователь админом
-        if self.admins.is_admin(user_id):
-            return True
+        logger.info(f"🔍 Проверка доступа для пользователя: user_id={user_id}, username={username}")
         
-        # Если не админ, проверяем в whitelist обычных пользователей
-        return self.users.has_user_access(user_id)
+        try:
+            # Сначала проверяем, является ли пользователь админом
+            logger.info(f"📋 Проверяем является ли пользователь {user_id} админом...")
+            is_admin = self.admins.is_admin(user_id)
+            logger.info(f"🔧 Результат проверки админа для {user_id}: {is_admin}")
+            
+            if is_admin:
+                logger.info(f"✅ Пользователь {user_id} является админом - доступ разрешен")
+                return True
+            
+            # Если не админ, проверяем в whitelist обычных пользователей
+            logger.info(f"👤 Пользователь {user_id} не админ, проверяем в whitelist обычных пользователей...")
+            has_access = self.users.has_user_access(user_id)
+            logger.info(f"📝 Результат проверки whitelist для {user_id}: {has_access}")
+            
+            if has_access:
+                logger.info(f"✅ Пользователь {user_id} найден в whitelist - доступ разрешен")
+            else:
+                logger.warning(f"❌ Пользователь {user_id} НЕ найден ни в админах, ни в whitelist - доступ запрещен")
+            
+            return has_access
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка при проверке доступа для пользователя {user_id}: {e}")
+            logger.error(f"❌ Возвращаем False для безопасности")
+            return False
     
     # Additional methods for error tracking with question IDs
     def add_user_error_by_question_id(self, user_id: int, question_id: int, topic: str,

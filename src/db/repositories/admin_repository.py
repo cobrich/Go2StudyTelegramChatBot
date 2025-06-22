@@ -53,9 +53,23 @@ class AdminRepository(BaseRepository):
     
     def is_admin(self, user_id: int) -> bool:
         """Check if user is admin (regular or super)."""
-        query = f'SELECT 1 FROM admins WHERE user_id = {self._get_placeholder(1)}'
-        result = self.fetch_val(query, (user_id,))
-        return result is not None
+        logger.info(f"🔍 AdminRepository.is_admin: проверяем user_id={user_id}")
+        
+        try:
+            query = f'SELECT 1 FROM admins WHERE user_id = {self._get_placeholder(1)}'
+            logger.info(f"📝 AdminRepository.is_admin: выполняем запрос: {query} с параметром {user_id}")
+            
+            result = self.fetch_val(query, (user_id,))
+            logger.info(f"📊 AdminRepository.is_admin: результат запроса: {result} (тип: {type(result)})")
+            
+            is_admin_result = result is not None
+            logger.info(f"🎯 AdminRepository.is_admin: финальный результат для {user_id}: {is_admin_result}")
+            
+            return is_admin_result
+            
+        except Exception as e:
+            logger.error(f"❌ AdminRepository.is_admin: ошибка при проверке админа {user_id}: {e}")
+            return False
     
     # ============== ADMIN MANAGEMENT METHODS ==============
     

@@ -1,7 +1,7 @@
 """
-Connection Manager for Supabase Database Operations
+Connection Manager for Neon PostgreSQL Database Operations
 
-Provides unified interface for Supabase PostgreSQL connections with connection pooling.
+Provides unified interface for Neon PostgreSQL connections with connection pooling.
 """
 
 import os
@@ -17,20 +17,20 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 class ConnectionManager:
-    """Manages Supabase database connections with pooling support"""
+    """Manages Neon PostgreSQL database connections with pooling support"""
     
     def __init__(self):
         self._pool = None
         self._tables_initialized = False
         self.connection_string = self._get_connection_string()
-        logger.info("Initialized ConnectionManager for Supabase")
+        logger.info("Initialized ConnectionManager for Neon PostgreSQL")
     
     def _get_connection_string(self) -> str:
-        """Get Supabase connection string from environment variables"""
+        """Get Neon PostgreSQL connection string from environment variables"""
         conn_str = os.getenv('DATABASE_URL') or os.getenv('SUPABASE_DATABASE_URL')
         if not conn_str:
             raise ValueError(
-                "Supabase connection string not found. "
+                "Neon PostgreSQL connection string not found. "
                 "Please set DATABASE_URL or SUPABASE_DATABASE_URL environment variable."
             )
         return conn_str
@@ -261,7 +261,7 @@ class ConnectionManager:
             # Не создаем fallback темы - пусть пользователь сам запустит init_topics.py
 
     async def initialize_pool(self, min_size: int = 1, max_size: int = 10):
-        """Initialize connection pool for Supabase"""
+        """Initialize connection pool for Neon PostgreSQL"""
         if self._pool:
             # Пул уже инициализирован
             return
@@ -271,19 +271,19 @@ class ConnectionManager:
             return
             
         try:
-            logger.info("Initializing Supabase connection pool...")
+            logger.info("Initializing Neon PostgreSQL connection pool...")
             self._pool = await asyncpg.create_pool(
                 self.connection_string,
                 min_size=min_size,
                 max_size=max_size,
-                command_timeout=60,
+                command_timeout=30,  # Уменьшаем таймаут
                 server_settings={
                     'application_name': 'go2study_bot',
                 },
-                ssl=None,  # Явно устанавливаем None для избежания проблем
+                # Убираем ssl=None для Neon - используем настройки из строки подключения
                 statement_cache_size=0  # Отключаем кэш для стабильности
             )
-            logger.info(f"Supabase connection pool initialized (min={min_size}, max={max_size})")
+            logger.info(f"Neon PostgreSQL connection pool initialized (min={min_size}, max={max_size})")
             
             # Initialize tables on first connection
             try:
@@ -294,7 +294,7 @@ class ConnectionManager:
                 # Не падаем из-за ошибок инициализации таблиц
                     
         except Exception as e:
-            logger.error(f"Failed to initialize Supabase pool: {e}")
+            logger.error(f"Failed to initialize Neon PostgreSQL pool: {e}")
             self._pool = None  # Убеждаемся, что пул не в частично инициализированном состоянии
             
             # Try fallback with single connection
@@ -319,7 +319,7 @@ class ConnectionManager:
                 server_settings={
                     'application_name': 'go2study_bot_fallback',
                 },
-                ssl=None
+                # Убираем ssl=None для Neon - используем настройки из строки подключения
             )
             logger.info("Fallback connection successful - using single connection mode")
             
@@ -331,63 +331,25 @@ class ConnectionManager:
             last_error = e
             logger.error(f"Direct connection failed: {e}")
             
-            # Try with IPv4 resolution if possible
-            if 'supabase.co' in self.connection_string:
-                try:
-                    import re
-                    # Extract host from connection string
-                    host_match = re.search(r'@([^:]+):', self.connection_string)
-                    if host_match:
-                        original_host = host_match.group(1)
-                        logger.info(f"Attempting to resolve {original_host} to IPv4...")
-                        
-                        # Try to resolve to IPv4
-                        try:
-                            import socket
-                            ipv4_addr = socket.getaddrinfo(original_host, None, socket.AF_INET)[0][4][0]
-                            modified_conn_str = self.connection_string.replace(original_host, ipv4_addr)
-                            logger.info(f"Resolved {original_host} to {ipv4_addr}")
-                            
-                            self._fallback_conn = await asyncpg.connect(
-                                modified_conn_str,
-                                command_timeout=30,
-                                server_settings={
-                                    'application_name': 'go2study_bot_ipv4',
-                                },
-                                ssl=None
-                            )
-                            logger.info("Fallback connection successful with IPv4 address")
-                            
-                            # Initialize tables with fallback connection
-                            await self._check_and_create_tables(self._fallback_conn)
-                            return
-                            
-                        except socket.gaierror as e:
-                            last_error = e
-                            logger.warning(f"Failed to resolve {original_host} to IPv4: {e}")
-                        
-                except Exception as e:
-                    last_error = e
-                    logger.warning(f"Failed to modify connection string: {e}")
-            
+            # Убираем логику для supabase.co, так как используем Neon
             # If all fails, raise the last error
-            raise Exception(f"All connection attempts failed: {last_error}")
+            raise Exception(f"Connection to Neon PostgreSQL failed: {last_error}")
 
     async def close_pool(self):
         """Close connection pool or fallback connection"""
         if self._pool:
             await self._pool.close()
             self._pool = None
-            logger.info("Supabase connection pool closed")
+            logger.info("Neon PostgreSQL connection pool closed")
         
         if hasattr(self, '_fallback_conn') and self._fallback_conn:
             await self._fallback_conn.close()
             self._fallback_conn = None
-            logger.info("Supabase fallback connection closed")
+            logger.info("Neon PostgreSQL fallback connection closed")
     
     @asynccontextmanager
     async def get_async_connection(self) -> AsyncGenerator[Any, None]:
-        """Get async Supabase database connection"""
+        """Get async Neon PostgreSQL database connection"""
         if not self._pool and not hasattr(self, '_fallback_conn'):
             await self.initialize_pool()
         
@@ -465,7 +427,7 @@ class ConnectionManager:
                     yield conn
             except Exception as e:
                 logger.error(f"Failed to initialize connection: {e}")
-                raise RuntimeError("No available PostgreSQL connection")
+                raise RuntimeError("No available Neon PostgreSQL connection")
 
 # Global connection manager instance
 _connection_manager = None
