@@ -79,6 +79,40 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 ## 📋 Changelog
 
+### ✅ XX.XX.2025 - Исправлен конфликт зависимостей в requirements.txt
+
+**🎯 Проблема**: Сборка Docker-образа на Railway завершалась с ошибкой `ResolutionImpossible` из-за конфликта зависимостей между `python-telegram-bot` и `supabase`.
+
+**🔍 Анализ**:
+- `python-telegram-bot 20.8` требует `httpx~=0.26.0`
+- `supabase 2.3.0` требует `httpx<0.25.0`
+- Конфликт версий `httpx` делал установку зависимостей невозможной
+- Проект использует Neon PostgreSQL напрямую через `asyncpg`, а не через Supabase
+
+**✅ РЕШЕНИЕ - Удалена ненужная зависимость supabase**:
+
+**🔧 Обновлен `requirements.txt`**:
+```txt
+# Core dependencies with exact versions for Railway
+python-telegram-bot==20.8
+google-generativeai==0.3.2
+python-dotenv==1.0.0
+PyPDF2==3.0.1
+Pillow==10.1.0
+
+# Database dependencies for Neon PostgreSQL
+asyncpg==0.29.0
+
+# Additional dependencies for Railway
+psycopg2-binary==2.9.9
+```
+
+**🎯 Результат**:
+- ✅ Устранен конфликт зависимостей
+- ✅ Упрощена структура зависимостей
+- ✅ Сборка Docker-образа теперь должна проходить успешно
+- ✅ Сохранена вся функциональность работы с Neon PostgreSQL
+
 ### ✅ XX.XX.2025 - Улучшена сборка Docker-образа
 
 **🎯 Проблема**: Сборка Docker-образа на Railway завершалась с ошибкой `exit code: 1` при установке зависимостей из `requirements.txt`.
