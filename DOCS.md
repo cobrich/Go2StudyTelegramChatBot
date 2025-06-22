@@ -453,37 +453,43 @@ go2study_bot/
 
 ### 2025-01-22: Исправлена ошибка с колонками базы данных в PDF процессоре
 
-**🎯 Проблема**: При загрузке PDF файлов возникала ошибка `column "name" does not exist` при попытке получить список тем из базы данных.
+**🎯 Проблема**: При загрузке PDF файлов возникала ошибка `column "name" does not exist` из-за неправильных SQL-запросов.
 
-**🔍 Анализ ошибки**:
-```
-Database connection error: column "name" does not exist
-LINE 1: SELECT name FROM subtopics WHERE is_active = true ORDER BY o...
-```
+**🔍 Анализ**:
+- В `sync_question_repository.py` использовались неправильные названия колонок
+- `SELECT name` вместо `SELECT subtopic_name`
+- `ORDER BY order_index` для несуществующей колонки
+- Неправильные JOIN-запросы в связанных таблицах
 
-**🐛 Причины ошибки**:
-1. В `sync_question_repository.py` использовалась неправильная колонка `name` вместо `subtopic_name`
-2. Ссылка на несуществующую колонку `order_index` в ORDER BY
-3. В методах удаления тем использовались неправильные колонки для связанных таблиц
+**✅ РЕШЕНИЕ**:
 
-**✅ ИСПРАВЛЕНИЯ**:
+**🔧 Исправлены SQL запросы**:
+- ✅ `get_topic_names()`: `SELECT subtopic_name FROM subtopics`
+- ✅ `get_tasks_for_topic()`: `s.subtopic_name as topic`
+- ✅ Удаление связанных данных через правильные FK
+- ✅ Корректная работа с таблицами `user_errors` и `test_results`
 
-**🔧 Исправлены SQL запросы в `src/db/repositories/sync_question_repository.py`**:
-- ✅ `SELECT name` → `SELECT subtopic_name` 
-- ✅ `ORDER BY order_index` → `ORDER BY subtopic_name`
-- ✅ `WHERE s.name = %s` → `WHERE s.subtopic_name = %s`
-- ✅ `s.name as topic` → `s.subtopic_name as topic`
+**🚀 Результат**: PDF процессор теперь корректно работает с БД и успешно загружает вопросы из PDF файлов.
 
-**🔧 Исправлены SQL запросы в `src/db/repositories/sync_topic_repository.py`**:
-- ✅ Исправлены запросы удаления связанных данных
-- ✅ `DELETE FROM user_errors WHERE topic = ...` → правильный запрос через `question_id`
-- ✅ `DELETE FROM test_results WHERE topic = ...` → `WHERE topic_id = %s`
+### 2025-01-22: Улучшен UX загрузки PDF файлов
 
-**🚀 Результат**:
-- ✅ PDF процессор теперь корректно получает список тем из БД
-- ✅ Вопросы из PDF правильно валидируются против существующих тем
-- ✅ Исчезли ошибки `column "name" does not exist`
-- ✅ Система корректно работает с новой структурой БД
+**🎯 Проблема**: После загрузки PDF файла в чате оставались лишние сообщения с инструкциями.
+
+**✅ РЕШЕНИЕ - Автоматическое удаление сообщений**:
+
+**🔧 Реализованы улучшения UX**:
+- ✅ Сохранение ID сообщения с инструкциями в `context.user_data`
+- ✅ Автоматическое удаление сообщения после загрузки PDF
+- ✅ Очистка состояния при возврате к меню или завершении операции
+- ✅ Безопасная обработка ошибок удаления (не критично)
+
+**📱 Методы с улучшениями**:
+- `upload_pdf_start()` - сохраняет ID сообщения
+- `pdf_format_guide()` - обновляет ID при изменении содержимого  
+- `process_pdf_file()` - удаляет сообщение после загрузки
+- `questions_menu()` - очищает состояние при возврате
+
+**🚀 Результат**: Чат остается чистым, пользователь видит только актуальную информацию без лишних сообщений.
 
 ---
 

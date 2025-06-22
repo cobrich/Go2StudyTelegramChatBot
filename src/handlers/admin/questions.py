@@ -44,6 +44,10 @@ class QuestionsHandler(AdminBaseHandler):
         query = update.callback_query
         await self.safe_answer_callback(query)
         
+        # Очищаем ID сообщения с инструкциями PDF при возврате к меню
+        context.user_data.pop('pdf_instruction_message_id', None)
+        context.user_data.pop('admin_action', None)
+        
         text = f"❓ <b>Управление вопросами</b>\n\nВыберите действие:"
         
         keyboard = [
@@ -82,7 +86,9 @@ class QuestionsHandler(AdminBaseHandler):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        # Отправляем сообщение и сохраняем его ID для последующего удаления
+        sent_message = await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        context.user_data['pdf_instruction_message_id'] = sent_message.message_id
 
     async def pdf_format_guide(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать руководство по формату PDF."""
@@ -123,7 +129,9 @@ class QuestionsHandler(AdminBaseHandler):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        # Обновляем ID сообщения, так как содержимое изменилось
+        sent_message = await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        context.user_data['pdf_instruction_message_id'] = sent_message.message_id
 
     async def questions_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Статистика вопросов."""
@@ -416,6 +424,22 @@ class QuestionsHandler(AdminBaseHandler):
             await update.message.reply_text("❌ Размер файла слишком большой. Максимум 20MB.")
             return
         
+        # Удаляем предыдущее сообщение с инструкциями по загрузке PDF
+        try:
+            # Ищем последнее сообщение бота с инструкциями
+            chat_id = update.effective_chat.id
+            # Пытаемся удалить предыдущее сообщение бота (обычно это сообщение с инструкциями)
+            # Получаем ID предыдущего сообщения из контекста, если он был сохранен
+            if 'pdf_instruction_message_id' in context.user_data:
+                await context.bot.delete_message(
+                    chat_id=chat_id,
+                    message_id=context.user_data['pdf_instruction_message_id']
+                )
+                context.user_data.pop('pdf_instruction_message_id', None)
+        except Exception as e:
+            # Не критично, если не удалось удалить сообщение
+            logging.debug(f"Не удалось удалить сообщение с инструкциями: {e}")
+        
         processing_msg = await update.message.reply_text("⏳ Обрабатываю PDF файл...")
         
         try:
@@ -600,6 +624,7 @@ class QuestionsHandler(AdminBaseHandler):
             
             # Очищаем состояние
             context.user_data.pop('admin_action', None)
+            context.user_data.pop('pdf_instruction_message_id', None)
 
     async def delete_questions_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Подтверждение удаления вопросов."""
