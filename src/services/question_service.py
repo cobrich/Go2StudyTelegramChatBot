@@ -299,20 +299,26 @@ class QuestionService:
                     logging.warning(f"[get_or_generate_tasks] Skipping error_task with empty fields: {task}")
                     continue
                 if task['question'] not in existing_question_texts_to_exclude:
-                    options = [task['answer']]
-                    if task['incorrect_options']:
-                        # Убеждаемся, что incorrect_options правильно разбиваются на список
-                        if isinstance(task['incorrect_options'], str):
-                            incorrect_opts = [opt.strip() for opt in task['incorrect_options'].split('\n') if opt.strip()]
-                        else:
-                            incorrect_opts = task['incorrect_options'] if isinstance(task['incorrect_options'], list) else []
-                        options.extend(incorrect_opts)
+                    # Используем готовые варианты ответов из базы данных если они есть
+                    if 'all_options' in task and task['all_options']:
+                        options = task['all_options']
+                    else:
+                        # Fallback: формируем варианты из правильного ответа и incorrect_options
+                        options = [task['answer']]
+                        if task['incorrect_options']:
+                            # Убеждаемся, что incorrect_options правильно разбиваются на список
+                            if isinstance(task['incorrect_options'], str):
+                                incorrect_opts = [opt.strip() for opt in task['incorrect_options'].split('\n') if opt.strip()]
+                            else:
+                                incorrect_opts = task['incorrect_options'] if isinstance(task['incorrect_options'], list) else []
+                            options.extend(incorrect_opts)
+                        
+                        # Убеждаемся, что options - это список строк
+                        options = [str(opt) for opt in options if opt and str(opt).strip()]
+                        if len(options) < 2:  # Добавляем фиктивные варианты если их мало
+                            options.extend([f"Вариант {i}" for i in range(len(options), 4)])
                     
-                    # Убеждаемся, что options - это список строк
-                    options = [str(opt) for opt in options if opt and str(opt).strip()]
-                    if len(options) < 2:  # Добавляем фиктивные варианты если их мало
-                        options.extend([f"Вариант {i}" for i in range(len(options), 4)])
-                    
+                    # Перемешиваем варианты
                     random.shuffle(options)
                     tasks.append((
                         task['question'],
@@ -431,20 +437,26 @@ class QuestionService:
                     logging.warning(f"[get_or_generate_tasks] Skipping error_task with empty fields: {task}")
                     continue
                 if task['question'] not in existing_question_texts_to_exclude:
-                    options = [task['answer']]
-                    if task['incorrect_options']:
-                        # Убеждаемся, что incorrect_options правильно разбиваются на список
-                        if isinstance(task['incorrect_options'], str):
-                            incorrect_opts = [opt.strip() for opt in task['incorrect_options'].split('\n') if opt.strip()]
-                        else:
-                            incorrect_opts = task['incorrect_options'] if isinstance(task['incorrect_options'], list) else []
-                        options.extend(incorrect_opts)
+                    # Используем готовые варианты ответов из базы данных если они есть
+                    if 'all_options' in task and task['all_options']:
+                        options = task['all_options']
+                    else:
+                        # Fallback: формируем варианты из правильного ответа и incorrect_options
+                        options = [task['answer']]
+                        if task['incorrect_options']:
+                            # Убеждаемся, что incorrect_options правильно разбиваются на список
+                            if isinstance(task['incorrect_options'], str):
+                                incorrect_opts = [opt.strip() for opt in task['incorrect_options'].split('\n') if opt.strip()]
+                            else:
+                                incorrect_opts = task['incorrect_options'] if isinstance(task['incorrect_options'], list) else []
+                            options.extend(incorrect_opts)
+                        
+                        # Убеждаемся, что options - это список строк
+                        options = [str(opt) for opt in options if opt and str(opt).strip()]
+                        if len(options) < 2:  # Добавляем фиктивные варианты если их мало
+                            options.extend([f"Вариант {i}" for i in range(len(options), 4)])
                     
-                    # Убеждаемся, что options - это список строк
-                    options = [str(opt) for opt in options if opt and str(opt).strip()]
-                    if len(options) < 2:  # Добавляем фиктивные варианты если их мало
-                        options.extend([f"Вариант {i}" for i in range(len(options), 4)])
-                    
+                    # Перемешиваем варианты
                     random.shuffle(options)
                     tasks.append((
                         task['question'],
@@ -479,28 +491,35 @@ class QuestionService:
                         continue
                     
                     if task['question'] not in existing_question_texts_to_exclude:
-                        options = [task['answer']]
-                        if task['incorrect_options']:
-                            # Убеждаемся, что incorrect_options правильно разбиваются на список
-                            if isinstance(task['incorrect_options'], str):
-                                incorrect_opts = [opt.strip() for opt in task['incorrect_options'].split('\n') if opt.strip()]
-                            else:
-                                incorrect_opts = task['incorrect_options'] if isinstance(task['incorrect_options'], list) else []
-                            options.extend(incorrect_opts)
+                        # Используем готовые варианты ответов из базы данных если они есть
+                        if 'all_options' in task and task['all_options']:
+                            options = task['all_options']
+                        else:
+                            # Fallback: формируем варианты из правильного ответа и incorrect_options
+                            options = [task['answer']]
+                            if task['incorrect_options']:
+                                # Убеждаемся, что incorrect_options правильно разбиваются на список
+                                if isinstance(task['incorrect_options'], str):
+                                    incorrect_opts = [opt.strip() for opt in task['incorrect_options'].split('\n') if opt.strip()]
+                                else:
+                                    incorrect_opts = task['incorrect_options'] if isinstance(task['incorrect_options'], list) else []
+                                options.extend(incorrect_opts)
+                            
+                            # Убеждаемся, что options - это список строк
+                            options = [str(opt) for opt in options if opt and str(opt).strip()]
+                            
+                            # КРИТИЧЕСКИ ВАЖНО: Гарантируем наличие правильного ответа в вариантах
+                            if task['answer'] not in options:
+                                options.append(task['answer'])
+                            
+                            # Если вариантов мало, добавляем фиктивные
+                            if len(options) < 4:
+                                options.extend([f"Вариант {i}" for i in range(len(options), 4)])
+                            
+                            # Удаляем дубликаты, сохраняя порядок
+                            options = list(dict.fromkeys(options))
                         
-                        # Убеждаемся, что options - это список строк
-                        options = [str(opt) for opt in options if opt and str(opt).strip()]
-                        
-                        # КРИТИЧЕСКИ ВАЖНО: Гарантируем наличие правильного ответа в вариантах
-                        if task['answer'] not in options:
-                            options.append(task['answer'])
-                        
-                        # Если вариантов мало, добавляем фиктивные
-                        if len(options) < 4:
-                            options.extend([f"Вариант {i}" for i in range(len(options), 4)])
-                        
-                        # Удаляем дубликаты, сохраняя порядок
-                        options = list(dict.fromkeys(options))
+                        # Перемешиваем варианты
                         random.shuffle(options)
                         tasks.append((
                             task['question'],

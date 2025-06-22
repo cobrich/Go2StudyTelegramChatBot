@@ -39,9 +39,17 @@ class SyncQuestionRepository(SyncBaseRepository):
         
         try:
             query = """
-                SELECT q.id, q.question_text as question, q.correct_answer as answer,
+                SELECT q.id, q.question_text as question, 
+                       CASE q.correct_answer
+                           WHEN 'A' THEN q.option_a
+                           WHEN 'B' THEN q.option_b
+                           WHEN 'C' THEN q.option_c
+                           WHEN 'D' THEN q.option_d
+                           ELSE q.correct_answer
+                       END as answer,
                        q.explanation, q.incorrect_options, q.source,
-                       s.subtopic_name as topic
+                       s.subtopic_name as topic,
+                       q.option_a, q.option_b, q.option_c, q.option_d, q.correct_answer as correct_letter
                 FROM questions q
                 JOIN subtopics s ON q.topic_id = s.id
                 WHERE s.subtopic_name = %s AND s.is_active = %s
@@ -53,15 +61,22 @@ class SyncQuestionRepository(SyncBaseRepository):
             # Преобразуем результат в нужный формат
             tasks = []
             for row in result:
+                # Создаем список всех вариантов ответов
+                all_options = [row['option_a'], row['option_b'], row['option_c'], row['option_d']]
+                # Убираем пустые варианты
+                all_options = [opt for opt in all_options if opt and opt.strip()]
+                
                 task = {
                     'id': row['id'],
                     'question': row['question'],
-                    'answer': row['answer'],
+                    'answer': row['answer'],  # Теперь это текст правильного ответа
                     'explanation': row['explanation'],
                     'incorrect_options': row['incorrect_options'],
                     'image_path': None,  # Колонка не существует в БД
                     'source': row['source'],
-                    'topic': row['topic']
+                    'topic': row['topic'],
+                    'all_options': all_options,  # Все варианты ответов для формирования теста
+                    'correct_letter': row['correct_letter']  # Буква правильного ответа (A, B, C, D)
                 }
                 tasks.append(task)
             
@@ -360,8 +375,16 @@ class SyncQuestionRepository(SyncBaseRepository):
         """Get tasks for topic by ID"""
         try:
             query = """
-                SELECT q.id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d,
-                       q.correct_answer, s.subtopic_name as topic, q.source, q.created_at
+                SELECT q.id, q.question_text, 
+                       CASE q.correct_answer
+                           WHEN 'A' THEN q.option_a
+                           WHEN 'B' THEN q.option_b
+                           WHEN 'C' THEN q.option_c
+                           WHEN 'D' THEN q.option_d
+                           ELSE q.correct_answer
+                       END as answer,
+                       q.option_a, q.option_b, q.option_c, q.option_d,
+                       q.correct_answer as correct_letter, s.subtopic_name as topic, q.source, q.created_at
                 FROM questions q
                 JOIN subtopics s ON q.topic_id = s.id
                 WHERE q.topic_id = %s AND s.is_active = %s

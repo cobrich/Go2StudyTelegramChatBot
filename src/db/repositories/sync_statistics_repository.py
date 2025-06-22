@@ -230,10 +230,18 @@ class SyncStatisticsRepository(SyncBaseRepository):
         
         try:
             query = """
-                SELECT DISTINCT q.question_text as question, q.correct_answer as answer,
+                SELECT DISTINCT q.question_text as question, 
+                       CASE q.correct_answer
+                           WHEN 'A' THEN q.option_a
+                           WHEN 'B' THEN q.option_b
+                           WHEN 'C' THEN q.option_c
+                           WHEN 'D' THEN q.option_d
+                           ELSE q.correct_answer
+                       END as answer,
                        q.explanation as explanation, s.subtopic_name as topic,
                        q.incorrect_options, NULL as image_path, ue.last_error_date,
-                       ue.error_count
+                       ue.error_count, q.id,
+                       q.option_a, q.option_b, q.option_c, q.option_d, q.correct_answer as correct_letter
                 FROM user_errors ue
                 JOIN questions q ON ue.question_id = q.id
                 JOIN subtopics s ON q.topic_id = s.id
@@ -245,14 +253,22 @@ class SyncStatisticsRepository(SyncBaseRepository):
             
             error_tasks = []
             for row in result:
+                # Создаем список всех вариантов ответов
+                all_options = [row['option_a'], row['option_b'], row['option_c'], row['option_d']]
+                # Убираем пустые варианты
+                all_options = [opt for opt in all_options if opt and opt.strip()]
+                
                 task = {
+                    'id': row['id'],
                     'question': row['question'],
-                    'answer': row['answer'],
+                    'answer': row['answer'],  # Теперь это текст правильного ответа
                     'explanation': row['explanation'],
                     'topic': row['topic'],
                     'incorrect_options': row['incorrect_options'],
                     'image_path': row['image_path'],
-                    'error_count': row['error_count']
+                    'error_count': row['error_count'],
+                    'all_options': all_options,  # Все варианты ответов для формирования теста
+                    'correct_letter': row['correct_letter']  # Буква правильного ответа (A, B, C, D)
                 }
                 error_tasks.append(task)
             
