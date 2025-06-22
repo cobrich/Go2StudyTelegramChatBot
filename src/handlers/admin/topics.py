@@ -244,7 +244,7 @@ class TopicsHandler(AdminBaseHandler):
             
             await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
         else:
-            error_text = f"❌ Ошибка при добавлении темы. Возможно, тема '{topic_name}' уже существует."
+            error_text = f"❌ Ошибка при добавлении темы. Возможно, тема '{topic_name}' уже существует в разделе '{selected_main_topic}' ({selected_language})."
             await update.message.reply_text(error_text)
         
         # Очищаем данные

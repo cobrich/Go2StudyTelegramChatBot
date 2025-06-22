@@ -311,7 +311,7 @@ def main() -> None:
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.edit_question_topic_select,
-        pattern="^edit_topic_select_"
+        pattern="^edit_question_topic_select_"
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.edit_question_text_start,

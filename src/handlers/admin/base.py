@@ -182,12 +182,12 @@ class AdminBaseHandler:
             return True
         
         # Обработка для тем
-        if action in ['add_topic_name', 'edit_topic_name']:
+        if action in ['add_topic', 'add_topic_name', 'edit_topic_name']:
             from .topics import TopicsHandler
             topics_handler = TopicsHandler()
             
-            if action == 'add_topic_name':
-                await topics_handler.handle_add_topic_name(update, context, text)
+            if action in ['add_topic', 'add_topic_name']:
+                await topics_handler.handle_add_topic(update, context, text)
             elif action == 'edit_topic_name':
                 await topics_handler.handle_edit_topic_name(update, context, text)
             

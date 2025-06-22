@@ -618,6 +618,7 @@ class SyncDatabaseFacade:
         """Add topic with language"""
         # Find main topic ID by name and language
         main_topics = self.topics.get_main_topics_by_language(language)
+        
         for mt in main_topics:
             # Check exact match first
             if mt['name'] == main_topic_name:

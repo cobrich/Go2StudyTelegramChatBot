@@ -1361,7 +1361,7 @@ class QuestionsHandler(AdminBaseHandler):
         for topic_id, topic_name, main_topic in topics[:20]:  # Ограничиваем для избежания длинного меню
             keyboard.append([InlineKeyboardButton(
                 f"{main_topic}: {topic_name}",
-                callback_data=f"edit_topic_select_{question_id}_{topic_id}"
+                callback_data=f"edit_question_topic_select_{question_id}_{topic_id}"
             )])
         
         keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data=f"edit_question_select_{question_id}")])
@@ -1373,8 +1373,9 @@ class QuestionsHandler(AdminBaseHandler):
         """Обработка выбора новой темы."""
         query = update.callback_query
         parts = query.data.split('_')
-        question_id = int(parts[3])
-        new_topic_id = int(parts[4])
+        # Новый формат: edit_question_topic_select_{question_id}_{topic_id}
+        question_id = int(parts[4])  # parts[4] - question_id
+        new_topic_id = int(parts[5])  # parts[5] - topic_id
         await self.safe_answer_callback(query)
         
         try:
