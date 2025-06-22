@@ -42,7 +42,7 @@ class SyncConnectionManager:
             'user': parsed.username,
             'password': parsed.password,
             'sslmode': 'require',  # Neon требует SSL
-            'connect_timeout': 10,  # Уменьшено с 30 до 10 секунд
+            'connect_timeout': 8,  # Уменьшено с 10 до 8 секунд
             'application_name': 'go2study_bot_sync',
             # Оптимизация производительности
             'keepalives_idle': 600,

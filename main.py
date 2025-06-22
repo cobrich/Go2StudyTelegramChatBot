@@ -33,19 +33,19 @@ def main() -> None:
     # Create custom request with optimized timeouts
     request = HTTPXRequest(
         connection_pool_size=8,
-        connect_timeout=10.0,  # Уменьшено с 30 до 10 секунд
-        read_timeout=15.0,     # Уменьшено с 30 до 15 секунд
-        write_timeout=15.0,    # Уменьшено с 30 до 15 секунд
-        pool_timeout=10.0      # Уменьшено с 30 до 10 секунд
+        connect_timeout=8.0,   # Уменьшено с 10 до 8 секунд
+        read_timeout=12.0,     # Уменьшено с 15 до 12 секунд
+        write_timeout=10.0,    # Уменьшено с 15 до 10 секунд
+        pool_timeout=8.0       # Уменьшено с 10 до 8 секунд
     )
     
     # Create separate request for get_updates with reasonable timeouts
     get_updates_request = HTTPXRequest(
         connection_pool_size=8,
-        connect_timeout=15.0,  # Уменьшено с 60 до 15 секунд
-        read_timeout=30.0,     # Уменьшено с 60 до 30 секунд
-        write_timeout=15.0,    # Уменьшено с 60 до 15 секунд
-        pool_timeout=15.0      # Уменьшено с 60 до 15 секунд
+        connect_timeout=12.0,  # Уменьшено с 15 до 12 секунд
+        read_timeout=25.0,     # Уменьшено с 30 до 25 секунд
+        write_timeout=12.0,    # Уменьшено с 15 до 12 секунд
+        pool_timeout=12.0      # Уменьшено с 15 до 12 секунд
     )
     
     # Create the Application with custom requests FIRST
