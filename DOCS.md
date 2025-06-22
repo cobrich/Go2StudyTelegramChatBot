@@ -639,6 +639,30 @@ ue.error_count
 - Система корректно отслеживает количество ошибок пользователя
 - Функция возвращает полную информацию об ошибках
 
+### ✅ 22.06.2025 - Исправлена ошибка TypeError: missing 'explanation_text' argument
+
+**🎯 Проблема**: При неправильном ответе на вопрос возникала ошибка `TypeError: SyncStatisticsRepository.add_user_error() missing 1 required positional argument: 'explanation_text'`.
+
+**🔍 Анализ**:
+- Переменная `explanation` определялась в локальной области видимости внутри блока `user_results`
+- При вызове `add_user_error()` переменная `explanation` была недоступна
+- Функция ожидала 6 аргументов, но `explanation_text` был неопределен
+
+**✅ РЕШЕНИЕ - Перемещено определение переменной explanation**:
+
+**🔧 Исправлена область видимости в `callback_handlers.py`**:
+```python
+# Перемещено ПЕРЕД блоком user_results:
+explanation = question[2] if len(question) > 2 and question[2] else None
+
+# Теперь explanation доступна во всей функции
+```
+
+**🎯 Результат**: 
+- Ошибка `TypeError: missing 'explanation_text' argument` устранена
+- Переменная `explanation` доступна во всех частях функции
+- Система корректно сохраняет ошибки пользователей с объяснениями
+
 ---
 
 ## 🚀 Go2Study Bot - Техническая документация

@@ -243,10 +243,6 @@ class CallbackHandlers(BaseHandler):
         is_correct = selected_answer == correct_answer
         logging.info(f"  ⚖️ Результат сравнения: {is_correct}")
         
-        # Store result
-        if 'user_results' not in context.user_data:
-            context.user_data['user_results'] = []
-        
         # Получаем объяснение - сначала из структуры вопроса, потом из БД
         explanation = question[2] if len(question) > 2 and question[2] else None
         
@@ -262,6 +258,10 @@ class CallbackHandlers(BaseHandler):
             except Exception as e:
                 logging.error(f"Error getting explanation for question: {e}")
                 explanation = "Объяснение не найдено" if user_language == 'ru' else "Түсіндірме табылмады"
+        
+        # Store result
+        if 'user_results' not in context.user_data:
+            context.user_data['user_results'] = []
         
         context.user_data['user_results'].append({
             'q_num': current_index,
