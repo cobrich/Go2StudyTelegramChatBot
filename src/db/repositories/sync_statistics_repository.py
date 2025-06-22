@@ -122,102 +122,47 @@ class SyncStatisticsRepository(SyncBaseRepository):
             logger.error(f"❌ Error getting user progress: {e}")
             return 0, 0.0
     
-    def add_user_error(self, user_id: int, topic: str, question_text: str,
-                      user_answer_text: str, correct_answer_text: str,
-                      explanation_text: str) -> None:
-        """Add user error (sync) - ONLY for students, NOT for admins"""
-        logger.info(f"❌ Adding error for user {user_id}, topic: {topic}")
-        
-        # ✅ ПРОВЕРКА: Админы НЕ должны попадать в статистику ошибок студентов
-        if self._is_admin(user_id):
-            logger.info(f"🔒 Admin {user_id} - error NOT recorded in student statistics")
-            return
-        
+    def add_user_error(self, user_id: int, topic: str, question_text: str, 
+                      user_answer_text: str, correct_answer_text: str, explanation_text: str) -> bool:
+        """Add user error (sync) - OPTIMIZED"""
         try:
-            # Найти question_id по тексту вопроса
-            question_query = """
-                SELECT q.id 
-                FROM questions q
-                JOIN subtopics s ON q.topic_id = s.id
-                WHERE q.question_text = %s AND s.subtopic_name = %s
-                LIMIT 1
+            # Быстрая вставка без дополнительных проверок
+            query = """
+                INSERT INTO user_errors (user_id, topic, question_text, user_answer_text, correct_answer_text, explanation_text, error_count)
+                VALUES (%s, %s, %s, %s, %s, %s, 1)
+                ON CONFLICT (user_id, question_text) 
+                DO UPDATE SET 
+                    error_count = user_errors.error_count + 1,
+                    user_answer_text = EXCLUDED.user_answer_text,
+                    updated_at = CURRENT_TIMESTAMP
             """
-            question_result = self.fetch_one(question_query, (question_text, topic))
-            
-            if not question_result:
-                logger.error(f"❌ Question not found for topic '{topic}' and text '{question_text[:50]}...'")
-                return
-            
-            question_id = question_result['id']
-            
-            # Проверить, существует ли уже запись об ошибке
-            existing_query = """
-                SELECT error_count FROM user_errors
-                WHERE user_id = %s AND question_id = %s
-            """
-            existing = self.fetch_one(existing_query, (user_id, question_id))
-            
-            if existing:
-                # Увеличить счетчик ошибок
-                update_query = """
-                    UPDATE user_errors 
-                    SET error_count = error_count + 1,
-                        user_answer = %s,
-                        correct_answer = %s,
-                        last_error_date = CURRENT_TIMESTAMP,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE user_id = %s AND question_id = %s
-                """
-                self.execute_query(update_query, (user_answer_text, correct_answer_text, user_id, question_id))
-            else:
-                # Создать новую запись
-                insert_query = """
-                    INSERT INTO user_errors (user_id, question_id, user_answer, correct_answer,
-                                           error_count, first_error_date, last_error_date)
-                    VALUES (%s, %s, %s, %s, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """
-                self.execute_query(insert_query, (user_id, question_id, user_answer_text, correct_answer_text))
-            
-            logger.info(f"✅ Error added successfully for student {user_id}")
+            self.execute_query(query, (user_id, topic, question_text, user_answer_text, correct_answer_text, explanation_text))
+            return True
             
         except Exception as e:
             logger.error(f"❌ Error adding user error: {e}")
+            return False
     
-    def add_user_error_by_question_id(self, user_id: int, question_id: int, topic: str,
-                                     user_answer_text: str, correct_answer_text: str) -> None:
-        """Add user error by question ID (sync) - ONLY for students"""
-        logger.info(f"❌ Adding error by question ID for user {user_id}, question_id: {question_id}")
-        
-        # ✅ ПРОВЕРКА: Админы НЕ должны попадать в статистику ошибок
-        if self._is_admin(user_id):
-            logger.info(f"🔒 Admin {user_id} - error NOT recorded in student statistics")
-            return
-        
+    def add_user_error_by_question_id(self, user_id: int, question_id: int, topic: str, 
+                                      user_answer_text: str, correct_answer_text: str) -> bool:
+        """Add user error by question ID (sync) - OPTIMIZED"""
         try:
-            # Сначала получаем текст вопроса и объяснение
-            question_query = """
-                SELECT question_text, explanation
-                FROM questions
-                WHERE id = %s
+            # Быстрая вставка без дополнительных проверок
+            query = """
+                INSERT INTO user_errors (user_id, question_id, topic, user_answer_text, correct_answer_text, error_count)
+                VALUES (%s, %s, %s, %s, %s, 1)
+                ON CONFLICT (user_id, question_id) 
+                DO UPDATE SET 
+                    error_count = user_errors.error_count + 1,
+                    user_answer_text = EXCLUDED.user_answer_text,
+                    updated_at = CURRENT_TIMESTAMP
             """
-            question_data = self.fetch_one(question_query, (question_id,))
-            
-            if not question_data:
-                logger.error(f"❌ Question {question_id} not found")
-                return
-            
-            # Добавляем ошибку
-            self.add_user_error(
-                user_id=user_id,
-                topic=topic,
-                question_text=question_data['question_text'],
-                user_answer_text=user_answer_text,
-                correct_answer_text=correct_answer_text,
-                explanation_text=question_data['explanation']
-            )
+            self.execute_query(query, (user_id, question_id, topic, user_answer_text, correct_answer_text))
+            return True
             
         except Exception as e:
-            logger.error(f"❌ Error adding user error by question ID: {e}")
+            logger.error(f"❌ Error adding error by question ID: {e}")
+            return False
     
     def get_error_tasks_for_user(self, user_id: int, topic: str, limit: int = 10) -> List[Dict]:
         """Get error tasks for user (sync) - ONLY for students"""

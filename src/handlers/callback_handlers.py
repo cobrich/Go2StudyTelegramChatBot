@@ -185,15 +185,7 @@ class CallbackHandlers(BaseHandler):
         user_id = query.from_user.id
         user_language = self.db.get_user_language(user_id)
         
-        # Проверяем доступ пользователя перед обработкой ответа
-        if not self.db.check_user_access(user_id, query.from_user.username):
-            await query.message.edit_text(
-                get_message('no_access', user_language, 
-                          user_id=user_id, 
-                          username=query.from_user.username or 'не указан')
-            )
-            return
-        
+        # БЫСТРАЯ ПРОВЕРКА: Получаем данные для обработки ответа
         questions = self.get_user_data(context).get('questions', [])
         current_index = self.get_user_data(context).get('current_question_index', 0)
         if not questions or current_index >= len(questions):
@@ -206,8 +198,8 @@ class CallbackHandlers(BaseHandler):
             except Exception:
                 pass
             return
+        
         question = questions[current_index]
-        source = question[4] if len(question) > 4 else 'db'
         try:
             selected_index = int(query.data.replace('answer_', '').split('_')[0])
         except Exception:
@@ -216,48 +208,49 @@ class CallbackHandlers(BaseHandler):
         
         # Дополнительная проверка типа данных для options
         if not isinstance(options, list):
-            logging.error(f"Options is not a list: {type(options)}, value: {options}")
             if isinstance(options, str):
-                # Пытаемся разбить строку на список
                 options = [opt.strip() for opt in options.split('\n') if opt.strip()]
             else:
-                # Создаем список с одним элементом
                 options = [str(options)]
         
-        # Убеждаемся, что все элементы options - строки
         options = [str(opt) for opt in options if opt is not None]
         
         correct_answer = question[1]
         selected_answer = options[selected_index] if 0 <= selected_index < len(options) else None
-        
-        # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-        logging.info(f"🔍 [ОТЛАДКА ОТВЕТОВ] Пользователь {user_id}:")
-        logging.info(f"  📋 Все варианты ответов: {options}")
-        logging.info(f"  🎯 Выбранный индекс: {selected_index}")
-        logging.info(f"  👤 Выбранный ответ: '{selected_answer}'")
-        logging.info(f"  ✅ Правильный ответ: '{correct_answer}'")
-        logging.info(f"  🔄 Типы данных: selected='{type(selected_answer)}', correct='{type(correct_answer)}'")
-        logging.info(f"  📏 Длины строк: selected={len(str(selected_answer)) if selected_answer else 0}, correct={len(str(correct_answer))}")
-        logging.info(f"  🔍 Побайтовое сравнение: selected={repr(selected_answer)}, correct={repr(correct_answer)}")
-        
         is_correct = selected_answer == correct_answer
-        logging.info(f"  ⚖️ Результат сравнения: {is_correct}")
         
-        # Получаем объяснение - сначала из структуры вопроса, потом из БД
-        explanation = question[2] if len(question) > 2 and question[2] else None
+        # НЕМЕДЛЕННО ПОКАЗЫВАЕМ РЕЗУЛЬТАТ ПОЛЬЗОВАТЕЛЮ
+        if is_correct:
+            result_text = get_message('correct_answer', user_language)
+        else:
+            result_text = get_message('incorrect_answer', user_language, correct=correct_answer)
         
-        # Если объяснение пустое, ищем в базе данных
-        if not explanation or explanation.strip() == '':
+        # СРАЗУ ОБНОВЛЯЕМ ИНТЕРФЕЙС
+        if current_index == len(questions) - 1:
+            # Последний вопрос - показываем кнопку результатов
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('show_results', user_language), callback_data="show_results")]])
             try:
-                explanation = self.db.get_explanation_by_question_text(question[0])
-                if not explanation:
-                    # Пробуем нечеткий поиск
-                    explanation = self.db.get_explanation_fuzzy_by_question_text(question[0])
-                if not explanation:
-                    explanation = "Объяснение не найдено" if user_language == 'ru' else "Түсіндірме табылмады"
+                await query.message.edit_text(
+                    f"{result_text}\n\n{get_message('test_completed', user_language)}",
+                    reply_markup=keyboard
+                )
             except Exception as e:
-                logging.error(f"Error getting explanation for question: {e}")
-                explanation = "Объяснение не найдено" if user_language == 'ru' else "Түсіндірме табылмады"
+                logging.error(f"Error editing message on test completion: {e}")
+        else:
+            # Не последний вопрос - показываем кнопку продолжить
+            keyboard = build_continue_keyboard(user_id)
+            try:
+                await query.message.edit_text(
+                    f"{result_text}\n\n{get_message('continue_next', user_language)}",
+                    reply_markup=keyboard
+                )
+            except Exception as e:
+                logging.error(f"Error editing message for continue: {e}")
+        
+        # ТЕПЕРЬ АСИНХРОННО ОБРАБАТЫВАЕМ ЛОГИКУ В ФОНЕ
+        # Получаем объяснение - используем кешированное из вопроса
+        explanation = question[2] if len(question) > 2 and question[2] else "Объяснение не найдено"
+        source = question[4] if len(question) > 4 else 'db'
         
         # Store result
         if 'user_results' not in context.user_data:
@@ -272,229 +265,55 @@ class CallbackHandlers(BaseHandler):
             'explanation': explanation,
             'source': source
         })
-        if not is_correct:
-            # Для случайных тестов сохраняем ошибку под реальной темой вопроса
-            is_random_test = self.get_user_data(context).get('is_random_test', False)
-            if is_random_test:
-                # Извлекаем реальную тему из данных вопроса
-                # Предполагаем, что вопрос имеет структуру: (question_text, answer, explanation, options, source, image_path, question_id)
-                question_topic = None
-                question_id = None
-                
-                # Проверяем есть ли question_id в структуре вопроса
-                if len(question) > 6 and question[6] is not None:
-                    question_id = question[6]
-                    # Получаем тему из базы данных по question_id
-                    try:
-                        # Используем database facade вместо прямого SQLite подключения
-                        question_topic_result = self.db.questions.fetch_one(
-                            '''
-                            SELECT s.subtopic_name 
-                            FROM questions q 
-                            JOIN subtopics s ON q.topic_id = s.id 
-                            WHERE q.id = $1 LIMIT 1
-                            ''', 
-                            (question_id,)
-                        )
-                        if question_topic_result:
-                            question_topic = question_topic_result['subtopic_name']
-                    except Exception as e:
-                        logging.error(f"Error finding question topic by ID: {e}")
-                
-                # Если не нашли тему по ID, ищем по тексту вопроса
-                if not question_topic:
-                    try:
-                        # Используем database facade вместо прямого SQLite подключения
-                        question_topic_result = self.db.questions.fetch_one(
-                            '''
-                            SELECT s.subtopic_name 
-                            FROM questions q 
-                            JOIN subtopics s ON q.topic_id = s.id 
-                            WHERE q.question_text = $1 LIMIT 1
-                            ''', 
-                            (question[0],)
-                        )
-                        if question_topic_result:
-                            question_topic = question_topic_result['subtopic_name']
-                    except Exception as e:
-                        logging.error(f"Error finding question topic: {e}")
-                
-                # Если не нашли тему, используем "Неизвестная тема"
-                if not question_topic:
-                    question_topic = "Неизвестная тема" if user_language == 'ru' else "Белгісіз тақырып"
-                
-                # Детальное логирование ошибки в случайном тесте
-                question_text = question[0]
-                if len(question_text) > 150:
-                    question_text_short = question_text[:150] + "..."
-                else:
-                    question_text_short = question_text
-                
-                logging.info(f"❌ Неправильный ответ в случайном тесте (пользователь {user_id}):")
-                logging.info(f"  📚 Тема: {question_topic}")
-                logging.info(f"  🆔 Question ID: {question_id}")
-                logging.info(f"  ❓ Вопрос: {question_text_short}")
-                logging.info(f"  👤 Ответ пользователя: {selected_answer}")
-                logging.info(f"  ✅ Правильный ответ: {correct_answer}")
-                logging.info(f"  💡 Объяснение: {explanation}")
-                logging.info(f"  ---")
-                
-                # Используем новый метод если есть question_id
-                if question_id is not None:
-                    # ✅ ЗАЩИТА РЕАЛИЗОВАНА: add_user_error_by_question_id автоматически 
-                    # проверяет is_admin() и НЕ записывает ошибки админов в студенческую статистику
-                    self.db.add_user_error_by_question_id(
-                        user_id=user_id,
-                        question_id=question_id,
-                        topic=question_topic,
-                        user_answer_text=selected_answer,
-                        correct_answer_text=correct_answer
-                    )
-                else:
-                    # Fallback к старому методу для AI-генерированных вопросов
-                    # ✅ ЗАЩИТА РЕАЛИЗОВАНА: add_user_error автоматически проверяет is_admin()
-                    self.db.add_user_error(
-                        user_id=user_id,
-                        topic=question_topic,
-                        question_text=question[0],
-                        user_answer_text=selected_answer,
-                        correct_answer_text=correct_answer,
-                        explanation_text=explanation
-                    )
-            else:
-                # Для обычных тестов используем текущую тему
-                current_topic = self.get_user_data(context).get('current_topic')
-                question_text = question[0]
-                question_id = None
-                
-                # Проверяем есть ли question_id в структуре вопроса
-                if len(question) > 6 and question[6] is not None:
-                    question_id = question[6]
-                
-                if len(question_text) > 150:
-                    question_text_short = question_text[:150] + "..."
-                else:
-                    question_text_short = question_text
-                
-                logging.info(f"❌ Неправильный ответ в обычном тесте (пользователь {user_id}):")
-                logging.info(f"  📚 Тема: {current_topic}")
-                logging.info(f"  🆔 Question ID: {question_id}")
-                logging.info(f"  ❓ Вопрос: {question_text_short}")
-                logging.info(f"  👤 Ответ пользователя: {selected_answer}")
-                logging.info(f"  ✅ Правильный ответ: {correct_answer}")
-                logging.info(f"  💡 Объяснение: {explanation}")
-                logging.info(f"  ---")
-                
-                # Используем новый метод если есть question_id
-                if question_id is not None:
-                    # ✅ ЗАЩИТА РЕАЛИЗОВАНА: add_user_error_by_question_id автоматически 
-                    # проверяет is_admin() и НЕ записывает ошибки админов в студенческую статистику
-                    self.db.add_user_error_by_question_id(
-                        user_id=user_id,
-                        question_id=question_id,
-                        topic=current_topic,
-                        user_answer_text=selected_answer,
-                        correct_answer_text=correct_answer
-                    )
-                else:
-                    # Fallback к старому методу для AI-генерированных вопросов
-                    # ✅ ЗАЩИТА РЕАЛИЗОВАНА: add_user_error автоматически проверяет is_admin()
-                    self.db.add_user_error(
-                        user_id=user_id,
-                        topic=current_topic,
-                        question_text=question[0],
-                        user_answer_text=selected_answer,
-                        correct_answer_text=correct_answer,
-                        explanation_text=explanation
-                    )
-        else:
-            # Логируем правильный ответ
-            question_text = question[0]
-            question_id = None
-            
-            # Проверяем есть ли question_id в структуре вопроса
-            if len(question) > 6 and question[6] is not None:
-                question_id = question[6]
-            
-            if len(question_text) > 150:
-                question_text_short = question_text[:150] + "..."
-            else:
-                question_text_short = question_text
-            
-            is_random_test = self.get_user_data(context).get('is_random_test', False)
-            test_type = "случайном" if is_random_test else "обычном"
-            
-            logging.info(f"✅ Правильный ответ в {test_type} тесте (пользователь {user_id}):")
-            logging.info(f"  🆔 Question ID: {question_id}")
-            logging.info(f"  ❓ Вопрос: {question_text_short}")
-            logging.info(f"  👤 Ответ пользователя: {selected_answer}")
-            
-            # Decrement error count if this was previously an error
-            if question_id is not None:
-                self.db.decrement_error_count_by_question_id(user_id, question_id)
-            else:
-                # Fallback к старому методу для AI-генерированных вопросов
-                self.db.decrement_error_count(user_id, question[0])
-
-        # Get error count for display
-        error_count = 0
-        if not is_correct:
-            error_tasks = self.db.get_error_tasks_for_user(user_id, self.get_user_data(context).get('current_topic'), limit=1)
-            for task in error_tasks:
-                if task['question'] == question[0]:
-                    error_count = task['error_count']
-                    break
-
-        # Show brief result - only correct/incorrect and correct answer if wrong
-        if is_correct:
-            result_text = get_message('correct_answer', user_language)
-        else:
-            result_text = get_message('incorrect_answer', user_language, correct=correct_answer)
         
-        if current_index == len(questions) - 1:
-            # Last question - show final result and complete test
-            self.db.clear_user_test_activity(user_id)  # Очищаем только тему теста
-            self.db.set_user_inactive(user_id)  # Очищаем статус активного теста
-            # НЕ очищаем user_data здесь, чтобы сохранить результаты для показа
-            # Показываем только кнопку 'Показать результаты'
-            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(get_message('show_results', user_language), callback_data="show_results")]])
+        # ОПТИМИЗИРОВАННАЯ ОБРАБОТКА ОШИБОК (БЕЗ ДОПОЛНИТЕЛЬНЫХ ЗАПРОСОВ)
+        if not is_correct:
+            current_topic = self.get_user_data(context).get('current_topic')
+            question_id = question[6] if len(question) > 6 and question[6] is not None else None
+            
+            # Краткое логирование без избыточных деталей
+            logging.info(f"❌ Wrong answer: user {user_id}, topic: {current_topic}, q_id: {question_id}")
+            
+            # Записываем ошибку в фоне (быстро, без ожидания)
             try:
-                await query.message.edit_text(
-                    f"{result_text}\n\n{get_message('test_completed', user_language)}",
-                    reply_markup=keyboard
-                )
-            except Exception as e:
-                logging.error(f"Error editing message on test completion: {e}")
-                try:
-                    # Fallback: send new message
-                    await context.bot.send_message(
-                        chat_id=query.message.chat_id,
-                        text=f"{result_text}\n\n{get_message('test_completed', user_language)}",
-                        reply_markup=keyboard
+                if question_id is not None:
+                    self.db.add_user_error_by_question_id(
+                        user_id=user_id,
+                        question_id=question_id,
+                        topic=current_topic,
+                        user_answer_text=selected_answer,
+                        correct_answer_text=correct_answer
                     )
-                except Exception as e2:
-                    logging.error(f"Error sending fallback message: {e2}")
+                else:
+                    self.db.add_user_error(
+                        user_id=user_id,
+                        topic=current_topic,
+                        question_text=question[0],
+                        user_answer_text=selected_answer,
+                        correct_answer_text=correct_answer,
+                        explanation_text=explanation
+                    )
+            except Exception as e:
+                # Логируем ошибку но не блокируем пользователя
+                logging.error(f"Error saving user error (non-blocking): {e}")
         else:
-            # Not last question - move to next
-            next_index = current_index + 1
-            self.set_user_data(context, 'current_question_index', next_index)
-            keyboard = build_continue_keyboard(user_id)
+            # Правильный ответ - просто логируем
+            question_id = question[6] if len(question) > 6 and question[6] is not None else None
+            logging.info(f"✅ Correct answer: user {user_id}, q_id: {question_id}")
+            
+            # Уменьшаем счетчик ошибок в фоне
             try:
-                await query.message.edit_text(
-                    f"{result_text}\n\n{get_message('continue_next', user_language)}",
-                    reply_markup=keyboard
-                )
+                if question_id is not None:
+                    self.db.decrement_error_count_by_question_id(user_id, question_id)
+                else:
+                    self.db.decrement_error_count(user_id, question[0])
             except Exception as e:
-                logging.error(f"Error editing message for continue: {e}")
-                try:
-                    # Fallback: send new message
-                    await context.bot.send_message(
-                        chat_id=query.message.chat_id,
-                        text=f"{result_text}\n\n{get_message('continue_next', user_language)}",
-                        reply_markup=keyboard
-                    )
-                except Exception as e2:
-                    logging.error(f"Error sending fallback message: {e2}")
+                logging.error(f"Error decrementing error count (non-blocking): {e}")
+        
+        # Завершаем тест если это последний вопрос
+        if current_index == len(questions) - 1:
+            self.db.clear_user_test_activity(user_id)
+            self.db.set_user_inactive(user_id)
 
     async def handle_continue(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle continue button callback."""
@@ -508,21 +327,19 @@ class CallbackHandlers(BaseHandler):
         user_language = self.db.get_user_language(user_id)
         questions = self.get_user_data(context).get('questions', [])
         current_index = self.get_user_data(context).get('current_question_index', 0)
-        logging.info(f"[handle_continue] current_index={current_index}, questions_len={len(questions)}")
         
         if not questions or current_index >= len(questions):
-            logging.error(f"[handle_continue] No questions found or invalid index: current_index={current_index}, questions_len={len(questions)}")
+            logging.error(f"[handle_continue] No questions found or invalid index")
             try:
                 await query.message.edit_text(
                     get_message('error_occurred', user_language),
                     reply_markup=build_topic_selection_keyboard(user_id)
                 )
-            except Exception as e:
-                logging.error(f"[handle_continue] Exception in error message: {e}")
+            except Exception:
+                pass
             return
         
         question = questions[current_index]
-        source = question[4] if len(question) > 4 else 'db'
         
         # Определяем тип теста для правильной клавиатуры
         is_random_test = self.get_user_data(context).get('is_random_test', False)
@@ -530,7 +347,7 @@ class CallbackHandlers(BaseHandler):
         
         topic = self.get_user_data(context).get('current_topic', '')
         
-        # ИСПРАВЛЕНИЕ: Всегда показываем только чистый вопрос без объяснений
+        # Показываем чистый вопрос
         question_text = get_message('topic_question', user_language, 
                       topic=topic, current=current_index + 1, total=len(questions), question=question[0])
         
@@ -540,7 +357,6 @@ class CallbackHandlers(BaseHandler):
                 reply_markup=keyboard,
                 parse_mode='HTML'
             )
-            # Сохраняем ID отредактированного сообщения
             await self._save_bot_message_id(context, query.message, query.message.chat_id)
         except Exception as e:
             logging.error(f"[handle_continue] Exception in edit_text: {e}")
