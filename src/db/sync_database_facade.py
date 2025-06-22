@@ -470,15 +470,69 @@ class SyncDatabaseFacade:
         """Add base topic section"""
         return self.topics.add_main_topic_with_language(main_topic, 'ru', subtopics, created_by)
     
-    def update_base_topic_section(self, old_main_topic: str, new_main_topic: str = None, 
-                                 new_subtopics: List[str] = None) -> bool:
-        """Update base topic section"""
-        logger.warning("update_base_topic_section complex operation - not implemented")
+    def update_topic_section(self, topic_id: int, new_main_topic_name: str) -> bool:
+        """Update topic section"""
+        # Helper function to clean topic name from emojis
+        def clean_topic_name(name: str) -> str:
+            clean_name = name
+            emojis_to_remove = ['📊', '📐', '🔢', '🔤', '🧠', '⚡', '🎯', '💡', '🔥', '✨']
+            for emoji in emojis_to_remove:
+                clean_name = clean_name.replace(emoji, '')
+            return clean_name.strip()
+        
+        # Find new main topic ID in all languages
+        # First try Russian
+        ru_topics = self.topics.get_main_topics_by_language('ru')
+        for mt in ru_topics:
+            # Check exact match first
+            if mt['name'] == new_main_topic_name:
+                return self.topics.update_topic_section(topic_id, mt['id'])
+            
+            # Check if topic name matches without emoji
+            if clean_topic_name(mt['name']) == new_main_topic_name:
+                return self.topics.update_topic_section(topic_id, mt['id'])
+        
+        # Then try Kazakh
+        kk_topics = self.topics.get_main_topics_by_language('kk')
+        for mt in kk_topics:
+            # Check exact match first
+            if mt['name'] == new_main_topic_name:
+                return self.topics.update_topic_section(topic_id, mt['id'])
+            
+            # Check if topic name matches without emoji
+            if clean_topic_name(mt['name']) == new_main_topic_name:
+                return self.topics.update_topic_section(topic_id, mt['id'])
+        
         return False
     
     def delete_base_topic_section(self, main_topic: str, hard_delete: bool = False) -> bool:
         """Delete base topic section"""
-        return self.topics.toggle_main_topic_status(main_topic)
+        if hard_delete:
+            # Для полного удаления нужно знать язык, попробуем найти его
+            # Сначала попробуем русский
+            ru_topics = self.topics.get_main_topics_by_language('ru', active_only=False)
+            for topic in ru_topics:
+                if topic['name'] == main_topic:
+                    return self.topics.delete_main_topic_permanently(main_topic, 'ru')
+            
+            # Если не найден в русских, попробуем казахский
+            kk_topics = self.topics.get_main_topics_by_language('kk', active_only=False)
+            for topic in kk_topics:
+                if topic['name'] == main_topic:
+                    return self.topics.delete_main_topic_permanently(main_topic, 'kk')
+            
+            # Если не найден ни в одном языке, попробуем удалить без указания языка
+            return self.topics.delete_main_topic_permanently(main_topic)
+        else:
+            # Мягкое удаление - просто деактивация
+            return self.topics.toggle_main_topic_status(main_topic)
+    
+    def delete_base_topic_section_with_language(self, main_topic: str, language: str, hard_delete: bool = False) -> bool:
+        """Delete base topic section with specific language"""
+        if hard_delete:
+            return self.topics.delete_main_topic_permanently(main_topic, language)
+        else:
+            return self.topics.toggle_main_topic_status_by_language(main_topic, language)
     
     def add_base_subtopic(self, main_topic: str, subtopic: str) -> bool:
         """Add base subtopic"""
@@ -565,8 +619,22 @@ class SyncDatabaseFacade:
         # Find main topic ID by name and language
         main_topics = self.topics.get_main_topics_by_language(language)
         for mt in main_topics:
+            # Check exact match first
             if mt['name'] == main_topic_name:
                 return self.topics.add_topic(name, mt['id'], created_by)
+            
+            # Check if topic name matches without emoji (for backward compatibility)
+            # Remove emoji and extra spaces from stored topic name
+            clean_stored_name = mt['name']
+            # Remove common emojis
+            emojis_to_remove = ['📊', '📐', '🔢', '🔤', '🧠', '⚡', '🎯', '💡', '🔥', '✨']
+            for emoji in emojis_to_remove:
+                clean_stored_name = clean_stored_name.replace(emoji, '')
+            clean_stored_name = clean_stored_name.strip()
+            
+            if clean_stored_name == main_topic_name:
+                return self.topics.add_topic(name, mt['id'], created_by)
+        
         return False
     
     def get_topics_with_language_info(self, active_only: bool = True, for_admin: bool = False) -> List[Dict[str, Any]]:
@@ -637,15 +705,6 @@ class SyncDatabaseFacade:
     def toggle_main_topic_status_by_language(self, main_topic_name: str, language: str) -> bool:
         """Toggle main topic status by name and language"""
         return self.topics.toggle_main_topic_status_by_language(main_topic_name, language)
-    
-    def update_topic_section(self, topic_id: int, new_main_topic_name: str) -> bool:
-        """Update topic section"""
-        # Find new main topic ID
-        main_topics = self.topics.get_main_topics_by_language('ru')  # Default to Russian
-        for mt in main_topics:
-            if mt['name'] == new_main_topic_name:
-                return self.topics.update_topic_section(topic_id, mt['id'])
-        return False
     
     def clear_user_test_activity(self, user_id: int) -> None:
         """Clear user test activity"""

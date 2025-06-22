@@ -293,6 +293,63 @@ class SyncTopicRepository(SyncBaseRepository):
             logger.error(f"Error toggling main topic status {main_topic_name} ({language}): {e}")
             return False
     
+    def delete_main_topic_permanently(self, main_topic_name: str, language: str = None) -> bool:
+        """Permanently delete main topic and all related data"""
+        try:
+            # Build query based on whether language is specified
+            if language:
+                query = "SELECT id FROM main_topics WHERE topic_name = %s AND language = %s"
+                params = (main_topic_name, language)
+            else:
+                query = "SELECT id FROM main_topics WHERE topic_name = %s"
+                params = (main_topic_name,)
+            
+            # Get main topic ID(s)
+            results = self.fetch_all(query, params)
+            
+            if not results:
+                logger.warning(f"Main topic '{main_topic_name}' not found for deletion")
+                return False
+            
+            for result in results:
+                main_topic_id = result['id']
+                
+                # Get all subtopic IDs for this main topic
+                subtopic_query = "SELECT id FROM subtopics WHERE main_topic_id = %s"
+                subtopic_results = self.fetch_all(subtopic_query, (main_topic_id,))
+                
+                # Delete all questions for each subtopic (CASCADE should handle this, but let's be explicit)
+                for subtopic in subtopic_results:
+                    subtopic_id = subtopic['id']
+                    
+                    # Delete questions for this subtopic
+                    delete_questions_query = "DELETE FROM questions WHERE topic_id = %s"
+                    self.execute_query(delete_questions_query, (subtopic_id,))
+                    
+                    # Delete user errors for this subtopic
+                    delete_errors_query = "DELETE FROM user_errors WHERE topic = (SELECT subtopic_name FROM subtopics WHERE id = %s)"
+                    self.execute_query(delete_errors_query, (subtopic_id,))
+                    
+                    # Delete test results for this subtopic
+                    delete_results_query = "DELETE FROM test_results WHERE topic = (SELECT subtopic_name FROM subtopics WHERE id = %s)"
+                    self.execute_query(delete_results_query, (subtopic_id,))
+                
+                # Delete all subtopics for this main topic
+                delete_subtopics_query = "DELETE FROM subtopics WHERE main_topic_id = %s"
+                self.execute_query(delete_subtopics_query, (main_topic_id,))
+                
+                # Finally, delete the main topic
+                delete_main_topic_query = "DELETE FROM main_topics WHERE id = %s"
+                self.execute_query(delete_main_topic_query, (main_topic_id,))
+                
+                logger.info(f"✅ Permanently deleted main topic {main_topic_name} (ID: {main_topic_id}) and all related data")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error permanently deleting main topic {main_topic_name}: {e}")
+            return False
+    
     def get_base_topic_structure(self) -> Dict[str, List[str]]:
         """Get base topic structure (all languages)"""
         try:

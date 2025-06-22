@@ -541,7 +541,10 @@ class TopicsHandler(AdminBaseHandler):
             
             if section_index >= len(sections_list) or not topic_id:
                 print(f"[ERROR] Неверные данные: section_index={section_index}, sections_count={len(sections_list)}, topic_id={topic_id}")
-                await query.edit_message_text("❌ Ошибка при выборе раздела.")
+                text = "❌ Ошибка при выборе раздела."
+                keyboard = [[InlineKeyboardButton("🔙 К редактированию темы", callback_data=f"edit_topic_select_{topic_id}" if topic_id else "edit_topic_start")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(text, reply_markup=reply_markup)
                 return
             
             selected_section = sections_list[section_index]
@@ -556,8 +559,10 @@ class TopicsHandler(AdminBaseHandler):
             
             if success:
                 text = f"✅ Раздел темы успешно изменен на '{section_name}'!"
+                print(f"[SUCCESS] Раздел темы {topic_id} изменен на '{section_name}'")
             else:
-                text = f"❌ Ошибка при изменении раздела темы."
+                text = f"❌ Ошибка при изменении раздела темы. Раздел '{section_name}' не найден в базе данных."
+                print(f"[ERROR] Не удалось изменить раздел темы {topic_id} на '{section_name}'")
             
             keyboard = [[InlineKeyboardButton("🔙 К редактированию темы", callback_data=f"edit_topic_select_{topic_id}")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -573,7 +578,7 @@ class TopicsHandler(AdminBaseHandler):
             print(f"[ERROR] Ошибка в edit_topic_section_select: {e}")
             # Добавляем кнопку "Назад" даже при ошибке
             topic_id = context.user_data.get('edit_topic_id', 'unknown')
-            text = "❌ Ошибка при выборе раздела."
+            text = f"❌ Ошибка при выборе раздела: {str(e)}"
             keyboard = [[InlineKeyboardButton("🔙 К редактированию темы", callback_data=f"edit_topic_select_{topic_id}" if topic_id != 'unknown' else "edit_topic_start")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text(text, reply_markup=reply_markup)
@@ -581,7 +586,7 @@ class TopicsHandler(AdminBaseHandler):
             print(f"[ERROR] Неожиданная ошибка в edit_topic_section_select: {e}")
             # Добавляем кнопку "Назад" даже при ошибке
             topic_id = context.user_data.get('edit_topic_id', 'unknown')
-            text = "❌ Произошла неожиданная ошибка."
+            text = f"❌ Произошла неожиданная ошибка: {str(e)}"
             keyboard = [[InlineKeyboardButton("🔙 К редактированию темы", callback_data=f"edit_topic_select_{topic_id}" if topic_id != 'unknown' else "edit_topic_start")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text(text, reply_markup=reply_markup)

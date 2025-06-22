@@ -212,7 +212,13 @@ class SectionsHandler(AdminBaseHandler):
         section_id = query.data.replace("edit_section_select_", "")
         
         if section_id not in self.sections_mapping:
-            await query.edit_message_text("❌ Раздел не найден.")
+            text = "❌ Раздел не найден."
+            keyboard = [
+                [InlineKeyboardButton("🔙 В меню разделов", callback_data="sections_menu")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup)
             return
         
         section_info = self.sections_mapping[section_id]
@@ -242,7 +248,13 @@ class SectionsHandler(AdminBaseHandler):
         
         section_info = context.user_data.get('editing_section')
         if not section_info:
-            await query.edit_message_text("❌ Информация о разделе потеряна.")
+            text = "❌ Информация о разделе потеряна."
+            keyboard = [
+                [InlineKeyboardButton("🔙 В меню разделов", callback_data="sections_menu")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup)
             return
         
         lang_flag = "🇷🇺" if section_info['language'] == 'ru' else "🇰🇿"
@@ -270,7 +282,13 @@ class SectionsHandler(AdminBaseHandler):
         
         section_info = context.user_data.get('editing_section')
         if not section_info:
-            await query.edit_message_text("❌ Информация о разделе потеряна.")
+            text = "❌ Информация о разделе потеряна."
+            keyboard = [
+                [InlineKeyboardButton("🔙 В меню разделов", callback_data="sections_menu")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup)
             return
         
         # Переключаем статус в базе данных
@@ -387,7 +405,13 @@ class SectionsHandler(AdminBaseHandler):
         section_id = query.data.replace("delete_section_confirm_", "")
         
         if section_id not in self.sections_mapping:
-            await query.edit_message_text("❌ Раздел не найден.")
+            text = "❌ Раздел не найден."
+            keyboard = [
+                [InlineKeyboardButton("🔙 В меню разделов", callback_data="sections_menu")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup)
             return
         
         section_info = self.sections_mapping[section_id]
@@ -428,12 +452,18 @@ class SectionsHandler(AdminBaseHandler):
         
         section_info = context.user_data.get('deleting_section')
         if not section_info:
-            await query.edit_message_text("❌ Информация о разделе потеряна.")
+            text = "❌ Информация о разделе потеряна."
+            keyboard = [
+                [InlineKeyboardButton("🔙 В меню разделов", callback_data="sections_menu")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup)
             return
         
         try:
             # Удаляем раздел из базы данных
-            success = self.db.delete_base_topic_section(section_info['name'], hard_delete=True)
+            success = self.db.delete_base_topic_section_with_language(section_info['name'], section_info['language'], hard_delete=True)
             
             lang_flag = "🇷🇺" if section_info['language'] == 'ru' else "🇰🇿"
             
@@ -454,15 +484,13 @@ class SectionsHandler(AdminBaseHandler):
             await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
             
         except Exception as e:
-            text = f"❌ <b>Ошибка</b>\n\n"
-            text += f"Произошла ошибка при удалении раздела: {str(e)}"
-            
+            text = f"❌ Произошла ошибка: {str(e)}"
             keyboard = [
-                [InlineKeyboardButton("🔙 Назад", callback_data="delete_section_start")]
+                [InlineKeyboardButton("🔙 Назад", callback_data="delete_section_start")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
             ]
-            
             reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            await query.edit_message_text(text, reply_markup=reply_markup)
         
         finally:
             # Очищаем состояние
@@ -479,13 +507,25 @@ class SectionsHandler(AdminBaseHandler):
         language = context.user_data.get('adding_section_language', 'ru')
         
         if not section_name:
-            await update.message.reply_text("❌ Название раздела не может быть пустым. Попробуйте еще раз.")
+            text = "❌ Название раздела не может быть пустым. Попробуйте еще раз."
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data="add_section_start")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return True
         
         # Проверяем, не существует ли уже такой раздел
         existing_sections = self.db.get_main_topics_by_language(language, active_only=False)
         if any(section['name'].lower() == section_name.lower() for section in existing_sections):
-            await update.message.reply_text(f"❌ Раздел с названием '{section_name}' уже существует. Выберите другое название.")
+            text = f"❌ Раздел с названием '{section_name}' уже существует. Выберите другое название."
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data="add_section_start")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return True
         
         try:
@@ -513,7 +553,13 @@ class SectionsHandler(AdminBaseHandler):
             await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
             
         except Exception as e:
-            await update.message.reply_text(f"❌ Произошла ошибка: {str(e)}")
+            text = f"❌ Произошла ошибка: {str(e)}"
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data="add_section_start")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, reply_markup=reply_markup)
         
         finally:
             # Очищаем состояние
@@ -532,18 +578,36 @@ class SectionsHandler(AdminBaseHandler):
         section_info = context.user_data.get('editing_section')
         
         if not section_info:
-            await update.message.reply_text("❌ Информация о разделе потеряна.")
+            text = "❌ Информация о разделе потеряна."
+            keyboard = [
+                [InlineKeyboardButton("🔙 В меню разделов", callback_data="sections_menu")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return True
         
         if not new_name:
-            await update.message.reply_text("❌ Название раздела не может быть пустым. Попробуйте еще раз.")
+            text = "❌ Название раздела не может быть пустым. Попробуйте еще раз."
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data="edit_section_start")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return True
         
         # Проверяем, не существует ли уже такой раздел
         existing_sections = self.db.get_main_topics_by_language(section_info['language'], active_only=False)
         if any(section['name'].lower() == new_name.lower() and section['name'] != section_info['name'] 
                for section in existing_sections):
-            await update.message.reply_text(f"❌ Раздел с названием '{new_name}' уже существует. Выберите другое название.")
+            text = f"❌ Раздел с названием '{new_name}' уже существует. Выберите другое название."
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data="edit_section_start")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, reply_markup=reply_markup)
             return True
         
         try:
@@ -572,7 +636,13 @@ class SectionsHandler(AdminBaseHandler):
             await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
             
         except Exception as e:
-            await update.message.reply_text(f"❌ Произошла ошибка: {str(e)}")
+            text = f"❌ Произошла ошибка: {str(e)}"
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data="edit_section_start")],
+                [InlineKeyboardButton("🏠 В админ-панель", callback_data="admin_panel")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, reply_markup=reply_markup)
         
         finally:
             # Очищаем состояние
