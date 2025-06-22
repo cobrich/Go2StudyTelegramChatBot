@@ -13,6 +13,9 @@ WORKDIR /app
 # Копирование файлов зависимостей
 COPY requirements.txt .
 
+# Обновление pip перед установкой зависимостей
+RUN pip install --no-cache-dir --upgrade pip
+
 # Установка Python зависимостей через requirements.txt (стандартный способ)
 RUN pip install --no-cache-dir -r requirements.txt
 
