@@ -693,8 +693,10 @@ class QuestionService:
                 
                 final_tasks = final_ai_tasks + final_db_tasks
             
+            # ✅ ПРИНУДИТЕЛЬНОЕ ОГРАНИЧЕНИЕ: Всегда возвращаем ровно needed вопросов
+            final_tasks = final_tasks[:needed]
             random.shuffle(final_tasks)  # Перемешиваем для случайного порядка
-            logging.info(f"[get_or_generate_tasks] Final composition: {len(final_tasks)} total")
+            logging.info(f"[get_or_generate_tasks] ✅ FINAL LIMIT (overflow case): Returning exactly {len(final_tasks)} questions (needed: {needed})")
             return final_tasks
         
         if len(tasks) < needed:
@@ -710,7 +712,11 @@ class QuestionService:
                 logging.info(f"[get_or_generate_tasks] Final task {idx+1}: {q[0][:80]}... (source: {q[4]})")
             else:
                 logging.warning(f"[get_or_generate_tasks] Invalid task at index {idx}: {q}")
-        return tasks[:needed]
+        
+        # ✅ ПРИНУДИТЕЛЬНОЕ ОГРАНИЧЕНИЕ: Всегда возвращаем ровно needed (10) вопросов
+        final_result = tasks[:needed]
+        logging.info(f"[get_or_generate_tasks] ✅ FINAL LIMIT: Returning exactly {len(final_result)} questions (needed: {needed})")
+        return final_result
 
     @staticmethod
     def generate_universal_options(correct_answer_str: str) -> List[str]:
