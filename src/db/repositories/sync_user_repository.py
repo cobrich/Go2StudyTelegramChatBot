@@ -46,8 +46,17 @@ class SyncUserRepository(SyncBaseRepository):
     
     def add_user(self, user_id: int, username: str = None, full_name: str = None,
                  grade: int = None, language: str = 'ru', added_by: int = None) -> bool:
-        """Add new user (sync)"""
-        logger.info(f"➕ Adding user: user_id={user_id}, username={username}")
+        """Add new user (sync) - PRIMARY method for adding students via Telegram data
+        
+        Args:
+            user_id: Telegram user ID
+            username: Telegram username
+            full_name: Student's full name (ФИО)
+            grade: Student's grade (5 or 6)
+            language: Student's language preference
+            added_by: Admin ID who added the student
+        """
+        logger.info(f"➕ Adding student via Telegram: user_id={user_id}, username={username}")
         
         try:
             query = """
@@ -62,11 +71,11 @@ class SyncUserRepository(SyncBaseRepository):
                     updated_at = CURRENT_TIMESTAMP
             """
             self.execute_query(query, (user_id, username, full_name, grade, language, added_by, True))
-            logger.info(f"✅ User {user_id} added/updated successfully")
+            logger.info(f"✅ Student {user_id} added/updated successfully via Telegram data")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Error adding user {user_id}: {e}")
+            logger.error(f"❌ Error adding student {user_id}: {e}")
             return False
     
     def remove_user_access(self, user_id: int) -> bool:
@@ -160,14 +169,20 @@ class SyncUserRepository(SyncBaseRepository):
     
     def add_allowed_user(self, username: str, full_name: str, grade: int, added_by: int,
                         user_id: int = None, language: str = "ru") -> bool:
-        """Add user to whitelist"""
+        """Add user to whitelist - DEPRECATED: Use add_user() with Telegram data instead
+        
+        ⚠️ DEPRECATED: Students should be added only via Telegram data using add_user()
+        This method is kept for backward compatibility but should not be used for new students.
+        """
+        logger.warning(f"⚠️ DEPRECATED: add_allowed_user() called for {username}. Use add_user() with Telegram data instead.")
+        
         try:
             query = """
                 INSERT INTO allowed_users (user_id, username, full_name, grade, language, added_by, has_access)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
             self.execute_query(query, (user_id, username, full_name, grade, language, added_by, True))
-            logger.info(f"✅ Added allowed user: {username}")
+            logger.info(f"✅ Added allowed user: {username} (DEPRECATED method)")
             return True
             
         except Exception as e:
@@ -259,7 +274,13 @@ class SyncUserRepository(SyncBaseRepository):
         return self.get_user_by_id(user_id)
     
     def set_user_info(self, user_id: int, full_name: str, grade: int) -> None:
-        """Set user information (create or update)"""
+        """Set user information (create or update) - DEPRECATED for new students
+        
+        ⚠️ DEPRECATED: New students should be added via add_user() with complete Telegram data.
+        This method is kept for updating existing student information only.
+        """
+        logger.warning(f"⚠️ DEPRECATED: set_user_info() called for {user_id}. Use add_user() for new students.")
+        
         try:
             query = """
                 INSERT INTO allowed_users (user_id, full_name, grade, has_access)
@@ -270,7 +291,7 @@ class SyncUserRepository(SyncBaseRepository):
                     updated_at = CURRENT_TIMESTAMP
             """
             self.execute_query(query, (user_id, full_name, grade, True))
-            logger.info(f"✅ Set user info: {user_id}")
+            logger.info(f"✅ Set user info: {user_id} (DEPRECATED method)")
             
         except Exception as e:
             logger.error(f"Error setting user info {user_id}: {e}")
@@ -339,15 +360,25 @@ class SyncUserRepository(SyncBaseRepository):
         self.update_user_activity(user_id, None)
     
     def register_user(self, user_id: int, username: str) -> None:
-        """Register user if they don't exist"""
+        """Register user if they don't exist - DEPRECATED for students
+        
+        ⚠️ DEPRECATED: Students should be properly added via add_user() with complete information.
+        This method creates incomplete user records and should be avoided.
+        """
+        logger.warning(f"⚠️ DEPRECATED: register_user() called for {user_id}. Use add_user() with complete data.")
+        
         try:
             # Check if user exists
             existing_user = self.get_user_by_id(user_id)
             
             if not existing_user:
-                # Add user with minimal info
-                self.add_user(user_id, username, has_access=False)
-                logger.info(f"✅ Registered new user: {user_id}")
+                # Add user with minimal info - NOT RECOMMENDED
+                query = """
+                    INSERT INTO allowed_users (user_id, username, has_access)
+                    VALUES (%s, %s, %s)
+                """
+                self.execute_query(query, (user_id, username, False))
+                logger.info(f"✅ Registered new user: {user_id} (INCOMPLETE - needs full info)")
             else:
                 logger.info(f"User {user_id} already exists")
                 

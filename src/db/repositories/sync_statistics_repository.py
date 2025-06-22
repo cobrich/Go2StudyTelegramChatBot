@@ -13,9 +13,24 @@ logger = logging.getLogger(__name__)
 class SyncStatisticsRepository(SyncBaseRepository):
     """Synchronous repository for statistics and error tracking operations"""
     
+    def _is_admin(self, user_id: int) -> bool:
+        """Check if user is admin (to exclude from student statistics)"""
+        try:
+            query = "SELECT 1 FROM admins WHERE user_id = %s"
+            result = self.fetch_val(query, (user_id,))
+            return result is not None
+        except Exception as e:
+            logger.error(f"Error checking admin status for {user_id}: {e}")
+            return False
+    
     def add_test_result(self, user_id: int, topic: str, percentage: float) -> None:
-        """Add test result (sync)"""
+        """Add test result (sync) - ONLY for students, NOT for admins"""
         logger.info(f"📊 Adding test result: user_id={user_id}, topic={topic}, percentage={percentage}")
+        
+        # ✅ ПРОВЕРКА: Админы НЕ должны попадать в статистику студентов
+        if self._is_admin(user_id):
+            logger.info(f"🔒 Admin {user_id} - test result NOT recorded in student statistics")
+            return
         
         try:
             query = """
@@ -23,14 +38,19 @@ class SyncStatisticsRepository(SyncBaseRepository):
                 VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
             """
             self.execute_query(query, (user_id, topic, percentage))
-            logger.info(f"✅ Test result added successfully")
+            logger.info(f"✅ Test result added successfully for student {user_id}")
             
         except Exception as e:
             logger.error(f"❌ Error adding test result: {e}")
     
     def get_user_test_results(self, user_id: int) -> List[Dict]:
-        """Get user test results (sync)"""
+        """Get user test results (sync) - ONLY for students"""
         logger.info(f"📋 Getting test results for user: {user_id}")
+        
+        # ✅ ПРОВЕРКА: Админы не имеют студенческих результатов
+        if self._is_admin(user_id):
+            logger.info(f"🔒 Admin {user_id} - no student test results")
+            return []
         
         try:
             query = """
@@ -59,8 +79,13 @@ class SyncStatisticsRepository(SyncBaseRepository):
             return []
     
     def get_user_progress(self, user_id: int) -> Tuple[int, float]:
-        """Get user progress summary (sync)"""
+        """Get user progress summary (sync) - ONLY for students"""
         logger.info(f"📈 Getting progress for user: {user_id}")
+        
+        # ✅ ПРОВЕРКА: Админы не имеют студенческого прогресса
+        if self._is_admin(user_id):
+            logger.info(f"🔒 Admin {user_id} - no student progress")
+            return 0, 0.0
         
         try:
             query = """
@@ -85,8 +110,13 @@ class SyncStatisticsRepository(SyncBaseRepository):
     def add_user_error(self, user_id: int, topic: str, question_text: str,
                       user_answer_text: str, correct_answer_text: str,
                       explanation_text: str) -> None:
-        """Add user error (sync)"""
+        """Add user error (sync) - ONLY for students, NOT for admins"""
         logger.info(f"❌ Adding error for user {user_id}, topic: {topic}")
+        
+        # ✅ ПРОВЕРКА: Админы НЕ должны попадать в статистику ошибок студентов
+        if self._is_admin(user_id):
+            logger.info(f"🔒 Admin {user_id} - error NOT recorded in student statistics")
+            return
         
         try:
             query = """
@@ -98,15 +128,20 @@ class SyncStatisticsRepository(SyncBaseRepository):
                 user_id, topic, question_text, user_answer_text,
                 correct_answer_text, explanation_text
             ))
-            logger.info(f"✅ Error added successfully")
+            logger.info(f"✅ Error added successfully for student {user_id}")
             
         except Exception as e:
             logger.error(f"❌ Error adding user error: {e}")
     
     def add_user_error_by_question_id(self, user_id: int, question_id: int, topic: str,
                                      user_answer_text: str, correct_answer_text: str) -> None:
-        """Add user error by question ID (sync)"""
+        """Add user error by question ID (sync) - ONLY for students"""
         logger.info(f"❌ Adding error by question ID for user {user_id}, question_id: {question_id}")
+        
+        # ✅ ПРОВЕРКА: Админы НЕ должны попадать в статистику ошибок
+        if self._is_admin(user_id):
+            logger.info(f"🔒 Admin {user_id} - error NOT recorded in student statistics")
+            return
         
         try:
             # Сначала получаем текст вопроса и объяснение
@@ -135,8 +170,13 @@ class SyncStatisticsRepository(SyncBaseRepository):
             logger.error(f"❌ Error adding user error by question ID: {e}")
     
     def get_error_tasks_for_user(self, user_id: int, topic: str, limit: int = 10) -> List[Dict]:
-        """Get error tasks for user (sync)"""
+        """Get error tasks for user (sync) - ONLY for students"""
         logger.info(f"🔍 Getting error tasks for user {user_id}, topic: {topic}")
+        
+        # ✅ ПРОВЕРКА: Админы не имеют студенческих ошибок
+        if self._is_admin(user_id):
+            logger.info(f"🔒 Admin {user_id} - no student error tasks")
+            return []
         
         try:
             query = """
@@ -170,8 +210,13 @@ class SyncStatisticsRepository(SyncBaseRepository):
             return []
     
     def get_error_topics(self, user_id: int) -> List[Tuple[str, int]]:
-        """Get topics with error counts for user (sync)"""
+        """Get topics with error counts for user (sync) - ONLY for students"""
         logger.info(f"📊 Getting error topics for user: {user_id}")
+        
+        # ✅ ПРОВЕРКА: Админы не имеют студенческих ошибок
+        if self._is_admin(user_id):
+            logger.info(f"🔒 Admin {user_id} - no student error topics")
+            return []
         
         try:
             query = """
@@ -196,8 +241,13 @@ class SyncStatisticsRepository(SyncBaseRepository):
             return []
     
     def get_recent_topics(self, user_id: int, limit: int = 5) -> List[Tuple[str, float, str]]:
-        """Get recent topics with scores (sync)"""
+        """Get recent topics with scores (sync) - ONLY for students"""
         logger.info(f"🕒 Getting recent topics for user: {user_id}")
+        
+        # ✅ ПРОВЕРКА: Админы не имеют студенческих результатов
+        if self._is_admin(user_id):
+            logger.info(f"🔒 Admin {user_id} - no student recent topics")
+            return []
         
         try:
             query = """
@@ -226,8 +276,13 @@ class SyncStatisticsRepository(SyncBaseRepository):
     
     def get_recent_unique_topics(self, user_id: int, unique_limit: int = 5, 
                                 history_limit: int = 20) -> List[Tuple[str, int]]:
-        """Get recent unique topics with attempt counts (sync)"""
+        """Get recent unique topics with attempt counts (sync) - ONLY for students"""
         logger.info(f"🔄 Getting recent unique topics for user: {user_id}")
+        
+        # ✅ ПРОВЕРКА: Админы не имеют студенческих результатов
+        if self._is_admin(user_id):
+            logger.info(f"🔒 Admin {user_id} - no student unique topics")
+            return []
         
         try:
             query = """
@@ -257,8 +312,13 @@ class SyncStatisticsRepository(SyncBaseRepository):
             return []
     
     def decrement_error_count(self, user_id: int, question_text: str) -> None:
-        """Decrement error count for a question (sync)"""
+        """Decrement error count for a question (sync) - ONLY for students"""
         logger.info(f"⬇️ Decrementing error count for user {user_id}")
+        
+        # ✅ ПРОВЕРКА: Админы не имеют студенческих ошибок для декремента
+        if self._is_admin(user_id):
+            logger.info(f"🔒 Admin {user_id} - no student errors to decrement")
+            return
         
         try:
             # Удаляем одну ошибку для данного вопроса
@@ -273,14 +333,19 @@ class SyncStatisticsRepository(SyncBaseRepository):
                 )
             """
             self.execute_query(query, (user_id, question_text, user_id, question_text))
-            logger.info(f"✅ Error count decremented")
+            logger.info(f"✅ Error count decremented for student {user_id}")
             
         except Exception as e:
             logger.error(f"❌ Error decrementing error count: {e}")
     
     def decrement_error_count_by_question_id(self, user_id: int, question_id: int) -> None:
-        """Decrement error count by question ID (sync)"""
+        """Decrement error count by question ID (sync) - ONLY for students"""
         logger.info(f"⬇️ Decrementing error count by question ID for user {user_id}")
+        
+        # ✅ ПРОВЕРКА: Админы не имеют студенческих ошибок для декремента
+        if self._is_admin(user_id):
+            logger.info(f"🔒 Admin {user_id} - no student errors to decrement")
+            return
         
         try:
             # Сначала получаем текст вопроса
@@ -296,8 +361,13 @@ class SyncStatisticsRepository(SyncBaseRepository):
             logger.error(f"❌ Error decrementing error count by question ID: {e}")
     
     def get_student_detailed_statistics(self, user_id: int) -> Optional[Dict]:
-        """Get detailed statistics for a student (sync)"""
+        """Get detailed statistics for a student (sync) - ONLY for students"""
         logger.info(f"📊 Getting detailed statistics for user: {user_id}")
+        
+        # ✅ ПРОВЕРКА: Админы не имеют студенческой статистики
+        if self._is_admin(user_id):
+            logger.info(f"🔒 Admin {user_id} - no student detailed statistics")
+            return None
         
         try:
             # Основная статистика
@@ -324,7 +394,7 @@ class SyncStatisticsRepository(SyncBaseRepository):
                 'improvement_trend': self._calculate_improvement_trend(recent_results)
             }
             
-            logger.info(f"📊 Detailed statistics calculated for user {user_id}")
+            logger.info(f"📊 Detailed statistics calculated for student {user_id}")
             return statistics
             
         except Exception as e:
