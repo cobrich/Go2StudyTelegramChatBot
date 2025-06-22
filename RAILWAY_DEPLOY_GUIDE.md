@@ -81,6 +81,11 @@ GEMINI_MODEL=gemini-pro
 DATABASE_URL=postgresql://username:password@ep-xxx-xxx-xxx.region.aws.neon.tech/database
 USE_POSTGRESQL=true
 
+# Superadmin (для автоматического создания)
+SUPERADMIN_ID=ВАШ_ТЕЛЕГРАМ_ID
+SUPERADMIN_USERNAME=ВАШ_ТЕЛЕГРАМ_ЮЗЕРНЕЙМ
+SUPERADMIN_FIO=ВАШЕ_ПОЛНОЕ_ИМЯ
+
 # Environment
 PYTHONUNBUFFERED=1
 ```
@@ -89,61 +94,25 @@ PYTHONUNBUFFERED=1
 ### 4. Запуск деплоя
 
 1. **Railway автоматически начнет деплой** после добавления репозитория.
-2. **Следите за логами** в реальном времени во вкладке "Deployments".
+2. **Следите за логами** во вкладке "Deployments". При первом запуске вы должны увидеть сообщения об автоматической инициализации.
 3. **Дождитесь успешного завершения**. Если деплой не начался, нажмите "Deploy" вручную.
 
 ## 🔧 Инициализация базы данных
 
-После успешного деплоя нужно инициализировать БД:
+**✅ ГОТОВО! Инициализация теперь полностью автоматическая.**
 
-### Вариант 1: Через Railway CLI
+При первом запуске бот сам:
+1.  Создаст все необходимые таблицы в базе данных.
+2.  Заполнит их темами для тестов.
+3.  Создаст суперадмина, используя переменные `SUPERADMIN_ID`, `SUPERADMIN_USERNAME` и `SUPERADMIN_FIO`.
 
-```bash
-# Установка Railway CLI
-npm install -g @railway/cli
-
-# Логин
-railway login
-
-# Подключение к проекту
-railway link
-
-# Запуск инициализации
-railway run python src/init_database.py
-railway run python src/init_superadmin.py
-railway run python src/init_topics.py
-```
-
-### Вариант 2: Через Railway Dashboard
-
-1. **Откройте Railway Dashboard**
-2. **Перейдите в "Deployments"**
-3. **Найдите последний деплой**
-4. **Нажмите "View Logs"**
-5. **В консоли выполните команды**:
-   ```bash
-   python src/init_database.py
-   python src/init_superadmin.py
-   python src/init_topics.py
-   ```
+Вам больше не нужно запускать скрипты вручную!
 
 ## 👥 Создание суперадмина
 
-После инициализации БД создайте суперадмина:
+**✅ ГОТОВО! Суперадмин создается автоматически** при первом запуске, если вы указали переменные окружения.
 
-1. **Получите ваш Telegram user_id**:
-   - Напишите боту `/myid`
-   - Или используйте [@userinfobot](https://t.me/userinfobot)
-
-2. **Запустите скрипт создания суперадмина**:
-   ```bash
-   railway run python src/init_superadmin.py
-   ```
-
-3. **Введите данные**:
-   - Telegram user_id: `123456789`
-   - Username: `your_username` (без @)
-   - ФИО: `Ваше Имя Фамилия`
+Если вы захотите добавить еще одного администратора, вы можете сделать это через админ-панель бота (`/admin`).
 
 ## 🧪 Тестирование
 

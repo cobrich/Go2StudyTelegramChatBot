@@ -149,22 +149,13 @@ src/
 ## 📄 Развертывание
 
 ### 🚀 Railway + Neon (РЕКОМЕНДУЕТСЯ)
-**Бесплатный деплой с автоматическими обновлениями**
+**Бесплатный деплой с полностью автоматической настройкой**
 
 1. **Создайте Neon базу данных** на [neon.tech](https://neon.tech)
 2. **Создайте проект на Railway** на [railway.app](https://railway.app)
 3. **Подключите GitHub репозиторий**
-4. **Настройте переменные окружения**:
-   ```env
-   TELEGRAM_BOT_TOKEN=ваш_токен_бота
-   GEMINI_API_KEY1=ваш_ключ_gemini
-   DATABASE_URL=postgresql://user:pass@neon-host/db
-   USE_POSTGRESQL=true
-   ```
-5. **Инициализируйте БД**:
-   ```bash
-   railway run python src/init_railway.py
-   ```
+4. **Настройте переменные окружения** (включая `DATABASE_URL` и `SUPERADMIN_ID`)
+5. **Готово!** При первом запуске бот настроит себя сам.
 
 **Преимущества:**
 - 🆓 Бесплатный тариф ($5/месяц)

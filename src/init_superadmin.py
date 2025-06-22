@@ -3,7 +3,7 @@
 Скрипт для инициализации суперадминистратора
 
 Создает первого суперадминистратора в системе.
-Запускается только один раз при первоначальной настройке.
+Может работать интерактивно или автоматически через переменные окружения.
 """
 
 import os
@@ -77,21 +77,41 @@ def init_superadmin():
         
         print("Суперадмин не найден. Создаем нового...")
         
-        # Получаем данные от пользователя
-        while True:
+        # Пытаемся получить данные из переменных окружения
+        superadmin_id_env = os.getenv('SUPERADMIN_ID')
+        superadmin_username_env = os.getenv('SUPERADMIN_USERNAME')
+        superadmin_fullname_env = os.getenv('SUPERADMIN_FIO')
+
+        if superadmin_id_env:
+            print("Найдены переменные окружения для суперадмина. Используем их.")
             try:
-                user_id = int(input("Введите Telegram user_id суперадмина: "))
-                break
-            except ValueError:
-                print("❌ Введите корректный числовой ID")
-        
-        username = input("Введите username суперадмина (без @, можно оставить пустым): ").strip()
-        if not username:
-            username = f"superadmin_{user_id}"
-        
-        full_name = input("Введите ФИО суперадмина (можно оставить пустым): ").strip()
-        if not full_name:
-            full_name = f"Суперадмин {user_id}"
+                user_id = int(superadmin_id_env)
+                username = superadmin_username_env or f"superadmin_{user_id}"
+                full_name = superadmin_fullname_env or f"Суперадмин {user_id}"
+            except (ValueError, TypeError):
+                print(f"❌ Неверный формат SUPERADMIN_ID: '{superadmin_id_env}'. Должно быть число.")
+                return False
+        else:
+            print("Переменные окружения не найдены. Запрашиваем данные интерактивно.")
+            # Получаем данные от пользователя
+            while True:
+                try:
+                    user_id_input = input("Введите Telegram user_id суперадмина: ")
+                    if not user_id_input:
+                        print("❌ ID не может быть пустым.")
+                        continue
+                    user_id = int(user_id_input)
+                    break
+                except ValueError:
+                    print("❌ Введите корректный числовой ID")
+            
+            username = input("Введите username суперадмина (без @, можно оставить пустым): ").strip()
+            if not username:
+                username = f"superadmin_{user_id}"
+            
+            full_name = input("Введите ФИО суперадмина (можно оставить пустым): ").strip()
+            if not full_name:
+                full_name = f"Суперадмин {user_id}"
         
         # Создаем суперадмина
         success = db.add_admin(

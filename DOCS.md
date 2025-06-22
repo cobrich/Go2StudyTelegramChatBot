@@ -699,7 +699,7 @@ python3 -c "from src.services.ai_service import AIService; ..."
 - ✅ **requirements.txt** - зависимости
 - ✅ **setup.py** - автоматическая установка
 - ✅ **railway.json** - конфигурация для Railway
-- ✅ **src/init_railway.py** - автоматическая инициализация
+- ✅ **src/init_app.py** - автоматическая инициализация при первом запуске
 - ✅ **Подробная документация** по развертыванию
 
 ### 🎯 **РЕКОМЕНДУЕМЫЙ ДЕПЛОЙ: Railway + Neon**

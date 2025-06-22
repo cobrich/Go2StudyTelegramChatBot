@@ -15,6 +15,7 @@ from src.services.ai_service import AIService
 from src.handlers.command_handlers import CommandHandlers
 from src.handlers.callback_handlers import CallbackHandlers
 from src.handlers.admin import AdminHandlers
+from src.init_app import initialize_app_if_needed
 
 # Configure logging
 logging.basicConfig(
@@ -25,6 +26,9 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     """Start the bot."""
+    # При запуске приложения проверяем, нужно ли выполнить первичную настройку
+    initialize_app_if_needed()
+
     # Initialize services
     db = get_database_instance()
     ai_service = AIService()
