@@ -3761,3 +3761,13 @@ The security implementation is **complete and functional** - admin data is autom
 - Solution: Created new `get_detailed_class_statistics()` method that returns proper grouped data
 - Added method to both repository and database facade
 - Updated handler to use the correct method
+
+**Bug Fix**: Fixed "детали ученика" (student details) button not working.
+- Problem: SQL queries used old schema with `topic` column instead of `topic_id` foreign key
+- Problem: Method returned wrong data structure - handler expected `user_info`, `test_statistics` etc.
+- Solution: Updated all SQL queries to match PostgreSQL schema:
+  - `test_results.topic` → `test_results.topic_id` with JOIN to `subtopics`
+  - `user_errors` now uses `question_id` foreign key with proper JOINs
+  - Completely rewrote `get_student_detailed_statistics()` to return expected structure
+- Fixed methods: `get_user_test_results()`, `get_error_topics()`, `add_test_result()`, `add_user_error()`
+- All admin panel buttons now work correctly with PostgreSQL schema

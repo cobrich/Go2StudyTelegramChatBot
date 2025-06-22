@@ -33,11 +33,25 @@ class SyncStatisticsRepository(SyncBaseRepository):
             return
         
         try:
+            # Найти topic_id по названию темы
+            topic_query = """
+                SELECT id FROM subtopics 
+                WHERE subtopic_name = %s AND is_active = true
+                LIMIT 1
+            """
+            topic_result = self.fetch_one(topic_query, (topic,))
+            
+            if not topic_result:
+                logger.error(f"❌ Topic '{topic}' not found in subtopics table")
+                return
+            
+            topic_id = topic_result['id']
+            
             query = """
-                INSERT INTO test_results (user_id, topic, percentage, completed_at)
+                INSERT INTO test_results (user_id, topic_id, percentage, created_at)
                 VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
             """
-            self.execute_query(query, (user_id, topic, percentage))
+            self.execute_query(query, (user_id, topic_id, percentage))
             logger.info(f"✅ Test result added successfully for student {user_id}")
             
         except Exception as e:
@@ -54,10 +68,11 @@ class SyncStatisticsRepository(SyncBaseRepository):
         
         try:
             query = """
-                SELECT topic, percentage, completed_at
-                FROM test_results
-                WHERE user_id = %s
-                ORDER BY completed_at DESC
+                SELECT s.subtopic_name as topic, tr.percentage, tr.created_at as completed_at
+                FROM test_results tr
+                JOIN subtopics s ON tr.topic_id = s.id
+                WHERE tr.user_id = %s
+                ORDER BY tr.created_at DESC
                 LIMIT 50
             """
             result = self.fetch_all(query, (user_id,))
@@ -119,15 +134,50 @@ class SyncStatisticsRepository(SyncBaseRepository):
             return
         
         try:
-            query = """
-                INSERT INTO user_errors (user_id, topic, question_text, user_answer_text,
-                                       correct_answer_text, explanation_text, error_date)
-                VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            # Найти question_id по тексту вопроса
+            question_query = """
+                SELECT q.id 
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE q.question_text = %s AND s.subtopic_name = %s
+                LIMIT 1
             """
-            self.execute_query(query, (
-                user_id, topic, question_text, user_answer_text,
-                correct_answer_text, explanation_text
-            ))
+            question_result = self.fetch_one(question_query, (question_text, topic))
+            
+            if not question_result:
+                logger.error(f"❌ Question not found for topic '{topic}' and text '{question_text[:50]}...'")
+                return
+            
+            question_id = question_result['id']
+            
+            # Проверить, существует ли уже запись об ошибке
+            existing_query = """
+                SELECT error_count FROM user_errors
+                WHERE user_id = %s AND question_id = %s
+            """
+            existing = self.fetch_one(existing_query, (user_id, question_id))
+            
+            if existing:
+                # Увеличить счетчик ошибок
+                update_query = """
+                    UPDATE user_errors 
+                    SET error_count = error_count + 1,
+                        user_answer = %s,
+                        correct_answer = %s,
+                        last_error_date = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = %s AND question_id = %s
+                """
+                self.execute_query(update_query, (user_answer_text, correct_answer_text, user_id, question_id))
+            else:
+                # Создать новую запись
+                insert_query = """
+                    INSERT INTO user_errors (user_id, question_id, user_answer, correct_answer,
+                                           error_count, first_error_date, last_error_date)
+                    VALUES (%s, %s, %s, %s, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """
+                self.execute_query(insert_query, (user_id, question_id, user_answer_text, correct_answer_text))
+            
             logger.info(f"✅ Error added successfully for student {user_id}")
             
         except Exception as e:
@@ -210,7 +260,7 @@ class SyncStatisticsRepository(SyncBaseRepository):
             return []
     
     def get_error_topics(self, user_id: int) -> List[Tuple[str, int]]:
-        """Get topics with error counts for user (sync) - ONLY for students"""
+        """Get error topics for user (sync) - ONLY for students"""
         logger.info(f"📊 Getting error topics for user: {user_id}")
         
         # ✅ ПРОВЕРКА: Админы не имеют студенческих ошибок
@@ -220,10 +270,12 @@ class SyncStatisticsRepository(SyncBaseRepository):
         
         try:
             query = """
-                SELECT topic, COUNT(*) as error_count
-                FROM user_errors
-                WHERE user_id = %s
-                GROUP BY topic
+                SELECT s.subtopic_name as topic, SUM(ue.error_count) as error_count
+                FROM user_errors ue
+                JOIN questions q ON ue.question_id = q.id
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE ue.user_id = %s
+                GROUP BY s.subtopic_name
                 ORDER BY error_count DESC
                 LIMIT 10
             """
@@ -233,7 +285,7 @@ class SyncStatisticsRepository(SyncBaseRepository):
             for row in result:
                 error_topics.append((row['topic'], row['error_count']))
             
-            logger.info(f"📊 Found {len(error_topics)} topics with errors")
+            logger.info(f"📊 Found {len(error_topics)} error topics")
             return error_topics
             
         except Exception as e:
@@ -370,28 +422,149 @@ class SyncStatisticsRepository(SyncBaseRepository):
             return None
         
         try:
-            # Основная статистика
-            total_tests, avg_score = self.get_user_progress(user_id)
+            # 1. Получаем информацию о пользователе
+            user_query = """
+                SELECT user_id, username, full_name, grade, language, 
+                       last_activity, added_at
+                FROM allowed_users
+                WHERE user_id = %s
+            """
+            user_data = self.fetch_one(user_query, (user_id,))
             
-            # Последние результаты
-            recent_results = self.get_user_test_results(user_id)
+            if not user_data:
+                logger.warning(f"User {user_id} not found")
+                return None
             
-            # Темы с ошибками
-            error_topics = self.get_error_topics(user_id)
+            # 2. Статистика тестов
+            test_stats_query = """
+                SELECT 
+                    COUNT(*) as total_tests,
+                    AVG(percentage) as avg_score,
+                    MAX(percentage) as max_score,
+                    MIN(percentage) as min_score,
+                    MIN(created_at) as first_test,
+                    MAX(created_at) as last_test
+                FROM test_results
+                WHERE user_id = %s
+            """
+            test_stats = self.fetch_one(test_stats_query, (user_id,))
             
-            # Общее количество ошибок
-            total_errors_query = "SELECT COUNT(*) as total_errors FROM user_errors WHERE user_id = %s"
-            total_errors_result = self.fetch_one(total_errors_query, (user_id,))
-            total_errors = total_errors_result['total_errors'] if total_errors_result else 0
+            # 3. Активность по дням (последние 10 дней)
+            daily_query = """
+                SELECT 
+                    DATE(created_at) as date,
+                    COUNT(*) as tests_count,
+                    AVG(percentage) as avg_score
+                FROM test_results
+                WHERE user_id = %s AND created_at >= CURRENT_DATE - INTERVAL '10 days'
+                GROUP BY DATE(created_at)
+                ORDER BY date DESC
+                LIMIT 10
+            """
+            daily_progress = self.fetch_all(daily_query, (user_id,))
             
+            # 4. Результаты по темам
+            topic_performance_query = """
+                SELECT 
+                    s.subtopic_name as topic,
+                    COUNT(*) as tests_count,
+                    AVG(tr.percentage) as avg_score,
+                    MAX(tr.created_at) as last_attempt
+                FROM test_results tr
+                JOIN subtopics s ON tr.topic_id = s.id
+                WHERE tr.user_id = %s
+                GROUP BY s.subtopic_name
+                ORDER BY avg_score DESC
+            """
+            topic_performance = self.fetch_all(topic_performance_query, (user_id,))
+            
+            # 5. Анализ ошибок по темам
+            error_analysis_query = """
+                SELECT 
+                    s.subtopic_name as topic,
+                    COUNT(DISTINCT ue.question_id) as unique_errors,
+                    SUM(ue.error_count) as total_errors,
+                    MAX(ue.last_error_date) as last_error
+                FROM user_errors ue
+                JOIN questions q ON ue.question_id = q.id
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE ue.user_id = %s
+                GROUP BY s.subtopic_name
+                ORDER BY total_errors DESC
+                LIMIT 10
+            """
+            error_analysis = self.fetch_all(error_analysis_query, (user_id,))
+            
+            # 6. Последние ошибки
+            recent_errors_query = """
+                SELECT 
+                    s.subtopic_name as topic,
+                    q.question_text as question,
+                    ue.error_count,
+                    ue.last_error_date as timestamp
+                FROM user_errors ue
+                JOIN questions q ON ue.question_id = q.id
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE ue.user_id = %s
+                ORDER BY ue.last_error_date DESC
+                LIMIT 10
+            """
+            recent_errors = self.fetch_all(recent_errors_query, (user_id,))
+            
+            # Формируем результат
             statistics = {
-                'user_id': user_id,
-                'total_tests': total_tests,
-                'average_score': avg_score,
-                'total_errors': total_errors,
-                'recent_results': recent_results[:10],  # Последние 10 результатов
-                'error_topics': error_topics[:5],  # Топ-5 проблемных тем
-                'improvement_trend': self._calculate_improvement_trend(recent_results)
+                'user_info': {
+                    'user_id': user_data['user_id'],
+                    'username': user_data['username'],
+                    'full_name': user_data['full_name'],
+                    'grade': user_data['grade'],
+                    'language': user_data['language'],
+                    'last_activity': user_data['last_activity'].isoformat() if user_data['last_activity'] else None,
+                    'added_to_whitelist': user_data['added_at'].isoformat() if user_data['added_at'] else None
+                },
+                'test_statistics': {
+                    'total_tests': test_stats['total_tests'] if test_stats else 0,
+                    'avg_score': round(test_stats['avg_score'] or 0, 1) if test_stats else 0,
+                    'max_score': round(test_stats['max_score'] or 0, 1) if test_stats else 0,
+                    'min_score': round(test_stats['min_score'] or 0, 1) if test_stats else 0,
+                    'first_test': test_stats['first_test'].isoformat() if test_stats and test_stats['first_test'] else None,
+                    'last_test': test_stats['last_test'].isoformat() if test_stats and test_stats['last_test'] else None
+                },
+                'daily_progress': [
+                    {
+                        'date': str(day['date']),
+                        'tests_count': day['tests_count'],
+                        'avg_score': round(day['avg_score'] or 0, 1)
+                    }
+                    for day in daily_progress
+                ],
+                'topic_performance': [
+                    {
+                        'topic': topic['topic'],
+                        'tests_count': topic['tests_count'],
+                        'avg_score': round(topic['avg_score'] or 0, 1),
+                        'last_attempt': topic['last_attempt'].isoformat() if topic['last_attempt'] else None
+                    }
+                    for topic in topic_performance
+                ],
+                'error_analysis': [
+                    {
+                        'topic': error['topic'],
+                        'unique_errors': error['unique_errors'],
+                        'total_errors': error['total_errors'],
+                        'last_error': error['last_error'].isoformat() if error['last_error'] else None
+                    }
+                    for error in error_analysis
+                ],
+                'recent_errors': [
+                    {
+                        'topic': error['topic'],
+                        'question': error['question'],
+                        'error_count': error['error_count'],
+                        'timestamp': error['timestamp'].isoformat() if error['timestamp'] else None
+                    }
+                    for error in recent_errors
+                ]
             }
             
             logger.info(f"📊 Detailed statistics calculated for student {user_id}")
