@@ -20,53 +20,22 @@ sys.path.insert(0, str(root_dir))
 try:
     from dotenv import load_dotenv
     
-    print("🔍 DEBUG: Проверка загрузки .env файла")
-    print(f"DEBUG BEFORE LOAD: DATABASE_URL = {os.getenv('DATABASE_URL')}")
-    print(f"DEBUG BEFORE LOAD: USE_POSTGRESQL = {os.getenv('USE_POSTGRESQL')}")
-    
     # Ищем .env файл в корневой директории проекта (на уровень выше src)
     env_path = root_dir.parent / ".env"
-    print(f"🔍 Ищем .env файл по пути: {env_path}")
-    print(f"🔍 Файл существует: {env_path.exists()}")
     
     if env_path.exists():
-        # Читаем содержимое файла для проверки
-        with open(env_path, 'r') as f:
-            content = f.read()
-            print(f"🔍 Содержимое .env файла:")
-            for line_num, line in enumerate(content.split('\n'), 1):
-                if line.strip() and not line.strip().startswith('#'):
-                    print(f"  {line_num}: {line}")
-        
         load_dotenv(dotenv_path=env_path, override=True)
         print(f"✅ Загружен .env файл: {env_path}")
-        
-        print(f"DEBUG AFTER LOAD: DATABASE_URL = {os.getenv('DATABASE_URL')}")
-        print(f"DEBUG AFTER LOAD: USE_POSTGRESQL = {os.getenv('USE_POSTGRESQL')}")
-        
     else:
         print(f"⚠️ .env файл не найден: {env_path}")
         # Попробуем в текущей директории
         current_env = Path(".env")
-        print(f"🔍 Проверяем текущую директорию: {current_env.absolute()}")
         
         if current_env.exists():
             load_dotenv(dotenv_path=current_env, override=True)
             print(f"✅ Загружен .env файл: {current_env.absolute()}")
         else:
-            print("❌ .env файл не найден ни в корне проекта, ни в текущей директории")
-            
-        # Проверим все возможные места
-        possible_paths = [
-            Path.cwd() / ".env",
-            Path.cwd().parent / ".env", 
-            Path(__file__).parent / ".env",
-            Path(__file__).parent.parent / ".env"
-        ]
-        
-        print("🔍 Проверяем все возможные пути к .env:")
-        for path in possible_paths:
-            print(f"  {path}: {'✅ НАЙДЕН' if path.exists() else '❌ НЕТ'}")
+            print("❌ .env файл не найден")
             
 except ImportError:
     print("⚠️ dotenv не установлен - переменные окружения не загружены")
@@ -95,22 +64,12 @@ async def init_superadmin():
     """Инициализация суперадминистратора"""
     print("🔧 Инициализация суперадминистратора...")
     
-    # Диагностика подключения к БД
-    print("\n🔍 ДИАГНОСТИКА ПОДКЛЮЧЕНИЯ:")
-    print(f"DATABASE_URL: {os.getenv('DATABASE_URL', 'НЕ УСТАНОВЛЕНО')}")
-    print(f"SUPABASE_DATABASE_URL: {os.getenv('SUPABASE_DATABASE_URL', 'НЕ УСТАНОВЛЕНО')}")
-    print(f"USE_POSTGRESQL: {os.getenv('USE_POSTGRESQL', 'НЕ УСТАНОВЛЕНО')}")
-    
     # Проверяем подключение к БД
     if not await check_database_connection():
         print("\n❌ ОШИБКА: Нет подключения к базе данных!")
         print("\n🔧 РЕШЕНИЕ:")
-        print("1. Проверьте переменные окружения SUPABASE_URL и SUPABASE_KEY")
-        print("2. Убедитесь, что Supabase проект активен")
-        print("3. Или создайте суперадмина вручную через Supabase Dashboard:")
-        print("   - Откройте https://supabase.com/dashboard")
-        print("   - Перейдите в SQL Editor")
-        print("   - Выполните скрипт из файла supabase_create_superadmin.sql")
+        print("1. Проверьте переменные окружения DATABASE_URL")
+        print("2. Убедитесь, что PostgreSQL сервер доступен")
         return False
     
     try:
@@ -178,12 +137,10 @@ async def init_superadmin():
             return True
         else:
             print(f"\n❌ Ошибка при создании суперадмина.")
-            print(f"Создайте суперадмина вручную через Supabase Dashboard")
             return False
             
     except Exception as e:
         print(f"\n❌ Ошибка: {e}")
-        print(f"Создайте суперадмина вручную через Supabase Dashboard")
         return False
 
 async def main():

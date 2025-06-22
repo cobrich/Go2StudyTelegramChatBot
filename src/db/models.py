@@ -134,21 +134,4 @@ class DatabaseModels:
             'CREATE INDEX IF NOT EXISTS idx_active_main_topics ON main_topics(is_active, language)',
             'CREATE INDEX IF NOT EXISTS idx_allowed_users_grade ON allowed_users(grade)',
             'CREATE INDEX IF NOT EXISTS idx_allowed_users_language ON allowed_users(language)',
-        ]
-    
-    def get_initial_data(self) -> Dict[str, List[Dict]]:
-        """Get initial data for database seeding"""
-        return {
-            'main_topics_ru': [
-                {'topic_name': 'Математика', 'language': 'ru'},
-                {'topic_name': 'Физика', 'language': 'ru'},
-                {'topic_name': 'Химия', 'language': 'ru'},
-                {'topic_name': 'Биология', 'language': 'ru'},
-            ],
-            'main_topics_kk': [
-                {'topic_name': 'Математика', 'language': 'kk'},
-                {'topic_name': 'Физика', 'language': 'kk'},
-                {'topic_name': 'Химия', 'language': 'kk'},
-                {'topic_name': 'Биология', 'language': 'kk'},
-            ]
-        } 
+        ] 

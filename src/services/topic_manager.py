@@ -5,6 +5,7 @@ import os
 import sys
 from src.db import get_database
 from src.services.ai_service import AIService
+from config.constants import TOPIC_HIERARCHY
 
 logger = logging.getLogger(__name__)
 
@@ -397,20 +398,20 @@ class TopicManager:
                 logger.info(f"Создана новая тема: '{original_topic}'")
                 return original_topic
             else:
-                # Fallback к первой доступной теме
-                if existing_topics:
-                    fallback_topic = existing_topics[0]
-                    logger.warning(f"Не удалось создать тему '{original_topic}', используем fallback: '{fallback_topic}'")
-                    return fallback_topic
-                else:
-                    logger.error("Нет доступных тем и не удалось создать новую")
-                    return "Математика"  # Базовая тема по умолчанию
+                # Возвращаем первую тему из constants.py или None
+                first_topic = list(TOPIC_HIERARCHY.keys())[0] if TOPIC_HIERARCHY else None
+                return first_topic or "Тема не найдена"
                     
         except Exception as e:
             logger.error(f"Ошибка в ensure_topic_exists: {e}")
-            # Возвращаем первую доступную тему или базовую
+            # Возвращаем первую доступную тему или первую из constants.py
             existing_topics = self.get_available_topics()
-            return existing_topics[0] if existing_topics else "Математика"
+            if existing_topics:
+                return existing_topics[0]
+            else:
+                from config.constants import TOPIC_HIERARCHY
+                first_topic = list(TOPIC_HIERARCHY.keys())[0] if TOPIC_HIERARCHY else None
+                return first_topic or "Тема не найдена"
 
     def _normalize_topic_with_ai(self, original_topic: str, sample_question: str) -> Optional[str]:
         """
@@ -537,10 +538,16 @@ class TopicManager:
                 return detected_topic
             
             # Используем ensure_topic_exists с базовой темой
-            return self.ensure_topic_exists("Математика", question_text)
+            first_topic = list(TOPIC_HIERARCHY.keys())[0] if TOPIC_HIERARCHY else "Тема не найдена"
+            return self.ensure_topic_exists(first_topic, question_text)
             
         except Exception as e:
             logger.error(f"Ошибка при определении темы по содержанию: {e}")
-            # Возвращаем первую доступную тему или базовую
-            available_topics = self.get_available_topics()
-            return available_topics[0] if available_topics else "Математика" 
+            # Возвращаем первую доступную тему или первую из constants.py
+            existing_topics = self.get_available_topics()
+            if existing_topics:
+                return existing_topics[0]
+            else:
+                from config.constants import TOPIC_HIERARCHY
+                first_topic = list(TOPIC_HIERARCHY.keys())[0] if TOPIC_HIERARCHY else None
+                return first_topic or "Тема не найдена" 

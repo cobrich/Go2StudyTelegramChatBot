@@ -11,6 +11,8 @@ import logging
 import socket
 from typing import Optional, Any, AsyncGenerator
 from contextlib import asynccontextmanager
+import sys
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -186,26 +188,77 @@ class ConnectionManager:
         logger.info("Created database indexes")
     
     async def _init_basic_data(self, conn):
-        """Initialize basic topics data"""
-        topics_data = [
-            ('Математика', 'ru'),
-            ('Физика', 'ru'),
-            ('Химия', 'ru'),
-            ('Биология', 'ru'),
-            ('Математика', 'kk'),
-            ('Физика', 'kk'),
-            ('Химия', 'kk'),
-            ('Биология', 'kk'),
-        ]
-        
-        for topic_name, language in topics_data:
-            await conn.execute("""
-                INSERT INTO main_topics (topic_name, language)
-                VALUES ($1, $2)
-                ON CONFLICT (topic_name, language) DO NOTHING
-            """, topic_name, language)
-        
-        logger.info("Initialized basic topics data")
+        """Initialize full topic structure from constants.py"""
+        try:
+            # Импортируем иерархию тем с правильным путем
+            from pathlib import Path
+            
+            # Добавляем src в путь если его нет
+            src_path = Path(__file__).parent.parent
+            if str(src_path) not in sys.path:
+                sys.path.insert(0, str(src_path))
+            
+            from config.constants import TOPIC_HIERARCHY
+            
+            logger.info("Initializing full topic structure...")
+            
+            # Проверяем, есть ли уже темы в БД
+            existing_count = await conn.fetchval(
+                "SELECT COUNT(*) FROM main_topics WHERE topic_name = ANY($1)",
+                list(TOPIC_HIERARCHY.keys())
+            )
+            
+            if existing_count > 0:
+                logger.info(f"Found {existing_count} existing main topics, skipping initialization")
+                return
+            
+            logger.info(f"Creating {len(TOPIC_HIERARCHY)} main topic sections with subtopics...")
+            
+            # Создаем основные темы и подтемы для русского и казахского языков
+            languages = ['ru', 'kk']
+            total_main_topics = 0
+            total_subtopics = 0
+            
+            for language in languages:
+                lang_name = 'Русский' if language == 'ru' else 'Казахский'
+                logger.info(f"Processing language: {lang_name}")
+                
+                for main_topic, subtopics in TOPIC_HIERARCHY.items():
+                    # Создаем основную тему
+                    main_topic_id = await conn.fetchval("""
+                        INSERT INTO main_topics (topic_name, language, is_active)
+                        VALUES ($1, $2, $3)
+                        ON CONFLICT (topic_name, language) DO UPDATE SET
+                            is_active = EXCLUDED.is_active
+                        RETURNING id
+                    """, main_topic, language, True)
+                    
+                    if main_topic_id:
+                        total_main_topics += 1
+                        logger.info(f"  ✅ Created main topic: {main_topic} (ID: {main_topic_id})")
+                        
+                        # Создаем подтемы
+                        for subtopic in subtopics:
+                            await conn.execute("""
+                                INSERT INTO subtopics (subtopic_name, main_topic_id, is_active)
+                                VALUES ($1, $2, $3)
+                                ON CONFLICT (subtopic_name, main_topic_id) DO UPDATE SET
+                                    is_active = EXCLUDED.is_active
+                            """, subtopic, main_topic_id, True)
+                            total_subtopics += 1
+                            logger.debug(f"    • Created subtopic: {subtopic}")
+            
+            logger.info(f"✅ Initialized full topic structure: {total_main_topics} main topics, {total_subtopics} subtopics")
+            
+            # Логируем статистику
+            final_main_count = await conn.fetchval("SELECT COUNT(*) FROM main_topics WHERE is_active = true")
+            final_sub_count = await conn.fetchval("SELECT COUNT(*) FROM subtopics WHERE is_active = true")
+            logger.info(f"📊 Final statistics: {final_main_count} main topics, {final_sub_count} subtopics")
+            
+        except Exception as e:
+            logger.error(f"Error initializing topic structure: {e}")
+            logger.warning("⚠️ Skipping topic initialization - will need to run init_topics.py manually")
+            # Не создаем fallback темы - пусть пользователь сам запустит init_topics.py
 
     async def initialize_pool(self, min_size: int = 1, max_size: int = 10):
         """Initialize connection pool for Supabase"""
