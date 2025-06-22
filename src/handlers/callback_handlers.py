@@ -695,7 +695,7 @@ class CallbackHandlers(BaseHandler):
             if prev_index == 0:
                 if is_random_test:
                     # Для случайных тестов показываем кнопку "В главное меню"
-                    nav_buttons.append(InlineKeyboardButton(f"🏠 {get_message('main_menu', user_language)}", callback_data="main_menu"))
+                    nav_buttons.append(InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu"))
                 else:
                     # Для обычных тестов показываем кнопку "Назад к темам"
                     nav_buttons.append(InlineKeyboardButton(f"⬅️ {get_message('back_to_topics', user_language)}", callback_data="back_to_topics"))
@@ -766,7 +766,7 @@ class CallbackHandlers(BaseHandler):
             if next_index == 0:
                 if is_random_test:
                     # Для случайных тестов показываем кнопку "В главное меню"
-                    nav_buttons.append(InlineKeyboardButton(f"🏠 {get_message('main_menu', user_language)}", callback_data="main_menu"))
+                    nav_buttons.append(InlineKeyboardButton(get_message('main_menu', user_language), callback_data="main_menu"))
                 else:
                     # Для обычных тестов показываем кнопку "Назад к темам"
                     nav_buttons.append(InlineKeyboardButton(f"⬅️ {get_message('back_to_topics', user_language)}", callback_data="back_to_topics"))
