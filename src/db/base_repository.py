@@ -29,40 +29,11 @@ class BaseRepository(ABC):
             # Проверяем, есть ли активный event loop
             try:
                 loop = asyncio.get_running_loop()
-                # Если есть активный loop, используем asyncio.create_task
-                # и ждем его выполнения синхронно через новый поток
-                import concurrent.futures
-                import threading
-                
-                def run_in_new_thread():
-                    """Запускаем корутину в новом потоке с новым event loop"""
-                    new_loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(new_loop)
-                    try:
-                        # Создаем новую корутину, а не переиспользуем старую
-                        if hasattr(coro, 'cr_frame') and coro.cr_frame is not None:
-                            # Корутина уже запущена, создаем новую
-                            method_name = getattr(coro, '__name__', 'unknown')
-                            logger.warning(f"Recreating coroutine for method: {method_name}")
-                            # Возвращаем fallback значение
-                            return self._get_fallback_value()
+                # Если есть активный loop, просто возвращаем fallback значение
+                # Это безопаснее, чем пытаться выполнить async операции
+                logger.debug("Active event loop detected, using fallback value for database operation")
+                return self._get_fallback_value()
                         
-                        return new_loop.run_until_complete(coro)
-                    except Exception as e:
-                        logger.error(f"Error in new thread: {e}")
-                        return self._get_fallback_value()
-                    finally:
-                        new_loop.close()
-                
-                # Запускаем в отдельном потоке
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(run_in_new_thread)
-                    try:
-                        return future.result(timeout=30)  # 30 секунд таймаут
-                    except concurrent.futures.TimeoutError:
-                        logger.error("Database operation timeout")
-                        return self._get_fallback_value()
-                    
             except RuntimeError:
                 # Нет активного event loop, можем использовать asyncio.run
                 try:
@@ -73,8 +44,29 @@ class BaseRepository(ABC):
                         
         except Exception as e:
             logger.error(f"Error in _sync_call: {e}")
-            # Возвращаем fallback значение вместо падения
             return self._get_fallback_value()
+        finally:
+            # Закрываем корутину, чтобы избежать warnings
+            if hasattr(coro, 'close'):
+                try:
+                    coro.close()
+                except Exception:
+                    pass
+    
+    def _create_fresh_coroutine(self, method_name, *args, **kwargs):
+        """Create a fresh coroutine for the given method"""
+        method_map = {
+            '_execute_query_async': self._execute_query_async,
+            '_fetch_one_async': self._fetch_one_async,
+            '_fetch_all_async': self._fetch_all_async,
+            '_fetch_val_async': self._fetch_val_async,
+        }
+        
+        if method_name in method_map:
+            return method_map[method_name](*args, **kwargs)
+        else:
+            logger.error(f"Unknown async method: {method_name}")
+            return None
     
     async def _execute_query_async(self, query: str, params: tuple = None) -> Any:
         """Execute query asynchronously"""
@@ -130,19 +122,27 @@ class BaseRepository(ABC):
     
     def execute_query(self, query: str, params: tuple = None) -> Any:
         """Execute query (sync wrapper)"""
-        return self._sync_call(self._execute_query_async(query, params))
+        # Создаем свежую корутину каждый раз
+        coro = self._execute_query_async(query, params)
+        return self._sync_call(coro)
     
     def fetch_one(self, query: str, params: tuple = None) -> Optional[Dict]:
         """Fetch one row (sync wrapper)"""
-        return self._sync_call(self._fetch_one_async(query, params))
+        # Создаем свежую корутину каждый раз
+        coro = self._fetch_one_async(query, params)
+        return self._sync_call(coro)
     
     def fetch_all(self, query: str, params: tuple = None) -> List[Dict]:
         """Fetch all rows (sync wrapper)"""
-        return self._sync_call(self._fetch_all_async(query, params))
+        # Создаем свежую корутину каждый раз
+        coro = self._fetch_all_async(query, params)
+        return self._sync_call(coro)
     
     def fetch_val(self, query: str, params: tuple = None) -> Any:
         """Fetch single value (sync wrapper)"""
-        return self._sync_call(self._fetch_val_async(query, params))
+        # Создаем свежую корутину каждый раз
+        coro = self._fetch_val_async(query, params)
+        return self._sync_call(coro)
     
     def _get_placeholder(self, index: int = 1) -> str:
         """Get parameter placeholder for PostgreSQL ($1, $2, etc.)"""

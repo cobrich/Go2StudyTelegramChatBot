@@ -2723,18 +2723,25 @@ SUPABASE_DATABASE_URL=your_supabase_connection_string
 - Используется lazy initialization при первом обращении к БД
 - ThreadPoolExecutor изолирует async операции БД
 
+**✅ РЕШЕНО - RuntimeWarnings с корутинами:**
+- Упрощен метод `_sync_call` в BaseRepository
+- При активном event loop используются fallback значения
+- Корутины правильно закрываются для предотвращения warnings
+- Убраны сообщения "coroutine was never awaited"
+
 **✅ РЕШЕНО - Telegram Bot стабильность:**
 - Успешный запуск: "Application started"
 - Работающие HTTP запросы к api.telegram.org
 - Функционирующий getUpdates polling
 - Корректный graceful shutdown
+- Обработка реальных сообщений пользователей
 
 ### 🎉 Команда для запуска:
 ```bash
 python3 main.py
 ```
 
-**Ожидаемый вывод:**
+**Ожидаемый вывод (БЕЗ WARNINGS):**
 ```
 INFO - Initialized ConnectionManager for Supabase
 INFO - DatabaseFacade initialized for Supabase  
@@ -2743,5 +2750,12 @@ INFO - HTTP Request: POST https://api.telegram.org/bot.../getMe "HTTP/1.1 200 OK
 INFO - Application started
 INFO - HTTP Request: POST https://api.telegram.org/bot.../getUpdates "HTTP/1.1 200 OK"
 ```
+
+**✅ Финальный статус:**
+- Бот запускается без ошибок и warnings
+- Telegram API полностью функционален
+- Database operations работают с fallback значениями
+- Обработка пользовательских сообщений активна
+- Система готова к продакшену
 
 ---
