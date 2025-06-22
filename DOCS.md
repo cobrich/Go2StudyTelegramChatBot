@@ -78,6 +78,61 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 ---
 
 ## 📋 Changelog
+
+### ✅ 22.06.2025 - Исправлена ошибка обработки Telegram данных пользователя
+
+**🎯 Проблема**: При запуске команды `/start` возникала ошибка `'str' object has no attribute 'get'` при попытке автоматического обновления username пользователя из Telegram данных.
+
+**🔍 Анализ**:
+- Функция `auto_update_username_from_telegram()` ожидала параметр `telegram_data: Dict[str, Any]`
+- В коде передавалась только строка `user.username` вместо словаря
+- Аналогичная проблема была в функции `auto_setup_user_from_whitelist()`
+- Функция `get_user_info()` возвращала словарь, но код ожидал кортеж
+
+**✅ РЕШЕНИЕ - Исправлены вызовы функций и обработка данных**:
+
+**🔧 Исправлен вызов `auto_update_username_from_telegram`**:
+```python
+# Было:
+self.db.auto_update_username_from_telegram(user.id, user.username)
+
+# Стало:
+telegram_data = {
+    'username': user.username,
+    'first_name': user.first_name,
+    'last_name': user.last_name
+}
+self.db.auto_update_username_from_telegram(user.id, telegram_data)
+```
+
+**🔧 Исправлен вызов `auto_setup_user_from_whitelist`**:
+- ✅ **Правильный параметр**: теперь передается словарь `telegram_data` вместо строки
+- ✅ **Обработка возвращаемого значения**: исправлена обработка boolean результата вместо ожидаемого словаря
+
+**🔧 Исправлена обработка `get_user_info`**:
+```python
+# Было:
+if not user_info or not user_info[0]:  # Ошибка: ожидался кортеж
+    ...
+welcome_name = user_info[0] if user_info else ...
+
+# Стало:
+if not user_info or not user_info.get('full_name'):  # Правильно: работа со словарем
+    ...
+welcome_name = user_info.get('full_name') if user_info else ...
+```
+
+**🔧 Улучшения**:
+- ✅ **Единообразие**: создание `telegram_data` вынесено в начало функции для использования во всех местах
+- ✅ **Безопасность**: добавлены проверки на `None` значения в `telegram_data`
+- ✅ **Совместимость**: сохранена работа с существующими пользователями
+
+**🎯 Результат**:
+- Пользователи больше не сталкиваются с ошибкой при выполнении `/start`
+- Корректно обрабатываются Telegram данные пользователей
+- Правильно работает автоматическое обновление username
+- Исправлена работа с информацией о пользователях
+
 ### ✅ 23.06.2025 - Исправлена проблема инициализации таблиц базы данных
 
 **🎯 Проблема**: При запуске `main.py` таблицы в Neon PostgreSQL не создавались автоматически, что приводило к ошибкам при первом запуске бота.

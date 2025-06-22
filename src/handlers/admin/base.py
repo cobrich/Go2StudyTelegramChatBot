@@ -193,6 +193,20 @@ class AdminBaseHandler:
             
             return True
         
+        # Обработка для админов
+        if action in ['add_admin', 'add_admin_username', 'add_admin_fullname']:
+            from .admins import AdminsHandler
+            admins_handler = AdminsHandler()
+            
+            if action == 'add_admin':
+                await admins_handler.handle_add_admin(update, context, text)
+            elif action == 'add_admin_username':
+                await admins_handler.handle_add_admin_username(update, context, text)
+            elif action == 'add_admin_fullname':
+                await admins_handler.handle_add_admin_fullname(update, context, text)
+            
+            return True
+        
         return False
 
     async def handle_admin_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

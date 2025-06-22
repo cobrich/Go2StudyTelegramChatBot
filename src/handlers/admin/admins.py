@@ -78,11 +78,11 @@ class AdminsHandler(AdminBaseHandler):
         else:
             text = "👑 <b>Список администраторов</b>\n\n"
             for i, admin in enumerate(admins, 1):
-                role = "👑 Суперадмин" if admin['is_super'] else "👨‍💼 Админ"
+                role = "👑 Суперадмин" if admin['is_super_admin'] else "👨‍💼 Админ"
                 text += f"{i}. {role}\n"
                 text += f"   ID: {admin['user_id']}\n"
                 text += f"   Username: @{admin['username']}\n"
-                text += f"   Имя: {admin['name']}\n\n"
+                text += f"   Имя: {admin['full_name']}\n\n"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_admins")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -104,7 +104,7 @@ class AdminsHandler(AdminBaseHandler):
         current_admin_id = user_id
         
         # Фильтруем список: убираем суперадминов и текущего пользователя
-        removable_admins = [admin for admin in admins if not admin['is_super'] and admin['user_id'] != current_admin_id]
+        removable_admins = [admin for admin in admins if not admin['is_super_admin'] and admin['user_id'] != current_admin_id]
         
         if not removable_admins:
             text = "🗑️ <b>Удаление администратора</b>\n\nНет администраторов, которых можно удалить.\n\n"
@@ -116,7 +116,7 @@ class AdminsHandler(AdminBaseHandler):
             keyboard = []
             
             for admin in removable_admins:
-                display_text = f"👨‍💼 @{admin['username']} - {admin['name']}"
+                display_text = f"👨‍💼 @{admin['username']} - {admin['full_name']}"
                 keyboard.append([InlineKeyboardButton(
                     display_text,
                     callback_data=f"remove_admin_confirm_{admin['user_id']}"
@@ -152,7 +152,7 @@ class AdminsHandler(AdminBaseHandler):
             return
         
         # Проверяем, что не пытаемся удалить суперадмина или себя
-        if admin_to_remove['is_super']:
+        if admin_to_remove['is_super_admin']:
             await query.edit_message_text(
                 "❌ Нельзя удалить суперадминистратора.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="remove_admin")]])
@@ -168,9 +168,9 @@ class AdminsHandler(AdminBaseHandler):
         
         text = f"🗑️ <b>Подтверждение удаления</b>\n\n"
         text += f"<b>Администратор:</b> @{admin_to_remove['username']}\n"
-        text += f"<b>Имя:</b> {admin_to_remove['name']}\n"
+        text += f"<b>Имя:</b> {admin_to_remove['full_name']}\n"
         text += f"<b>ID:</b> {admin_to_remove['user_id']}\n"
-        text += f"<b>Роль:</b> {'👑 Суперадмин' if admin_to_remove['is_super'] else '👨‍💼 Админ'}\n\n"
+        text += f"<b>Роль:</b> {'👑 Суперадмин' if admin_to_remove['is_super_admin'] else '👨‍💼 Админ'}\n\n"
         text += "⚠️ <b>ВНИМАНИЕ:</b> Это действие нельзя отменить!\n"
         text += "Пользователь потеряет права администратора.\n\n"
         text += "Подтвердите удаление:"
@@ -208,7 +208,7 @@ class AdminsHandler(AdminBaseHandler):
             return
         
         # Финальные проверки безопасности
-        if admin_to_remove['is_super'] or admin_id_to_remove == current_user_id:
+        if admin_to_remove['is_super_admin'] or admin_id_to_remove == current_user_id:
             await query.edit_message_text(
                 "❌ Операция запрещена по соображениям безопасности.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_admins")]])
@@ -223,7 +223,7 @@ class AdminsHandler(AdminBaseHandler):
                 text = f"✅ <b>Администратор успешно удален</b>\n\n"
                 text += f"<b>Удаленный администратор:</b>\n"
                 text += f"• Username: @{admin_to_remove['username']}\n"
-                text += f"• Имя: {admin_to_remove['name']}\n"
+                text += f"• Имя: {admin_to_remove['full_name']}\n"
                 text += f"• ID: {admin_to_remove['user_id']}\n\n"
                 text += f"Пользователь больше не имеет прав администратора."
                 
@@ -350,8 +350,8 @@ class AdminsHandler(AdminBaseHandler):
                 user_id=new_admin_id,
                 username=new_admin_username,
                 full_name=fullname.strip(),
-                is_super=False,  # Обычный админ
-                added_by=current_user_id
+                is_super_admin=False,  # Обычный админ
+                created_by=current_user_id
             )
             
             if success:

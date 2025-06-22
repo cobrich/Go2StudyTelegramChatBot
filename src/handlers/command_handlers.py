@@ -25,9 +25,16 @@ class CommandHandlers(BaseHandler):
         chat_id = update.effective_chat.id
         user_language = self.db.get_user_language(user.id)
 
+        # Создаем telegram_data для использования в различных функциях
+        telegram_data = {
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name
+        }
+
         # Автоматически обновляем username если он есть
         if user.username:
-            self.db.auto_update_username_from_telegram(user.id, user.username)
+            self.db.auto_update_username_from_telegram(user.id, telegram_data)
 
         # Проверяем доступ пользователя (админ, whitelist по username или user_id)
         if not self.db.check_user_access(user.id, user.username):
@@ -43,19 +50,12 @@ class CommandHandlers(BaseHandler):
         
         if not is_admin:
             # Для обычных пользователей - пытаемся автоматически настроить из whitelist
-            setup_result = self.db.auto_setup_user_from_whitelist(user.id, user.username)
+            setup_success = self.db.auto_setup_user_from_whitelist(user.id, telegram_data)
             
-            if setup_result['success'] and setup_result['auto_configured']:
+            if setup_success:
                 # Показываем сообщение об автоматической настройке
                 auto_setup_message = f"✅ <b>Добро пожаловать!</b>\n\n"
-                auto_setup_message += f"🔄 {setup_result['message']}\n\n"
-                
-                user_data = setup_result['user_data']
-                if user_data['full_name']:
-                    auto_setup_message += f"👤 <b>ФИО:</b> {user_data['full_name']}\n"
-                if user_data['grade']:
-                    auto_setup_message += f"🎓 <b>Класс:</b> {user_data['grade']}\n"
-                
+                auto_setup_message += f"🔄 Ваши данные автоматически настроены из whitelist\n\n"
                 auto_setup_message += f"\n📚 Теперь вы можете пользоваться ботом!"
                 
                 await update.message.reply_html(auto_setup_message)
@@ -64,24 +64,24 @@ class CommandHandlers(BaseHandler):
             user_info = self.db.get_user_info(user.id)
             
             # Для обычных пользователей - проверяем ФИО и класс (на случай если автонастройка не сработала)
-            if not user_info or not user_info[0]:  # Нет ФИО
+            if not user_info or not user_info.get('full_name'):  # Нет ФИО
                 context.user_data['awaiting_full_name'] = True
                 fullname_request = "Пожалуйста, введите ваше ФИО:" if user_language == 'ru' else "Толық атыңызды енгізіңіз:"
                 await update.message.reply_text(fullname_request)
                 return
-            elif not user_info[1]:  # Нет класса
+            elif not user_info.get('grade'):  # Нет класса
                 context.user_data['awaiting_grade'] = True
-                context.user_data['full_name'] = user_info[0]
+                context.user_data['full_name'] = user_info.get('full_name')
                 grade_request = "Пожалуйста, введите ваш класс (5, 6 или 7):" if user_language == 'ru' else "Сыныбыңызды енгізіңіз (5, 6 немесе 7):"
                 await update.message.reply_text(grade_request)
                 return
             
             # Если все данные есть - показываем приветствие
-            welcome_name = user_info[0] if user_info and user_info[0] else user.first_name or "пользователь"
-            grade_text = f", {user_info[1]} класс" if user_info and user_info[1] else ""
+            welcome_name = user_info.get('full_name') if user_info else user.first_name or "пользователь"
+            grade_text = f", {user_info.get('grade')} класс" if user_info and user_info.get('grade') else ""
             if user_language == 'kk':
-                grade_text = f", {user_info[1]} сынып" if user_info and user_info[1] else ""
-                welcome_text = get_message('welcome', user_language, name=welcome_name, grade=user_info[1] if user_info and user_info[1] else '') + "\n\n" + get_message('bot_description', user_language)
+                grade_text = f", {user_info.get('grade')} сынып" if user_info and user_info.get('grade') else ""
+                welcome_text = get_message('welcome', user_language, name=welcome_name, grade=user_info.get('grade') if user_info else '') + "\n\n" + get_message('bot_description', user_language)
             else:
                 welcome_text = f"👋 Привет, {welcome_name}{grade_text}!\n\n📚 Я бот для изучения математики. Выбери действие:"
         else:
