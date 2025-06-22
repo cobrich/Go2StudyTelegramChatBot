@@ -225,35 +225,231 @@ class SyncQuestionRepository(SyncBaseRepository):
             return False
     
     def get_all_ai_questions(self) -> List[Dict]:
-        """Get all AI-generated questions (sync)"""
-        logger.info("🤖 Getting all AI questions")
+        """Get all AI questions (sync)"""
+        logger.info("📋 Getting all AI questions")
         
         try:
             query = """
-                SELECT q.id, q.question_text as question, q.correct_answer as answer,
-                       q.explanation, q.incorrect_options, s.name as topic
+                SELECT q.id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d,
+                       q.correct_answer, s.subtopic_name as topic, q.source, q.created_at
                 FROM questions q
                 JOIN subtopics s ON q.topic_id = s.id
-                WHERE q.source = %s OR q.source = %s
+                WHERE q.source = %s
                 ORDER BY q.created_at DESC
             """
-            result = self.fetch_all(query, ('ai', 'ai_retake'))
-            
-            questions = []
-            for row in result:
-                question = {
-                    'id': row['id'],
-                    'question': row['question'],
-                    'answer': row['answer'],
-                    'explanation': row['explanation'],
-                    'incorrect_options': row['incorrect_options'],
-                    'topic': row['topic']
-                }
-                questions.append(question)
-            
-            logger.info(f"📊 Found {len(questions)} AI questions")
-            return questions
+            result = self.fetch_all(query, ('ai',))
+            logger.info(f"📊 Found {len(result)} AI questions")
+            return result
             
         except Exception as e:
             logger.error(f"❌ Error getting AI questions: {e}")
+            return []
+    
+    # Additional methods from main branch
+    def get_explanation_fuzzy_by_question_text(self, question_text: str) -> Optional[str]:
+        """Get explanation using fuzzy matching"""
+        try:
+            # Try exact match first
+            exact_result = self.get_explanation_by_question_text(question_text)
+            if exact_result:
+                return exact_result
+            
+            # Try fuzzy match using ILIKE
+            query = """
+                SELECT e.explanation_text
+                FROM questions q
+                LEFT JOIN explanations e ON q.id = e.question_id
+                WHERE q.question_text ILIKE %s
+                LIMIT 1
+            """
+            result = self.fetch_one(query, (f"%{question_text}%",))
+            return result['explanation_text'] if result and result['explanation_text'] else None
+            
+        except Exception as e:
+            logger.error(f"Error getting fuzzy explanation for question: {e}")
+            return None
+    
+    def update_question(self, question_text: str, new_answer: str, new_explanation: str) -> None:
+        """Update a question's answer and explanation"""
+        try:
+            # Update question
+            query = """
+                UPDATE questions 
+                SET correct_answer = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE question_text = %s
+            """
+            self.execute_query(query, (new_answer, question_text))
+            
+            # Update explanation if exists
+            if new_explanation:
+                # First try to update existing explanation
+                query = """
+                    UPDATE explanations 
+                    SET explanation_text = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE question_id = (SELECT id FROM questions WHERE question_text = %s)
+                """
+                self.execute_query(query, (new_explanation, question_text))
+                
+                # If no rows were affected, insert new explanation
+                query = """
+                    INSERT INTO explanations (question_id, explanation_text)
+                    SELECT id, %s FROM questions WHERE question_text = %s
+                    ON CONFLICT (question_id) DO UPDATE SET
+                        explanation_text = EXCLUDED.explanation_text,
+                        updated_at = CURRENT_TIMESTAMP
+                """
+                self.execute_query(query, (new_explanation, question_text))
+            
+            logger.info(f"✅ Updated question: {question_text[:50]}...")
+            
+        except Exception as e:
+            logger.error(f"Error updating question: {e}")
+    
+    def get_tasks_for_topic_id(self, topic_id: int, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get tasks for topic by ID"""
+        try:
+            query = """
+                SELECT q.id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d,
+                       q.correct_answer, s.subtopic_name as topic, q.source, q.created_at
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE q.topic_id = %s AND s.is_active = %s
+                ORDER BY RANDOM()
+                LIMIT %s
+            """
+            result = self.fetch_all(query, (topic_id, True, limit))
+            logger.info(f"📊 Found {len(result)} questions for topic_id {topic_id}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting tasks for topic_id {topic_id}: {e}")
+            return []
+    
+    def add_question_with_topic_id(self, question: dict, topic_id: int) -> bool:
+        """Add question with topic ID"""
+        try:
+            query = """
+                INSERT INTO questions (question_text, option_a, option_b, option_c, option_d,
+                                     correct_answer, topic_id, source)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            
+            self.execute_query(query, (
+                question.get('question_text'),
+                question.get('option_a'),
+                question.get('option_b'),
+                question.get('option_c'),
+                question.get('option_d'),
+                question.get('correct_answer'),
+                topic_id,
+                question.get('source', 'manual')
+            ))
+            
+            logger.info(f"✅ Added question with topic_id {topic_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error adding question with topic_id {topic_id}: {e}")
+            return False
+    
+    def get_topics_by_language(self, language: str, active_only: bool = True) -> List[Dict]:
+        """Get topics by language"""
+        try:
+            query = """
+                SELECT DISTINCT s.subtopic_name as topic_name, m.language
+                FROM subtopics s
+                JOIN main_topics m ON s.main_topic_id = m.id
+                WHERE m.language = %s
+            """
+            params = [language]
+            
+            if active_only:
+                query += " AND s.is_active = %s AND m.is_active = %s"
+                params.extend([True, True])
+            
+            query += " ORDER BY s.subtopic_name"
+            
+            result = self.fetch_all(query, params)
+            logger.info(f"📊 Found {len(result)} topics for language {language}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting topics by language {language}: {e}")
+            return []
+    
+    def get_questions_by_user_language(self, user_id: int, topic: str = None) -> List[Dict]:
+        """Get questions by user language"""
+        try:
+            # First get user's language
+            user_query = "SELECT language FROM allowed_users WHERE user_id = %s"
+            user_result = self.fetch_one(user_query, (user_id,))
+            user_language = user_result['language'] if user_result else 'ru'
+            
+            # Get questions for that language
+            query = """
+                SELECT q.id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d,
+                       q.correct_answer, s.subtopic_name as topic, q.source, q.created_at
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                JOIN main_topics m ON s.main_topic_id = m.id
+                WHERE m.language = %s AND s.is_active = %s AND m.is_active = %s
+            """
+            params = [user_language, True, True]
+            
+            if topic:
+                query += " AND s.subtopic_name = %s"
+                params.append(topic)
+            
+            query += " ORDER BY q.created_at DESC"
+            
+            result = self.fetch_all(query, params)
+            logger.info(f"📊 Found {len(result)} questions for user {user_id} language {user_language}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting questions by user language for {user_id}: {e}")
+            return []
+    
+    def get_topics_with_language_info(self, active_only: bool = True, for_admin: bool = False) -> List[Dict[str, Any]]:
+        """Get topics with language info"""
+        try:
+            query = """
+                SELECT s.id, s.subtopic_name as name, m.topic_name as main_topic,
+                       m.language, s.is_active, COUNT(q.id) as question_count,
+                       s.created_at, s.updated_at
+                FROM subtopics s
+                JOIN main_topics m ON s.main_topic_id = m.id
+                LEFT JOIN questions q ON s.id = q.topic_id
+            """
+            params = []
+            
+            if active_only and not for_admin:
+                query += " WHERE s.is_active = %s AND m.is_active = %s"
+                params = [True, True]
+            
+            query += """
+                GROUP BY s.id, s.subtopic_name, m.topic_name, m.language, s.is_active, s.created_at, s.updated_at
+                ORDER BY m.language, m.topic_name, s.subtopic_name
+            """
+            
+            results = self.fetch_all(query, params)
+            
+            return [
+                {
+                    'id': row['id'],
+                    'name': row['name'],
+                    'main_topic': row['main_topic'],
+                    'language': row['language'],
+                    'is_active': row['is_active'],
+                    'question_count': row['question_count'],
+                    'has_questions': row['question_count'] > 0,
+                    'created_at': row['created_at'],
+                    'updated_at': row['updated_at'],
+                    'display_name': f"{row['main_topic']} → {row['name']} ({row['language'].upper()})"
+                }
+                for row in results
+            ]
+            
+        except Exception as e:
+            logger.error(f"Error getting topics with language info: {e}")
             return [] 
