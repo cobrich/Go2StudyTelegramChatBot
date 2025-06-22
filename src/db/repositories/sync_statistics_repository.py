@@ -230,12 +230,14 @@ class SyncStatisticsRepository(SyncBaseRepository):
         
         try:
             query = """
-                SELECT DISTINCT question_text as question, correct_answer_text as answer,
-                       explanation_text as explanation, topic,
-                       '' as incorrect_options, NULL as image_path
-                FROM user_errors
-                WHERE user_id = %s AND topic = %s
-                ORDER BY error_date DESC
+                SELECT DISTINCT q.question_text as question, q.correct_answer as answer,
+                       q.explanation as explanation, s.subtopic_name as topic,
+                       q.incorrect_options, NULL as image_path, ue.last_error_date
+                FROM user_errors ue
+                JOIN questions q ON ue.question_id = q.id
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE ue.user_id = %s AND s.subtopic_name = %s
+                ORDER BY ue.last_error_date DESC
                 LIMIT %s
             """
             result = self.fetch_all(query, (user_id, topic, limit))

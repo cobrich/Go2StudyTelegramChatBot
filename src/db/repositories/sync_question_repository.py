@@ -40,7 +40,7 @@ class SyncQuestionRepository(SyncBaseRepository):
         try:
             query = """
                 SELECT q.id, q.question_text as question, q.correct_answer as answer,
-                       q.explanation, q.incorrect_options, q.image_path, q.source,
+                       q.explanation, q.incorrect_options, q.source,
                        s.subtopic_name as topic
                 FROM questions q
                 JOIN subtopics s ON q.topic_id = s.id
@@ -59,7 +59,7 @@ class SyncQuestionRepository(SyncBaseRepository):
                     'answer': row['answer'],
                     'explanation': row['explanation'],
                     'incorrect_options': row['incorrect_options'],
-                    'image_path': row['image_path'],
+                    'image_path': None,  # Колонка не существует в БД
                     'source': row['source'],
                     'topic': row['topic']
                 }

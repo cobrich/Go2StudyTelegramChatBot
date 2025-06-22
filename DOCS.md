@@ -79,6 +79,54 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 ## 📋 Changelog
 
+### ✅ 22.06.2025 - Исправлены SQL-запросы для использования существующих вопросов из БД
+
+**🎯 Проблема**: При выборе темы "Модуль числа" система генерировала новые вопросы через ИИ вместо использования 46 существующих вопросов из базы данных.
+
+**🔍 Анализ**:
+- В БД есть 46 вопросов по теме "Модуль числа" (topic_id = 6)
+- Ошибки в SQL-запросах препятствовали получению вопросов из БД:
+  1. `column q.image_path does not exist` в `sync_question_repository.py`
+  2. `column question_text does not exist` в `sync_statistics_repository.py`
+- Структура БД: `main_topics` → `subtopics` → `questions`
+- Таблица `user_errors` содержит только `question_id`, не `question_text`
+
+**✅ РЕШЕНИЕ - Исправлены SQL-запросы в репозиториях**:
+
+**🔧 Исправлен `sync_question_repository.py`**:
+```sql
+-- Было:
+SELECT q.id, q.question_text as question, q.correct_answer as answer,
+       q.explanation, q.incorrect_options, q.image_path, q.source
+
+-- Стало:
+SELECT q.id, q.question_text as question, q.correct_answer as answer,
+       q.explanation, q.incorrect_options, q.source
+-- Убрана несуществующая колонка q.image_path
+```
+
+**🔧 Исправлен `sync_statistics_repository.py`**:
+```sql
+-- Было:
+SELECT DISTINCT question_text as question, correct_answer_text as answer,
+       explanation_text as explanation, topic
+FROM user_errors
+
+-- Стало:
+SELECT DISTINCT q.question_text as question, q.correct_answer as answer,
+       q.explanation as explanation, s.subtopic_name as topic
+FROM user_errors ue
+JOIN questions q ON ue.question_id = q.id
+JOIN subtopics s ON q.topic_id = s.id
+-- Добавлены необходимые JOIN для получения данных из связанных таблиц
+```
+
+**🎯 Результат**:
+- ✅ Система теперь корректно загружает 10 существующих вопросов из БД по теме "Модуль числа"
+- ✅ Вопросы берутся из разных источников: 4 от ИИ + 6 из PDF
+- ✅ Генерация новых вопросов ИИ происходит только при недостатке вопросов в БД
+- ✅ Исправлены ошибки с несуществующими колонками в SQL-запросах
+
 ### ✅ 22.06.2025 - Исправлена ошибка обработки Telegram данных пользователя
 
 **🎯 Проблема**: При запуске команды `/start` возникала ошибка `'str' object has no attribute 'get'` при попытке автоматического обновления username пользователя из Telegram данных.
