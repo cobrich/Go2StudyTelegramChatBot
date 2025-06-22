@@ -85,11 +85,13 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 - `'AdminRepository' object has no attribute 'is_postgresql'`
 - `cannot perform operation: another operation is in progress`
 - `Event loop is closed`
+- **Суперадмин создается в fallback режиме** - показывается успех, но данные не сохраняются в Supabase
 
 **Причины**:
 1. **Отсутствие `is_postgresql`**: В `BaseRepository` не было свойства `is_postgresql`, которое использовалось в SQL-запросах
 2. **Конфликты асинхронности**: Синхронные вызовы конфликтовали с асинхронными операциями соединений
 3. **Неправильные fallback значения**: При недоступности БД возвращались неподходящие типы данных
+4. **IPv6 проблема**: Supabase возвращает только IPv6 адреса, система не поддерживает IPv6
 
 **Исправления**:
 
@@ -112,21 +114,53 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 - ✅ Улучшен метод `get_async_connection()` - добавлен таймаут 10 секунд для получения соединений
 - ✅ Улучшена обработка ошибок при освобождении соединений
 
+**🛠️ Скрипт инициализации (`src/init_superadmin.py`)**:
+- ✅ Добавлена проверка реального подключения к БД
+- ✅ Корректное определение fallback режима
+- ✅ Инструкции по ручному созданию суперадмина при недоступности БД
+
 **📊 Результаты**:
-- ✅ **Суперадмин создается успешно**: `init_superadmin.py` работает корректно
+- ✅ **Суперадмин создается успешно**: `init_superadmin.py` работает корректно при доступной БД
 - ✅ **Graceful degradation**: При недоступности БД система работает с fallback значениями
 - ✅ **Стабильность**: Нет конфликтов между синхронными и асинхронными операциями
 - ✅ **Безопасность**: При недоступности БД админские права не предоставляются
+- ✅ **Честная диагностика**: Система корректно сообщает о fallback режиме
+
+**🔧 Решение проблемы с IPv6 и создание суперадмина**:
+
+**Способ 1 - Ручное создание через Supabase Dashboard (рекомендуется)**:
+1. Откройте https://supabase.com/dashboard
+2. Войдите в ваш проект
+3. Перейдите в **SQL Editor**
+4. Выполните скрипт из файла `supabase_create_superadmin.sql`:
+   ```sql
+   INSERT INTO admins (user_id, username, full_name, is_super_admin, created_by) 
+   VALUES (1354242060, 'Bekzat_Erikuly', 'Tursun Bekzat Yerikuly', true, NULL);
+   ```
+5. Проверьте результат в **Table Editor** → **admins**
+
+**Способ 2 - Настройка IPv6 на сервере**:
+```bash
+# Проверьте поддержку IPv6
+ping6 db.msglxbessktlrormbaxx.supabase.co
+
+# Если IPv6 не работает, настройте его или используйте способ 1
+```
+
+**Способ 3 - Использование прокси или VPN с IPv6 поддержкой**
 
 **🧪 Тестирование**:
-- ✅ Создание суперадмина через `init_superadmin.py`
+- ✅ Создание суперадмина через `init_superadmin.py` (при доступной БД)
 - ✅ Работа с недоступной БД (fallback режим)
 - ✅ Корректные типы данных в ответах репозитория
+- ✅ Ручное создание через Supabase Dashboard
 
 **📝 Файлы изменены**:
 - `src/db/base_repository.py` - добавлено свойство `is_postgresql`, улучшен `_sync_call`
 - `src/db/repositories/admin_repository.py` - исправлены SQL-запросы и fallback значения
 - `src/db/connection_manager.py` - улучшено управление соединениями
+- `src/init_superadmin.py` - добавлена диагностика подключения к БД
+- `supabase_create_superadmin.sql` - SQL скрипт для ручного создания суперадмина
 
 ### 2025-01-19: Исправлена проблема с нерабочей кнопкой "Админ панель"
 
