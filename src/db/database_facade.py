@@ -26,6 +26,7 @@ class DatabaseFacade:
         """Initialize the database facade with all repositories."""
         self.connection_manager = get_connection_manager()
         self.models = DatabaseModels()
+        self._tables_initialized = False
         
         # Initialize repositories
         self.users = UserRepository()
@@ -34,6 +35,32 @@ class DatabaseFacade:
         self.statistics = StatisticsRepository()
         
         logger.info("DatabaseFacade initialized for Supabase")
+    
+    async def ensure_tables_exist(self):
+        """Ensure database tables exist (lazy initialization)"""
+        if not self._tables_initialized:
+            try:
+                await self.connection_manager.initialize_pool()
+                self._tables_initialized = True
+                logger.info("Database tables ensured to exist")
+            except Exception as e:
+                logger.error(f"Failed to ensure tables exist: {e}")
+                # Не поднимаем исключение, позволяем системе работать
+    
+    def init_tables_sync(self):
+        """Synchronous wrapper for table initialization"""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Если loop уже запущен, создаем задачу
+                asyncio.create_task(self.ensure_tables_exist())
+            else:
+                # Если loop не запущен, запускаем синхронно
+                loop.run_until_complete(self.ensure_tables_exist())
+        except RuntimeError:
+            # Создаем новый loop
+            asyncio.run(self.ensure_tables_exist())
     
     def _get_placeholder(self, index: int = 1) -> str:
         """Get parameter placeholder for PostgreSQL."""

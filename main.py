@@ -146,6 +146,14 @@ def main() -> None:
     # Add main callback handlers
     application.add_handler(CallbackQueryHandler(callback_handlers.handle_callback, pattern="^(?!admin_|student_|edit_|delete_|add_|upload_|search_|generate_|manual_|confirm_|remove_|set_|class_|list_|questions_|pdf_|show_)"))
     
+    # Инициализируем таблицы перед запуском бота
+    logger.info("Initializing database tables...")
+    try:
+        db.init_tables_sync()
+        logger.info("Database tables initialized successfully")
+    except Exception as e:
+        logger.warning(f"Could not initialize tables: {e}. Bot will try to initialize them on first database access.")
+    
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
 
