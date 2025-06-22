@@ -509,6 +509,7 @@ class CallbackHandlers(BaseHandler):
         questions = self.get_user_data(context).get('questions', [])
         current_index = self.get_user_data(context).get('current_question_index', 0)
         logging.info(f"[handle_continue] current_index={current_index}, questions_len={len(questions)}")
+        
         if not questions or current_index >= len(questions):
             logging.error(f"[handle_continue] No questions found or invalid index: current_index={current_index}, questions_len={len(questions)}")
             try:
@@ -519,14 +520,23 @@ class CallbackHandlers(BaseHandler):
             except Exception as e:
                 logging.error(f"[handle_continue] Exception in error message: {e}")
             return
+        
         question = questions[current_index]
         source = question[4] if len(question) > 4 else 'db'
-        keyboard = build_question_keyboard(question[3], current_index, current_index, len(questions), user_id, is_random_test=False)
+        
+        # Определяем тип теста для правильной клавиатуры
+        is_random_test = self.get_user_data(context).get('is_random_test', False)
+        keyboard = build_question_keyboard(question[3], current_index, current_index, len(questions), user_id, is_random_test=is_random_test)
+        
         topic = self.get_user_data(context).get('current_topic', '')
+        
+        # ИСПРАВЛЕНИЕ: Всегда показываем только чистый вопрос без объяснений
+        question_text = get_message('topic_question', user_language, 
+                      topic=topic, current=current_index + 1, total=len(questions), question=question[0])
+        
         try:
             await query.message.edit_text(
-                get_message('topic_question', user_language, 
-                          topic=topic, current=current_index + 1, total=len(questions), question=question[0]),
+                question_text,
                 reply_markup=keyboard,
                 parse_mode='HTML'
             )
@@ -534,6 +544,17 @@ class CallbackHandlers(BaseHandler):
             await self._save_bot_message_id(context, query.message, query.message.chat_id)
         except Exception as e:
             logging.error(f"[handle_continue] Exception in edit_text: {e}")
+            # Fallback: отправляем новое сообщение если редактирование не удалось
+            try:
+                new_msg = await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=question_text,
+                    reply_markup=keyboard,
+                    parse_mode='HTML'
+                )
+                await self._save_bot_message_id(context, new_msg, query.message.chat_id)
+            except Exception as e2:
+                logging.error(f"[handle_continue] Exception in fallback send_message: {e2}")
 
     async def handle_show_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
@@ -833,7 +854,7 @@ class CallbackHandlers(BaseHandler):
                                   topic=topic, current=prev_index + 1, total=len(questions), question=question[0])
         
         if user_answer is not None:
-            # Показываем правильную иконку в зависимости от результата
+            # Вопрос уже отвечен - показываем полную информацию с объяснением
             if is_correct:
                 question_text += f"\n\n✅ <b>Ваш ответ:</b> {user_answer}\n"
                 question_text += f"✅ <b>Правильный ответ:</b> {correct_answer}\n\n"
@@ -860,9 +881,10 @@ class CallbackHandlers(BaseHandler):
                     nav_buttons.append(InlineKeyboardButton(f"⬅️ {get_message('back_to_topics', user_language)}", callback_data="back_to_topics"))
             keyboard = InlineKeyboardMarkup([nav_buttons] if nav_buttons else [])
         else:
-            # Варианты ответа и навигация
+            # Вопрос НЕ отвечен - показываем только чистый вопрос с вариантами ответов
             is_random_test = self.get_user_data(context).get('is_random_test', False)
             keyboard = build_question_keyboard(question[3], prev_index, max(prev_index, current_index), len(questions), user_id, is_random_test=is_random_test)
+        
         try:
             await query.message.edit_text(question_text, reply_markup=keyboard, parse_mode='HTML')
         except Exception:
@@ -903,7 +925,7 @@ class CallbackHandlers(BaseHandler):
                                   topic=topic, current=next_index + 1, total=len(questions), question=question[0])
         
         if user_answer is not None:
-            # Показываем правильную иконку в зависимости от результата
+            # Вопрос уже отвечен - показываем полную информацию с объяснением
             if is_correct:
                 question_text += f"\n\n✅ <b>Ваш ответ:</b> {user_answer}\n"
                 question_text += f"✅ <b>Правильный ответ:</b> {correct_answer}\n\n"
@@ -930,9 +952,10 @@ class CallbackHandlers(BaseHandler):
                     nav_buttons.append(InlineKeyboardButton(f"⬅️ {get_message('back_to_topics', user_language)}", callback_data="back_to_topics"))
             keyboard = InlineKeyboardMarkup([nav_buttons] if nav_buttons else [])
         else:
-            # Варианты ответа и навигация
+            # Вопрос НЕ отвечен - показываем только чистый вопрос с вариантами ответов
             is_random_test = self.get_user_data(context).get('is_random_test', False)
             keyboard = build_question_keyboard(question[3], next_index, next_index, len(questions), user_id, is_random_test=is_random_test)
+        
         try:
             await query.message.edit_text(question_text, reply_markup=keyboard, parse_mode='HTML')
         except Exception:
