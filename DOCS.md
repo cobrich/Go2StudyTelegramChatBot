@@ -3785,3 +3785,11 @@ The security implementation is **complete and functional** - admin data is autom
   - "Сейчас в тесте" (is_active) - students currently taking a test
 - Updated both per-class and overall statistics display
 - Now admins can clearly distinguish between having access and being currently active in tests
+
+**Bug Fix**: Fixed grade constraint error when editing student class.
+- Problem: Database constraint only allowed grades 5 and 6, but UI allowed 1-11
+- Root cause: `CHECK (grade IN (5, 6))` constraint was too restrictive
+- Solution: Updated constraint to allow grades 5-7: `CHECK (grade >= 5 AND grade <= 7)`
+- Updated validation in all handlers: `students.py` and `command_handlers.py`
+- Created and executed database migration script
+- Now students can be assigned to grades 5, 6, or 7 without constraint violations

@@ -164,7 +164,7 @@ class StudentsHandler(AdminBaseHandler):
         if auto_info.get('username'):
             summary_text += f"<b>Username:</b> @{auto_info['username']} (автоопределен)\n"
         
-        summary_text += f"\nВведите класс ученика (1-11):"
+        summary_text += f"\nВведите класс ученика (5-7):"
         
         keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="admin_students")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -174,8 +174,8 @@ class StudentsHandler(AdminBaseHandler):
         """Обработка добавления ученика по ID - этап 3 (класс)."""
         try:
             grade = int(grade_text)
-            if grade < 1 or grade > 11:
-                await update.message.reply_text("❌ Класс должен быть от 1 до 11. Попробуйте еще раз:")
+            if grade < 5 or grade > 7:
+                await update.message.reply_text("❌ Класс должен быть от 5 до 7. Попробуйте еще раз:")
                 return
         except ValueError:
             await update.message.reply_text("❌ Введите корректный номер класса (число). Попробуйте еще раз:")
@@ -664,7 +664,7 @@ class StudentsHandler(AdminBaseHandler):
         context.user_data['edit_student_id'] = user_id
         context.user_data['admin_action'] = 'edit_student_grade'
         
-        text = f"🎓 <b>Изменение класса</b>\n\nВведите новый класс ученика (от 1 до 11):"
+        text = f"🎓 <b>Изменение класса</b>\n\nВведите новый класс ученика (от 5 до 7):"
         
         keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_select_{user_id}")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -845,10 +845,10 @@ class StudentsHandler(AdminBaseHandler):
         
         try:
             grade = int(grade_text)
-            if grade < 1 or grade > 11:
+            if grade < 5 or grade > 7:
                 keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_select_{user_id}")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.message.reply_text("❌ Класс должен быть от 1 до 11. Попробуйте еще раз:", reply_markup=reply_markup)
+                await update.message.reply_text("❌ Класс должен быть от 5 до 7. Попробуйте еще раз:", reply_markup=reply_markup)
                 return
         except ValueError:
             keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_student_select_{user_id}")]]

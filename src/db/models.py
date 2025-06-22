@@ -35,7 +35,7 @@ class DatabaseModels:
                     user_id BIGINT PRIMARY KEY,
                     username TEXT UNIQUE,
                     full_name TEXT,
-                    grade INTEGER CHECK (grade IN (5, 6)),
+                    grade INTEGER CHECK (grade >= 5 AND grade <= 7),
                     added_by BIGINT REFERENCES admins(user_id),
                     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -72,7 +72,7 @@ class CommandHandlers(BaseHandler):
             elif not user_info[1]:  # Нет класса
                 context.user_data['awaiting_grade'] = True
                 context.user_data['full_name'] = user_info[0]
-                grade_request = "Пожалуйста, введите ваш класс (4, 5 или 6):" if user_language == 'ru' else "Сыныбыңызды енгізіңіз (4, 5 немесе 6):"
+                grade_request = "Пожалуйста, введите ваш класс (5, 6 или 7):" if user_language == 'ru' else "Сыныбыңызды енгізіңіз (5, 6 немесе 7):"
                 await update.message.reply_text(grade_request)
                 return
             
@@ -309,7 +309,7 @@ class CommandHandlers(BaseHandler):
                 context.user_data['full_name'] = text
                 context.user_data['awaiting_full_name'] = False
                 context.user_data['awaiting_grade'] = True
-                grade_request = "Пожалуйста, введите ваш класс (4, 5 или 6):" if user_language == 'ru' else "Сыныбыңызды енгізіңіз (4, 5 немесе 6):"
+                grade_request = "Пожалуйста, введите ваш класс (5, 6 или 7):" if user_language == 'ru' else "Сыныбыңызды енгізіңіз (5, 6 немесе 7):"
                 await update.message.reply_text(grade_request)
                 return
             else:
@@ -321,7 +321,7 @@ class CommandHandlers(BaseHandler):
         if context.user_data.get('awaiting_grade'):
             try:
                 grade = int(text)
-                if grade in [4, 5, 6]:
+                if grade in [5, 6, 7]:
                     full_name = context.user_data.get('full_name', '')
                     self.db.update_user_info(user_id, full_name, grade)
                     context.user_data.clear()
@@ -332,11 +332,11 @@ class CommandHandlers(BaseHandler):
                     )
                     return
                 else:
-                    grade_error_text = "❌ Пожалуйста, введите класс: 4, 5 или 6" if user_language == 'ru' else "❌ Сыныпты енгізіңіз: 4, 5 немесе 6"
+                    grade_error_text = "❌ Пожалуйста, введите класс: 5, 6 или 7" if user_language == 'ru' else "❌ Сыныпты енгізіңіз: 5, 6 немесе 7"
                     await update.message.reply_text(grade_error_text)
                     return
             except ValueError:
-                grade_format_error = "❌ Пожалуйста, введите число (4, 5 или 6)" if user_language == 'ru' else "❌ Санды енгізіңіз (4, 5 немесе 6)"
+                grade_format_error = "❌ Пожалуйста, введите число (5, 6 или 7)" if user_language == 'ru' else "❌ Санды енгізіңіз (5, 6 немесе 7)"
                 await update.message.reply_text(grade_format_error)
                 return
 
