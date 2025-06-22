@@ -668,8 +668,16 @@ class CommandHandlers(BaseHandler):
         for result in results[-10:]:  # Show last 10 results
             topic = result['topic']
             percentage = result['percentage']
-            date = result['date']
-            progress_text += f"📝 {topic}: {percentage:.1f}% ({date})\n"
+            completed_at = result['completed_at']
+            # Форматируем дату для отображения
+            if completed_at:
+                if hasattr(completed_at, 'strftime'):
+                    date_str = completed_at.strftime('%d.%m.%Y')
+                else:
+                    date_str = str(completed_at)[:10]  # Берем первые 10 символов (дата)
+            else:
+                date_str = "Неизвестно"
+            progress_text += f"📝 {topic}: {percentage:.1f}% ({date_str})\n"
         
         await update.message.reply_text(
             progress_text,
