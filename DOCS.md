@@ -3777,3 +3777,11 @@ The security implementation is **complete and functional** - admin data is autom
 - Solution: Added `WHERE user_id NOT IN (SELECT user_id FROM admins)` to exclude admins
 - Fixed methods: `get_detailed_class_statistics()`, `get_all_users_with_history()`, `get_class_statistics()`
 - Now only actual students appear in statistics, not admins
+
+**UI Improvement**: Clarified activity terminology in class statistics display.
+- Problem: "Активных" was confusing - it showed users with access, not currently active users
+- Solution: Split into two clear metrics:
+  - "С доступом" (has_access) - students who can use the bot
+  - "Сейчас в тесте" (is_active) - students currently taking a test
+- Updated both per-class and overall statistics display
+- Now admins can clearly distinguish between having access and being currently active in tests

@@ -391,27 +391,31 @@ class StudentsHandler(AdminBaseHandler):
             text = "📈 <b>Статистика по классам</b>\n\n"
             
             total_students = 0
-            total_active = 0
+            total_with_access = 0
+            total_currently_active = 0
             total_tests = 0
             
             for cls in class_stats['class_stats']:
                 if cls['grade']:  # Пропускаем записи без класса
                     text += f"🎓 <b>{cls['grade']} класс:</b>\n"
                     text += f"• Учеников: {cls['students_count']}\n"
-                    text += f"• Активных: {cls['active_students']} ({cls['activity_rate']}%)\n"
+                    text += f"• С доступом: {cls['active_students']} ({cls['activity_rate']}%)\n"
+                    text += f"• Сейчас в тесте: {cls['currently_active']}\n"
                     text += f"• Тестов: {cls['total_tests']}\n"
                     text += f"• Средний балл: {cls['avg_score']}%\n\n"
                     
                     total_students += cls['students_count']
-                    total_active += cls['active_students']
+                    total_with_access += cls['active_students']
+                    total_currently_active += cls['currently_active']
                     total_tests += cls['total_tests']
             
             text += f"📊 <b>Общая статистика:</b>\n"
             text += f"• Всего учеников: {total_students}\n"
-            text += f"• Активных: {total_active}\n"
+            text += f"• С доступом: {total_with_access}\n"
+            text += f"• Сейчас в тесте: {total_currently_active}\n"
             text += f"• Всего тестов: {total_tests}\n"
-            overall_activity = round((total_active / total_students * 100) if total_students > 0 else 0, 1)
-            text += f"• Общая активность: {overall_activity}%\n"
+            overall_access_rate = round((total_with_access / total_students * 100) if total_students > 0 else 0, 1)
+            text += f"• Процент с доступом: {overall_access_rate}%\n"
         
         keyboard = [[InlineKeyboardButton("🔙 Назад к списку учеников", callback_data="list_students")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
