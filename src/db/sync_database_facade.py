@@ -770,6 +770,64 @@ class SyncDatabaseFacade:
         # In the current implementation, repositories handle their own connections
         logger.info("Database connections closed")
 
+    # === НЕДОСТАЮЩИЕ МЕТОДЫ ПОИСКА ВОПРОСОВ ===
+    
+    def search_questions(self, search_text: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Search questions by text (sync)"""
+        return self.questions.search_questions(search_text, limit)
+    
+    def search_questions_for_edit(self, search_text: str, limit: int = 10) -> List[tuple]:
+        """Search questions for editing (sync) - returns tuple format"""
+        return self.questions.search_questions_for_edit(search_text, limit)
+    
+    def search_questions_for_deletion(self, search_text: str, limit: int = 10) -> List[tuple]:
+        """Search questions for deletion (sync) - returns tuple format"""
+        return self.questions.search_questions_for_deletion(search_text, limit)
+    
+    def get_question_by_id(self, question_id: int) -> Optional[Dict[str, Any]]:
+        """Get question by ID (sync)"""
+        return self.questions.get_question_by_id(question_id)
+    
+    def get_question_with_topic_by_id(self, question_id: int) -> Optional[Dict[str, Any]]:
+        """Get question with topic info by ID (sync)"""
+        return self.questions.get_question_with_topic_by_id(question_id)
+    
+    def update_question_explanation(self, question_id: int, explanation: str) -> bool:
+        """Update question explanation by ID (sync)"""
+        return self.questions.update_question_explanation(question_id, explanation)
+    
+    def count_questions_by_topic_name(self, topic_name: str) -> int:
+        """Count questions by topic name (sync)"""
+        return self.questions.count_questions_by_topic_name(topic_name)
+    
+    def delete_questions_by_topic_name(self, topic_name: str) -> int:
+        """Delete all questions by topic name (sync)"""
+        return self.questions.delete_questions_by_topic_name(topic_name)
+    
+    def get_explanation_improvement_stats(self) -> Dict[str, int]:
+        """Get statistics for explanation improvement (sync)"""
+        return self.questions.get_explanation_improvement_stats()
+    
+    def get_questions_for_explanation_improvement(self, improvement_type: str, limit: int = 50) -> List[tuple]:
+        """Get questions that need explanation improvement (sync)"""
+        return self.questions.get_questions_for_explanation_improvement(improvement_type, limit)
+    
+    def get_topics_for_editing(self) -> List[tuple]:
+        """Get topics for editing (sync)"""
+        return self.questions.get_topics_for_editing()
+    
+    def get_topic_name_by_id_for_edit(self, topic_id: int) -> Optional[str]:
+        """Get topic name by ID for editing (sync)"""
+        return self.questions.get_topic_name_by_id_for_edit(topic_id)
+    
+    def update_question_in_database(self, question_id: int, field: str, value: str) -> bool:
+        """Update specific field of a question (sync)"""
+        return self.questions.update_question_in_database(question_id, field, value)
+    
+    def update_question_options(self, question_id: int, options_list: List[str]) -> bool:
+        """Update question options (sync)"""
+        return self.questions.update_question_options(question_id, options_list)
+
 def get_sync_database_facade() -> SyncDatabaseFacade:
     """
     Get singleton instance of SyncDatabaseFacade

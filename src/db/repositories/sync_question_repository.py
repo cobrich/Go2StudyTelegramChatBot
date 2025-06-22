@@ -503,4 +503,445 @@ class SyncQuestionRepository(SyncBaseRepository):
             
         except Exception as e:
             logger.error(f"Error getting topics with language info: {e}")
-            return [] 
+            return []
+
+    def search_questions(self, search_text: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Search questions by text"""
+        logger.info(f"🔍 Searching questions for: '{search_text}', limit: {limit}")
+        
+        try:
+            query = """
+                SELECT q.id, q.question_text as question, 
+                       CASE q.correct_answer
+                           WHEN 'A' THEN q.option_a
+                           WHEN 'B' THEN q.option_b
+                           WHEN 'C' THEN q.option_c
+                           WHEN 'D' THEN q.option_d
+                           ELSE q.correct_answer
+                       END as answer,
+                       q.explanation, s.subtopic_name as topic
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE LOWER(q.question_text) LIKE LOWER(%s)
+                ORDER BY q.created_at DESC
+                LIMIT %s
+            """
+            result = self.fetch_all(query, (f"%{search_text}%", limit))
+            
+            questions = []
+            for row in result:
+                questions.append({
+                    'id': row['id'],
+                    'question': row['question'],
+                    'question_text': row['question'],  # Для совместимости
+                    'answer': row['answer'],
+                    'explanation': row['explanation'],
+                    'topic': row['topic']
+                })
+            
+            logger.info(f"📊 Found {len(questions)} questions matching '{search_text}'")
+            return questions
+            
+        except Exception as e:
+            logger.error(f"❌ Error searching questions: {e}")
+            return []
+
+    def search_questions_for_edit(self, search_text: str, limit: int = 10) -> List[tuple]:
+        """Search questions for editing (returns tuple format)"""
+        logger.info(f"🔍 Searching questions for edit: '{search_text}', limit: {limit}")
+        
+        try:
+            query = """
+                SELECT q.id, s.subtopic_name as topic, q.question_text as question,
+                       CASE q.correct_answer
+                           WHEN 'A' THEN q.option_a
+                           WHEN 'B' THEN q.option_b
+                           WHEN 'C' THEN q.option_c
+                           WHEN 'D' THEN q.option_d
+                           ELSE q.correct_answer
+                       END as answer,
+                       q.explanation
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE LOWER(q.question_text) LIKE LOWER(%s)
+                ORDER BY q.created_at DESC
+                LIMIT %s
+            """
+            result = self.fetch_all(query, (f"%{search_text}%", limit))
+            
+            # Возвращаем в формате tuple как ожидает код
+            questions = []
+            for row in result:
+                questions.append((
+                    row['id'],
+                    row['topic'],
+                    row['question'],
+                    row['answer'],
+                    row['explanation'] or ''
+                ))
+            
+            logger.info(f"📊 Found {len(questions)} questions for editing matching '{search_text}'")
+            return questions
+            
+        except Exception as e:
+            logger.error(f"❌ Error searching questions for edit: {e}")
+            return []
+
+    def search_questions_for_deletion(self, search_text: str, limit: int = 10) -> List[tuple]:
+        """Search questions for deletion (returns tuple format)"""
+        logger.info(f"🔍 Searching questions for deletion: '{search_text}', limit: {limit}")
+        
+        try:
+            query = """
+                SELECT q.id, s.subtopic_name as topic, q.question_text as question
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE LOWER(q.question_text) LIKE LOWER(%s)
+                ORDER BY q.created_at DESC
+                LIMIT %s
+            """
+            result = self.fetch_all(query, (f"%{search_text}%", limit))
+            
+            # Возвращаем в формате tuple как ожидает код
+            questions = []
+            for row in result:
+                questions.append((
+                    row['id'],
+                    row['topic'],
+                    row['question']
+                ))
+            
+            logger.info(f"📊 Found {len(questions)} questions for deletion matching '{search_text}'")
+            return questions
+            
+        except Exception as e:
+            logger.error(f"❌ Error searching questions for deletion: {e}")
+            return []
+
+    def get_question_by_id(self, question_id: int) -> Optional[Dict[str, Any]]:
+        """Get question by ID"""
+        logger.info(f"🔍 Getting question by ID: {question_id}")
+        
+        try:
+            query = """
+                SELECT q.id, q.question_text as question, q.option_a, q.option_b, q.option_c, q.option_d,
+                       q.correct_answer, q.explanation, q.incorrect_options, q.source, q.topic_id,
+                       s.subtopic_name as topic, q.created_at, q.updated_at,
+                       CASE q.correct_answer
+                           WHEN 'A' THEN q.option_a
+                           WHEN 'B' THEN q.option_b
+                           WHEN 'C' THEN q.option_c
+                           WHEN 'D' THEN q.option_d
+                           ELSE q.correct_answer
+                       END as answer
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE q.id = %s
+            """
+            result = self.fetch_one(query, (question_id,))
+            
+            if result:
+                question = {
+                    'id': result['id'],
+                    'question': result['question'],
+                    'question_text': result['question'],  # Для совместимости
+                    'option_a': result['option_a'],
+                    'option_b': result['option_b'],
+                    'option_c': result['option_c'],
+                    'option_d': result['option_d'],
+                    'correct_answer': result['correct_answer'],
+                    'answer': result['answer'],
+                    'explanation': result['explanation'],
+                    'incorrect_options': result['incorrect_options'],
+                    'source': result['source'],
+                    'topic_id': result['topic_id'],
+                    'topic': result['topic'],
+                    'created_at': result['created_at'],
+                    'updated_at': result['updated_at']
+                }
+                
+                logger.info(f"📊 Found question {question_id}")
+                return question
+            else:
+                logger.info(f"📊 Question {question_id} not found")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Error getting question {question_id}: {e}")
+            return None
+
+    def get_question_with_topic_by_id(self, question_id: int) -> Optional[Dict[str, Any]]:
+        """Get question with topic info by ID (alias for compatibility)"""
+        return self.get_question_by_id(question_id)
+
+    def update_question_explanation(self, question_id: int, explanation: str) -> bool:
+        """Update question explanation by ID"""
+        logger.info(f"📝 Updating explanation for question {question_id}")
+        
+        try:
+            query = """
+                UPDATE questions 
+                SET explanation = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """
+            self.execute_query(query, (explanation, question_id))
+            
+            logger.info(f"✅ Updated explanation for question {question_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error updating explanation for question {question_id}: {e}")
+            return False
+
+    def count_questions_by_topic_name(self, topic_name: str) -> int:
+        """Count questions by topic name"""
+        logger.info(f"🔢 Counting questions for topic: {topic_name}")
+        
+        try:
+            query = """
+                SELECT COUNT(*) as count
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE s.subtopic_name = %s
+            """
+            result = self.fetch_val(query, (topic_name,))
+            count = result if result is not None else 0
+            
+            logger.info(f"📊 Found {count} questions for topic '{topic_name}'")
+            return count
+            
+        except Exception as e:
+            logger.error(f"❌ Error counting questions for topic '{topic_name}': {e}")
+            return 0
+
+    def delete_questions_by_topic_name(self, topic_name: str) -> int:
+        """Delete all questions by topic name, returns count of deleted questions"""
+        logger.info(f"🗑️ Deleting questions for topic: {topic_name}")
+        
+        try:
+            # First count how many we're about to delete
+            count_query = """
+                SELECT COUNT(*) as count
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE s.subtopic_name = %s
+            """
+            count = self.fetch_val(count_query, (topic_name,)) or 0
+            
+            if count == 0:
+                logger.info(f"📊 No questions found for topic '{topic_name}' to delete")
+                return 0
+            
+            # Delete the questions
+            delete_query = """
+                DELETE FROM questions 
+                WHERE topic_id IN (
+                    SELECT id FROM subtopics WHERE subtopic_name = %s
+                )
+            """
+            self.execute_query(delete_query, (topic_name,))
+            
+            logger.info(f"✅ Deleted {count} questions for topic '{topic_name}'")
+            return count
+            
+        except Exception as e:
+            logger.error(f"❌ Error deleting questions for topic '{topic_name}': {e}")
+            return 0
+
+    def get_explanation_improvement_stats(self) -> Dict[str, int]:
+        """Get statistics for explanation improvement"""
+        logger.info("📊 Getting explanation improvement statistics")
+        
+        try:
+            # Total questions
+            total_query = "SELECT COUNT(*) as count FROM questions"
+            total_questions = self.fetch_val(total_query) or 0
+            
+            # Short explanations (< 100 chars)
+            short_query = """
+                SELECT COUNT(*) as count FROM questions 
+                WHERE explanation IS NOT NULL AND LENGTH(explanation) < 100
+            """
+            short_explanations = self.fetch_val(short_query) or 0
+            
+            # No step-by-step explanations (not containing "шаг" or "этап")
+            no_steps_query = """
+                SELECT COUNT(*) as count FROM questions 
+                WHERE explanation IS NOT NULL 
+                AND LOWER(explanation) NOT LIKE '%шаг%' 
+                AND LOWER(explanation) NOT LIKE '%этап%'
+                AND LOWER(explanation) NOT LIKE '%step%'
+            """
+            no_steps = self.fetch_val(no_steps_query) or 0
+            
+            stats = {
+                'total_questions': total_questions,
+                'short_explanations': short_explanations,
+                'no_steps': no_steps
+            }
+            
+            logger.info(f"📊 Explanation stats: {stats}")
+            return stats
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting explanation improvement stats: {e}")
+            return {'total_questions': 0, 'short_explanations': 0, 'no_steps': 0}
+
+    def get_questions_for_explanation_improvement(self, improvement_type: str, limit: int = 50) -> List[tuple]:
+        """Get questions that need explanation improvement"""
+        logger.info(f"🔍 Getting questions for improvement type: {improvement_type}, limit: {limit}")
+        
+        try:
+            base_query = """
+                SELECT q.id, q.question_text, 
+                       CASE q.correct_answer
+                           WHEN 'A' THEN q.option_a
+                           WHEN 'B' THEN q.option_b
+                           WHEN 'C' THEN q.option_c
+                           WHEN 'D' THEN q.option_d
+                           ELSE q.correct_answer
+                       END as answer,
+                       q.explanation, s.subtopic_name as topic
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE q.explanation IS NOT NULL
+            """
+            
+            if improvement_type == "short":
+                query = base_query + " AND LENGTH(q.explanation) < 100"
+            elif improvement_type == "no_steps":
+                query = base_query + """
+                    AND LOWER(q.explanation) NOT LIKE '%шаг%' 
+                    AND LOWER(q.explanation) NOT LIKE '%этап%'
+                    AND LOWER(q.explanation) NOT LIKE '%step%'
+                """
+            elif improvement_type == "all":
+                query = base_query
+            else:
+                query = base_query + " AND LENGTH(q.explanation) < 100"
+            
+            query += f" ORDER BY q.created_at DESC LIMIT {limit}"
+            
+            result = self.fetch_all(query)
+            
+            # Return as tuples
+            questions = []
+            for row in result:
+                questions.append((
+                    row['id'],
+                    row['question_text'],
+                    row['answer'],
+                    row['explanation'],
+                    row['topic']
+                ))
+            
+            logger.info(f"📊 Found {len(questions)} questions for improvement type '{improvement_type}'")
+            return questions
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting questions for improvement: {e}")
+            return []
+
+    def get_topics_for_editing(self) -> List[tuple]:
+        """Get topics for editing (returns tuple format)"""
+        logger.info("🔍 Getting topics for editing")
+        
+        try:
+            query = """
+                SELECT s.id, s.subtopic_name, m.topic_name as main_topic
+                FROM subtopics s
+                JOIN main_topics m ON s.main_topic_id = m.id
+                WHERE s.is_active = %s AND m.is_active = %s
+                ORDER BY m.topic_name, s.subtopic_name
+            """
+            result = self.fetch_all(query, (True, True))
+            
+            # Return as tuples (topic_id, topic_name, main_topic)
+            topics = []
+            for row in result:
+                topics.append((
+                    row['id'],
+                    row['subtopic_name'],
+                    row['main_topic']
+                ))
+            
+            logger.info(f"📊 Found {len(topics)} topics for editing")
+            return topics
+            
+        except Exception as e:
+            logger.error(f"❌ Error getting topics for editing: {e}")
+            return []
+
+    def get_topic_name_by_id_for_edit(self, topic_id: int) -> Optional[str]:
+        """Get topic name by ID for editing"""
+        logger.info(f"🔍 Getting topic name for ID: {topic_id}")
+        
+        try:
+            query = "SELECT subtopic_name FROM subtopics WHERE id = %s"
+            result = self.fetch_val(query, (topic_id,))
+            
+            if result:
+                logger.info(f"📊 Found topic name: {result}")
+                return result
+            else:
+                logger.info(f"📊 Topic with ID {topic_id} not found")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Error getting topic name for ID {topic_id}: {e}")
+            return None
+
+    def update_question_in_database(self, question_id: int, field: str, value: str) -> bool:
+        """Update specific field of a question"""
+        logger.info(f"📝 Updating question {question_id} field '{field}' to '{value[:50]}...'")
+        
+        try:
+            # Map field names to database columns
+            field_mapping = {
+                'topic_id': 'topic_id',
+                'question': 'question_text',
+                'answer': 'correct_answer',
+                'explanation': 'explanation'
+            }
+            
+            db_field = field_mapping.get(field, field)
+            
+            query = f"""
+                UPDATE questions 
+                SET {db_field} = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """
+            self.execute_query(query, (value, question_id))
+            
+            logger.info(f"✅ Updated question {question_id} field '{field}'")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error updating question {question_id} field '{field}': {e}")
+            return False
+
+    def update_question_options(self, question_id: int, options_list: List[str]) -> bool:
+        """Update question options (A, B, C, D)"""
+        logger.info(f"📝 Updating options for question {question_id}")
+        
+        try:
+            # Ensure we have exactly 4 options
+            while len(options_list) < 4:
+                options_list.append('')
+            
+            option_a, option_b, option_c, option_d = options_list[:4]
+            
+            query = """
+                UPDATE questions 
+                SET option_a = %s, option_b = %s, option_c = %s, option_d = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """
+            self.execute_query(query, (option_a, option_b, option_c, option_d, question_id))
+            
+            logger.info(f"✅ Updated options for question {question_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error updating options for question {question_id}: {e}")
+            return False 
