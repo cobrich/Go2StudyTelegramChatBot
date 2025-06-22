@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Импортируем нашу базу данных
-from src.db import get_database
+from db import get_database
 
 def init_superadmin():
     """Инициализация суперадминистратора"""

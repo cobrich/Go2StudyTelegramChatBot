@@ -18,48 +18,50 @@ class BaseRepository(ABC):
     def __init__(self):
         self.connection_manager = get_connection_manager()
     
+    @property
+    def is_postgresql(self) -> bool:
+        """Check if database is PostgreSQL (always True for Supabase)"""
+        return True
+    
     def _sync_call(self, coro):
         """Execute async function synchronously"""
         try:
             # Проверяем, есть ли активный event loop
             try:
                 loop = asyncio.get_running_loop()
-                # Если есть активный loop, создаем задачу и ждем ее выполнения
+                # Если есть активный loop, создаем новый в отдельном потоке
                 import concurrent.futures
                 import threading
                 
-                # Создаем новый event loop в отдельном потоке
-                def run_in_thread():
+                def run_in_new_thread():
+                    """Запускаем корутину в новом потоке с новым event loop"""
                     new_loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(new_loop)
                     try:
                         return new_loop.run_until_complete(coro)
                     finally:
                         new_loop.close()
+                        asyncio.set_event_loop(None)
                 
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(run_in_thread)
-                    return future.result()
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(run_in_new_thread)
+                    return future.result(timeout=30)  # 30 секунд таймаут
                     
             except RuntimeError:
                 # Нет активного loop, можем создать новый
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    return loop.run_until_complete(coro)
-                finally:
-                    loop.close()
+                return asyncio.run(coro)
+                
         except OSError as e:
             if "Network is unreachable" in str(e):
                 logger.warning(f"Database unreachable (IPv6 issue): {e}. Returning fallback value.")
-                # Возвращаем безопасные fallback значения
                 return self._get_fallback_value()
             else:
                 logger.error(f"Database connection error: {e}")
                 raise
         except Exception as e:
             logger.error(f"Error in _sync_call: {e}")
-            raise
+            # Возвращаем fallback значение вместо поднятия исключения
+            return self._get_fallback_value()
     
     async def _execute_query_async(self, query: str, params: tuple = None) -> Any:
         """Execute query asynchronously"""

@@ -7,6 +7,7 @@ Handles all admin-related database operations.
 import logging
 from typing import Dict, List, Optional
 from ..base_repository import BaseRepository
+import inspect
 
 logger = logging.getLogger(__name__)
 
@@ -18,9 +19,29 @@ class AdminRepository(BaseRepository):
     
     def _get_fallback_value(self):
         """Get fallback value when database is unreachable"""
-        # Для админских операций возвращаем False (нет доступа)
-        # Это безопасно - лучше заблокировать доступ, чем дать его всем
-        return False
+        # Для админских операций возвращаем безопасные значения
+        # Анализируем стек вызовов, чтобы понять, что именно запрашивается
+        frame = inspect.currentframe()
+        try:
+            # Получаем имя вызывающего метода
+            caller_name = frame.f_back.f_back.f_code.co_name if frame.f_back and frame.f_back.f_back else ""
+            
+            # Возвращаем подходящие fallback значения в зависимости от метода
+            if 'get_all_admins' in caller_name or 'search_admins' in caller_name:
+                return []  # Пустой список для методов, возвращающих списки
+            elif 'get_admin_activity_stats' in caller_name:
+                return {
+                    'total_admins': 0,
+                    'super_admins': 0,
+                    'regular_admins': 0,
+                    'recent_additions': 0
+                }
+            elif 'is_' in caller_name:  # is_admin, is_super_admin
+                return False  # Безопасно - нет доступа при недоступности БД
+            else:
+                return None  # Для остальных случаев
+        finally:
+            del frame
     
     # ============== ADMIN CHECK METHODS ==============
     
@@ -41,6 +62,7 @@ class AdminRepository(BaseRepository):
     def add_admin(self, user_id: int, username: str, full_name: str, is_super: bool = False, added_by: int = None) -> bool:
         """Add new admin."""
         try:
+            # PostgreSQL syntax with ON CONFLICT
             query = f'''
                 INSERT INTO admins (user_id, username, full_name, is_super_admin, created_by)
                 VALUES ({self._get_placeholder(1)}, {self._get_placeholder(2)}, {self._get_placeholder(3)}, 
@@ -49,12 +71,8 @@ class AdminRepository(BaseRepository):
                     username = EXCLUDED.username,
                     full_name = EXCLUDED.full_name,
                     is_super_admin = EXCLUDED.is_super_admin
-            ''' if self.is_postgresql else f'''
-                INSERT OR REPLACE INTO admins (user_id, username, full_name, is_super_admin, created_by)
-                VALUES ({self._get_placeholder(1)}, {self._get_placeholder(2)}, {self._get_placeholder(3)}, 
-                        {self._get_placeholder(4)}, {self._get_placeholder(5)})
             '''
-            params = (user_id, username, full_name, self._get_boolean_value(is_super), added_by)
+            params = (user_id, username, full_name, is_super, added_by)
             self.execute_query(query, params)
             return True
         except Exception as e:
@@ -69,7 +87,7 @@ class AdminRepository(BaseRepository):
                 DELETE FROM admins 
                 WHERE user_id = {self._get_placeholder(1)} AND is_super_admin = {self._get_placeholder(2)}
             '''
-            params = (user_id, self._get_boolean_value(False))
+            params = (user_id, False)
             self.execute_query(query, params)
             return True
         except Exception as e:
@@ -84,6 +102,10 @@ class AdminRepository(BaseRepository):
             ORDER BY is_super_admin DESC, created_at ASC
         '''
         admins = self.fetch_all(query)
+        
+        # Проверяем, что admins это список, а не fallback значение
+        if not isinstance(admins, list):
+            return []
         
         # Convert boolean values for consistency
         for admin in admins:
@@ -146,13 +168,10 @@ class AdminRepository(BaseRepository):
             
             # Count super admins
             super_query = f'SELECT COUNT(*) FROM admins WHERE is_super_admin = {self._get_placeholder(1)}'
-            super_admins = self.fetch_val(super_query, (self._get_boolean_value(True),))
+            super_admins = self.fetch_val(super_query, (True,))
             
-            # Get recent admin additions
+            # Get recent admin additions (PostgreSQL syntax)
             recent_query = '''
-                SELECT COUNT(*) FROM admins 
-                WHERE created_at >= datetime('now', '-30 days')
-            ''' if not self.is_postgresql else '''
                 SELECT COUNT(*) FROM admins 
                 WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
             '''
@@ -248,15 +267,11 @@ class AdminRepository(BaseRepository):
         """Search admins by username or full name."""
         search_pattern = f'%{search_term}%'
         
+        # PostgreSQL syntax with ILIKE
         query = f'''
             SELECT user_id, username, full_name, is_super_admin, created_at
             FROM admins
             WHERE username ILIKE {self._get_placeholder(1)} OR full_name ILIKE {self._get_placeholder(2)}
-            ORDER BY is_super_admin DESC, created_at ASC
-        ''' if self.is_postgresql else f'''
-            SELECT user_id, username, full_name, is_super_admin, created_at
-            FROM admins
-            WHERE username LIKE {self._get_placeholder(1)} OR full_name LIKE {self._get_placeholder(2)}
             ORDER BY is_super_admin DESC, created_at ASC
         '''
         
