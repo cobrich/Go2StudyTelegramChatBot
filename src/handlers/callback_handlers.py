@@ -328,6 +328,10 @@ class CallbackHandlers(BaseHandler):
         questions = self.get_user_data(context).get('questions', [])
         current_index = self.get_user_data(context).get('current_question_index', 0)
         
+        # ✅ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Переходим к следующему вопросу
+        current_index += 1
+        context.user_data['current_question_index'] = current_index
+        
         if not questions or current_index >= len(questions):
             logging.error(f"[handle_continue] No questions found or invalid index")
             try:
