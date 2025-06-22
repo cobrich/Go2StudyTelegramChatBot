@@ -996,6 +996,35 @@ for row in all_results:
 
 ## 📋 Последние изменения
 
+### 🔧 2024-12-22 17:15 - Исправлена ошибка клика на вопрос в админ-панели
+
+**Проблема:** При клике на вопрос в результатах поиска ничего не происходило, в логах ошибка `TypeError: QuestionsHandler.handle_edit_question_id() missing 1 required positional argument: 'question_id_text'`
+
+**Корневая причина:** В `src/handlers/admin/__init__.py` метод `handle_edit_question_id` вызывался без извлечения `question_id` из `callback_data`, хотя метод в `questions.py` требует этот параметр.
+
+**Решение:**
+1. **Исправлен метод `handle_edit_question_id` в `AdminHandlers`:**
+   - Добавлено извлечение `question_id` из `callback_data`
+   - Проверка формата callback: `edit_question_select_{question_id}`
+   - Правильная передача параметра в `QuestionsHandler`
+
+**Техническая деталь:**
+```python
+# До исправления:
+return self.questions.handle_edit_question_id(update, context)
+
+# После исправления:
+query = update.callback_query
+if query and query.data.startswith('edit_question_select_'):
+    question_id = query.data.replace('edit_question_select_', '')
+    return self.questions.handle_edit_question_id(update, context, question_id)
+```
+
+**Результат:** 
+- ✅ Клик на вопрос теперь работает корректно
+- ✅ Открывается меню редактирования конкретного вопроса
+- ✅ Все функции редактирования вопросов восстановлены
+
 ### 🔧 2024-12-22 17:00 - Исправлена ошибка поиска вопросов в админ-панели
 
 **Проблема:** При попытке поиска вопросов в админ-панели возникала ошибка `'SyncDatabaseFacade' object has no attribute 'search_questions_for_edit'`

@@ -213,7 +213,14 @@ class AdminHandlers:
         return self.questions.edit_question_start(update, context)
     
     def handle_edit_question_id(self, update, context):
-        return self.questions.handle_edit_question_id(update, context)
+        # Извлекаем question_id из callback_data
+        query = update.callback_query
+        if query and query.data.startswith('edit_question_select_'):
+            question_id = query.data.replace('edit_question_select_', '')
+            return self.questions.handle_edit_question_id(update, context, question_id)
+        else:
+            # Если это не callback, то это ошибка
+            return None
     
     def edit_question_topic_start(self, update, context):
         return self.questions.edit_question_topic_start(update, context)
