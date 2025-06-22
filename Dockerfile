@@ -1,9 +1,11 @@
 FROM python:3.9-slim
 
-# Установка системных зависимостей
-RUN apt-get update && apt-get install -y \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+# Установка системных зависимостей больше не требуется,
+# так как git не используется в работе приложения.
+# Это значительно ускоряет сборку.
+# RUN apt-get update && apt-get install -y \
+#     git \
+#     && rm -rf /var/lib/apt/lists/*
 
 # Создание рабочей директории
 WORKDIR /app
