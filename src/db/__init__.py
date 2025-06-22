@@ -25,12 +25,19 @@ Usage:
 
 from .sync_database_facade import get_sync_database_facade, SyncDatabaseFacade
 from .sync_connection_manager import get_sync_connection_manager
-
+from .repositories.sync_admin_repository import SyncAdminRepository
+from .repositories.sync_user_repository import SyncUserRepository
+from .repositories.sync_question_repository import SyncQuestionRepository
+from .repositories.sync_statistics_repository import SyncStatisticsRepository
 from .models import DatabaseModels
 
 __all__ = [
     'get_sync_database_facade',
     'SyncDatabaseFacade',
     'get_sync_connection_manager',
+    'SyncAdminRepository',
+    'SyncUserRepository',
+    'SyncQuestionRepository',
+    'SyncStatisticsRepository',
     'DatabaseModels',
 ] 

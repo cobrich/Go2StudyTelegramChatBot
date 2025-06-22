@@ -4,14 +4,14 @@ Database Repositories
 Modular database operations organized by domain.
 """
 
-from .user_repository import UserRepository
-from .admin_repository import AdminRepository
-from .question_repository import QuestionRepository
-from .statistics_repository import StatisticsRepository
+from .sync_admin_repository import SyncAdminRepository
+from .sync_user_repository import SyncUserRepository
+from .sync_question_repository import SyncQuestionRepository
+from .sync_statistics_repository import SyncStatisticsRepository
 
 __all__ = [
-    'UserRepository',
-    'AdminRepository', 
-    'QuestionRepository',
-    'StatisticsRepository'
+    'SyncAdminRepository',
+    'SyncUserRepository', 
+    'SyncQuestionRepository',
+    'SyncStatisticsRepository'
 ] 

@@ -8,6 +8,8 @@ import logging
 from typing import Optional, List, Dict, Any
 from .repositories.sync_admin_repository import SyncAdminRepository
 from .repositories.sync_user_repository import SyncUserRepository
+from .repositories.sync_question_repository import SyncQuestionRepository
+from .repositories.sync_statistics_repository import SyncStatisticsRepository
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +19,8 @@ class SyncDatabaseFacade:
     def __init__(self):
         self.admins = SyncAdminRepository()
         self.users = SyncUserRepository()
+        self.questions = SyncQuestionRepository()
+        self.statistics = SyncStatisticsRepository()
         logger.info("SyncDatabaseFacade initialized for Neon PostgreSQL")
     
     def check_user_access(self, user_id: int, username: str = None) -> bool:
@@ -135,14 +139,6 @@ class SyncDatabaseFacade:
         """Update user activity (sync)"""
         return self.users.update_user_activity(user_id, current_topic)
     
-    def close_connections(self):
-        """Close all database connections"""
-        try:
-            self.admins.connection_manager.close_all_connections()
-            logger.info("🔒 All database connections closed")
-        except Exception as e:
-            logger.error(f"❌ Error closing connections: {e}")
-    
     # User profile and language methods
     def get_user_language(self, user_id: int) -> str:
         """Get user language (sync)"""
@@ -163,9 +159,7 @@ class SyncDatabaseFacade:
     
     def update_user_language(self, user_id: int, language: str) -> None:
         """Update user language (sync)"""
-        # This would need to be implemented in SyncUserRepository
         logger.info(f"🔄 Updating language for user {user_id} to {language}")
-        # For now, we'll use add_user which handles updates via ON CONFLICT
         user = self.users.get_user_by_id(user_id)
         if user:
             self.users.add_user(
@@ -190,47 +184,105 @@ class SyncDatabaseFacade:
         """Set user as inactive (sync)"""
         self.users.update_user_activity(user_id, None)
     
-    # Additional methods needed by the bot
+    # Question operations
     def get_topic_names(self, active_only: bool = True) -> List[str]:
-        """Get topic names (sync) - stub implementation"""
-        # This would need to be implemented in sync repositories
-        logger.warning("get_topic_names called but not fully implemented in sync facade")
-        return []
+        """Get topic names (sync)"""
+        return self.questions.get_topic_names(active_only)
     
     def get_tasks_for_topic(self, topic: str, limit: int = 20) -> List[Dict]:
-        """Get tasks for topic (sync) - stub implementation"""
-        logger.warning("get_tasks_for_topic called but not fully implemented in sync facade")
-        return []
+        """Get tasks for topic (sync)"""
+        return self.questions.get_tasks_for_topic(topic, limit)
     
     def get_explanation_by_question_text(self, question_text: str) -> Optional[str]:
-        """Get explanation by question text (sync) - stub implementation"""
-        logger.warning("get_explanation_by_question_text called but not fully implemented in sync facade")
-        return None
+        """Get explanation by question text (sync)"""
+        return self.questions.get_explanation_by_question_text(question_text)
     
     def add_question(self, question: dict) -> bool:
-        """Add question (sync) - stub implementation"""
-        logger.warning("add_question called but not fully implemented in sync facade")
-        return False
+        """Add question (sync)"""
+        return self.questions.add_question(question)
     
+    def get_all_questions(self) -> List[Dict]:
+        """Get all questions (sync)"""
+        return self.questions.get_all_questions()
+    
+    def get_questions_by_user_language(self, user_id: int) -> List[Dict]:
+        """Get questions available for user based on their language (sync)"""
+        user_language = self.get_user_language(user_id)
+        return self.questions.get_questions_by_language(user_language)
+    
+    def delete_question_by_id(self, question_id: int) -> bool:
+        """Delete question by ID (sync)"""
+        return self.questions.delete_question_by_id(question_id)
+    
+    def get_all_ai_questions(self) -> List[Dict]:
+        """Get all AI-generated questions (sync)"""
+        return self.questions.get_all_ai_questions()
+    
+    # Statistics operations
     def add_test_result(self, user_id: int, topic: str, percentage: float) -> None:
-        """Add test result (sync) - stub implementation"""
-        logger.warning("add_test_result called but not fully implemented in sync facade")
+        """Add test result (sync)"""
+        self.statistics.add_test_result(user_id, topic, percentage)
+    
+    def get_user_test_results(self, user_id: int) -> List[Dict]:
+        """Get user test results (sync)"""
+        return self.statistics.get_user_test_results(user_id)
+    
+    def get_user_progress(self, user_id: int) -> tuple[int, float]:
+        """Get user progress (sync)"""
+        return self.statistics.get_user_progress(user_id)
     
     def get_error_tasks_for_user(self, user_id: int, topic: str, limit: int = 10) -> List[Dict]:
-        """Get error tasks for user (sync) - stub implementation"""
-        logger.warning("get_error_tasks_for_user called but not fully implemented in sync facade")
-        return []
+        """Get error tasks for user (sync)"""
+        return self.statistics.get_error_tasks_for_user(user_id, topic, limit)
+    
+    def get_error_topics(self, user_id: int) -> List[tuple[str, int]]:
+        """Get error topics for user (sync)"""
+        return self.statistics.get_error_topics(user_id)
     
     def add_user_error(self, user_id: int, topic: str, question_text: str,
                       user_answer_text: str, correct_answer_text: str,
                       explanation_text: str) -> None:
-        """Add user error (sync) - stub implementation"""
-        logger.warning("add_user_error called but not fully implemented in sync facade")
+        """Add user error (sync)"""
+        self.statistics.add_user_error(
+            user_id, topic, question_text, user_answer_text,
+            correct_answer_text, explanation_text
+        )
     
     def add_user_error_by_question_id(self, user_id: int, question_id: int, topic: str,
                                      user_answer_text: str, correct_answer_text: str) -> None:
-        """Add user error by question ID (sync) - stub implementation"""
-        logger.warning("add_user_error_by_question_id called but not fully implemented in sync facade")
+        """Add user error by question ID (sync)"""
+        self.statistics.add_user_error_by_question_id(
+            user_id, question_id, topic, user_answer_text, correct_answer_text
+        )
+    
+    def get_recent_topics(self, user_id: int, limit: int = 5) -> List[tuple[str, float, str]]:
+        """Get recent topics (sync)"""
+        return self.statistics.get_recent_topics(user_id, limit)
+    
+    def get_recent_unique_topics(self, user_id: int, unique_limit: int = 5, 
+                                history_limit: int = 20) -> List[tuple[str, int]]:
+        """Get recent unique topics (sync)"""
+        return self.statistics.get_recent_unique_topics(user_id, unique_limit, history_limit)
+    
+    def decrement_error_count(self, user_id: int, question_text: str) -> None:
+        """Decrement error count (sync)"""
+        self.statistics.decrement_error_count(user_id, question_text)
+    
+    def decrement_error_count_by_question_id(self, user_id: int, question_id: int) -> None:
+        """Decrement error count by question ID (sync)"""
+        self.statistics.decrement_error_count_by_question_id(user_id, question_id)
+    
+    def get_student_detailed_statistics(self, user_id: int) -> Optional[Dict]:
+        """Get detailed statistics for a student (sync)"""
+        return self.statistics.get_student_detailed_statistics(user_id)
+    
+    def close_connections(self):
+        """Close all database connections"""
+        try:
+            self.admins.connection_manager.close_all_connections()
+            logger.info("🔒 All database connections closed")
+        except Exception as e:
+            logger.error(f"❌ Error closing connections: {e}")
 
 # Global facade instance
 _sync_database_facade = None
