@@ -724,7 +724,7 @@ class CommandHandlers(BaseHandler):
         )
         
         # Generate random test using RandomTestService
-        random_test_service = RandomTestService(self.db)
+        random_test_service = RandomTestService()
         questions_data = random_test_service.generate_random_test(user_id, 10)
         
         if not questions_data:
