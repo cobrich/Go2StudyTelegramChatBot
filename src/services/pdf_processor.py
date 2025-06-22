@@ -757,7 +757,7 @@ class PDFProcessor:
         
         return questions, topic_stats
 
-def add_questions_to_db(questions: List[Dict], db: Database) -> Dict[str, int]:
+def add_questions_to_db(questions: List[Dict], db) -> Dict[str, int]:
     """
     Добавление вопросов в базу данных с генерацией подробных объяснений.
     Возвращает статистику добавления.
