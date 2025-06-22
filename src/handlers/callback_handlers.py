@@ -803,22 +803,28 @@ class CallbackHandlers(BaseHandler):
         self.db.clear_user_test_activity(user_id)  # Очищаем только тему теста
         self.db.set_user_inactive(user_id)  # Очищаем статус активного теста
         self.clear_user_data(context)
-        # Очищаем флаг выбора темы
-        context.user_data.pop('in_topic_selection', None)
+        # Устанавливаем флаг выбора темы
+        context.user_data['in_topic_selection'] = True
+        
         try:
-            # Удаляем inline-клавиатуру у старого сообщения
-            await query.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
-        try:
-            # Отправляем новое сообщение с главным меню (обычная клавиатура)
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text=get_message('topic_not_selected', user_language),
-                reply_markup=get_main_menu_markup(user_id)
+            # Показываем выбор разделов математики (inline-клавиатура)
+            await query.message.edit_text(
+                get_message('select_topic', user_language),
+                reply_markup=build_topic_selection_keyboard(user_id),
+                parse_mode='Markdown'
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logging.error(f"Error editing message for main menu: {e}")
+            # Fallback: отправляем новое сообщение
+            try:
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=get_message('select_topic', user_language),
+                    reply_markup=build_topic_selection_keyboard(user_id),
+                    parse_mode='Markdown'
+                )
+            except Exception as e2:
+                logging.error(f"Error sending fallback main menu message: {e2}")
 
     async def handle_main_topic_selection(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle main topic category selection callback."""
