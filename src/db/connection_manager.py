@@ -262,33 +262,48 @@ class ConnectionManager:
 
     async def initialize_pool(self, min_size: int = 1, max_size: int = 10):
         """Initialize connection pool for Supabase"""
-        if not self._pool and not hasattr(self, '_fallback_conn'):
+        if self._pool:
+            # Пул уже инициализирован
+            return
+            
+        if hasattr(self, '_fallback_conn') and self._fallback_conn:
+            # Fallback соединение уже есть
+            return
+            
+        try:
+            logger.info("Initializing Supabase connection pool...")
+            self._pool = await asyncpg.create_pool(
+                self.connection_string,
+                min_size=min_size,
+                max_size=max_size,
+                command_timeout=60,
+                server_settings={
+                    'application_name': 'go2study_bot',
+                },
+                ssl=None,  # Явно устанавливаем None для избежания проблем
+                statement_cache_size=0  # Отключаем кэш для стабильности
+            )
+            logger.info(f"Supabase connection pool initialized (min={min_size}, max={max_size})")
+            
+            # Initialize tables on first connection
             try:
-                self._pool = await asyncpg.create_pool(
-                    self.connection_string,
-                    min_size=min_size,
-                    max_size=max_size,
-                    command_timeout=60,
-                    server_settings={
-                        'application_name': 'go2study_bot',
-                    },
-                    ssl=None,  # Явно устанавливаем None для избежания проблем
-                    statement_cache_size=0  # Отключаем кэш для стабильности
-                )
-                logger.info(f"Supabase connection pool initialized (min={min_size}, max={max_size})")
-                
-                # Initialize tables on first connection
                 async with self._pool.acquire() as conn:
                     await self._check_and_create_tables(conn)
+            except Exception as table_error:
+                logger.warning(f"Could not initialize tables through pool: {table_error}")
+                # Не падаем из-за ошибок инициализации таблиц
                     
-            except Exception as e:
-                logger.error(f"Failed to initialize Supabase pool: {e}")
-                # Try fallback with single connection
-                try:
-                    await self._try_fallback_connection()
-                except Exception as fallback_error:
-                    logger.error(f"Fallback connection also failed: {fallback_error}")
-                    raise
+        except Exception as e:
+            logger.error(f"Failed to initialize Supabase pool: {e}")
+            self._pool = None  # Убеждаемся, что пул не в частично инициализированном состоянии
+            
+            # Try fallback with single connection
+            try:
+                await self._try_fallback_connection()
+            except Exception as fallback_error:
+                logger.error(f"Fallback connection also failed: {fallback_error}")
+                # Не поднимаем исключение - позволяем приложению продолжить работу
+                # Соединение будет создано при первом обращении к базе
 
     async def _try_fallback_connection(self):
         """Try fallback connection with single persistent connection"""
@@ -381,24 +396,52 @@ class ConnectionManager:
             conn = None
             try:
                 conn = await asyncio.wait_for(self._pool.acquire(), timeout=10.0)
+                # Проверяем соединение перед использованием
+                await conn.fetchval("SELECT 1")
                 yield conn
             except asyncio.TimeoutError:
                 logger.error("Timeout acquiring database connection from pool")
-                raise
+                # Попробуем fallback соединение
+                if hasattr(self, '_fallback_conn') and self._fallback_conn:
+                    try:
+                        await self._fallback_conn.fetchval("SELECT 1")
+                        yield self._fallback_conn
+                        return
+                    except Exception:
+                        pass
+                raise RuntimeError("Database connection timeout")
             except Exception as e:
                 logger.error(f"Error acquiring database connection from pool: {e}")
-                raise
-            finally:
-                if conn:
+                # Попробуем fallback соединение
+                if hasattr(self, '_fallback_conn') and self._fallback_conn:
                     try:
-                        await self._pool.release(conn)
+                        await self._fallback_conn.fetchval("SELECT 1")
+                        yield self._fallback_conn
+                        return
+                    except Exception:
+                        pass
+                raise RuntimeError(f"Database connection error: {e}")
+            finally:
+                if conn and self._pool:
+                    try:
+                        # Проверяем, что соединение еще живо перед возвратом в пул
+                        if not conn.is_closed():
+                            await self._pool.release(conn)
                     except Exception as e:
                         logger.error(f"Error releasing database connection: {e}")
+                        # Если не можем вернуть соединение в пул, закрываем его
+                        try:
+                            await conn.close()
+                        except Exception:
+                            pass
         
         # Use fallback connection if pool is not available
         elif hasattr(self, '_fallback_conn') and self._fallback_conn:
             try:
                 # Check if connection is still alive
+                if self._fallback_conn.is_closed():
+                    raise Exception("Fallback connection is closed")
+                    
                 await self._fallback_conn.fetchval("SELECT 1")
                 yield self._fallback_conn
             except Exception as e:
@@ -406,12 +449,23 @@ class ConnectionManager:
                 # Try to reconnect
                 try:
                     await self._try_fallback_connection()
-                    yield self._fallback_conn
+                    if hasattr(self, '_fallback_conn') and self._fallback_conn:
+                        yield self._fallback_conn
+                    else:
+                        raise RuntimeError("Failed to establish fallback connection")
                 except Exception as reconnect_error:
                     logger.error(f"Failed to reconnect: {reconnect_error}")
-                    raise
+                    raise RuntimeError(f"Database connection failed: {reconnect_error}")
         else:
-            raise RuntimeError("No available PostgreSQL connection")
+            # Последняя попытка - создать новое соединение
+            try:
+                await self.initialize_pool()
+                # Рекурсивно вызываем себя после инициализации
+                async with self.get_async_connection() as conn:
+                    yield conn
+            except Exception as e:
+                logger.error(f"Failed to initialize connection: {e}")
+                raise RuntimeError("No available PostgreSQL connection")
 
 # Global connection manager instance
 _connection_manager = None

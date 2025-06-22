@@ -50,17 +50,47 @@ class DatabaseFacade:
     def init_tables_sync(self):
         """Synchronous wrapper for table initialization"""
         import asyncio
+        import concurrent.futures
+        
+        def run_in_thread():
+            """Запускаем инициализацию в отдельном потоке с новым event loop"""
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                return new_loop.run_until_complete(self.ensure_tables_exist())
+            except Exception as e:
+                logger.error(f"Error in table initialization thread: {e}")
+                # Не поднимаем исключение, позволяем боту работать
+                return None
+            finally:
+                new_loop.close()
+        
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Если loop уже запущен, создаем задачу
-                asyncio.create_task(self.ensure_tables_exist())
-            else:
-                # Если loop не запущен, запускаем синхронно
-                loop.run_until_complete(self.ensure_tables_exist())
-        except RuntimeError:
-            # Создаем новый loop
-            asyncio.run(self.ensure_tables_exist())
+            # Проверяем, есть ли активный event loop
+            try:
+                loop = asyncio.get_running_loop()
+                # Если есть активный loop, запускаем в отдельном потоке
+                logger.info("Active event loop detected, initializing tables in separate thread...")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(run_in_thread)
+                    try:
+                        future.result(timeout=60)  # 60 секунд на инициализацию
+                        logger.info("Database tables initialization completed")
+                    except concurrent.futures.TimeoutError:
+                        logger.warning("Database initialization timeout - will initialize on first access")
+                    except Exception as e:
+                        logger.warning(f"Database initialization error: {e} - will initialize on first access")
+                        
+            except RuntimeError:
+                # Нет активного event loop, можем использовать asyncio.run
+                try:
+                    asyncio.run(self.ensure_tables_exist())
+                    logger.info("Database tables initialization completed")
+                except Exception as e:
+                    logger.warning(f"Database initialization error: {e} - will initialize on first access")
+                    
+        except Exception as e:
+            logger.warning(f"Could not initialize tables: {e}. Bot will try to initialize them on first database access.")
     
     def _get_placeholder(self, index: int = 1) -> str:
         """Get parameter placeholder for PostgreSQL."""

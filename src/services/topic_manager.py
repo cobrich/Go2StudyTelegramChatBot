@@ -1,11 +1,10 @@
 import logging
-from typing import List, Dict,  Optional
+from typing import List, Dict, Optional
 from difflib import SequenceMatcher
 import os
 import sys
 from src.db import get_database
 from src.services.ai_service import AIService
-from config.constants import TOPIC_HIERARCHY
 
 logger = logging.getLogger(__name__)
 
@@ -399,6 +398,7 @@ class TopicManager:
                 return original_topic
             else:
                 # Возвращаем первую тему из constants.py или None
+                from config.constants import TOPIC_HIERARCHY
                 first_topic = list(TOPIC_HIERARCHY.keys())[0] if TOPIC_HIERARCHY else None
                 return first_topic or "Тема не найдена"
                     
@@ -538,6 +538,7 @@ class TopicManager:
                 return detected_topic
             
             # Используем ensure_topic_exists с базовой темой
+            from config.constants import TOPIC_HIERARCHY
             first_topic = list(TOPIC_HIERARCHY.keys())[0] if TOPIC_HIERARCHY else "Тема не найдена"
             return self.ensure_topic_exists(first_topic, question_text)
             

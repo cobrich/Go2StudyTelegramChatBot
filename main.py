@@ -155,7 +155,8 @@ def main() -> None:
         logger.warning(f"Could not initialize tables: {e}. Bot will try to initialize them on first database access.")
     
     # Run the bot until the user presses Ctrl-C
-    application.run_polling()
+    # Используем синхронный метод для совместимости
+    application.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
     main() 

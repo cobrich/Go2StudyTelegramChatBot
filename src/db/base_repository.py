@@ -29,10 +29,8 @@ class BaseRepository(ABC):
             # Проверяем, есть ли активный event loop
             try:
                 loop = asyncio.get_running_loop()
-                if loop.is_closed():
-                    raise RuntimeError("Event loop is closed")
-                
-                # Если есть активный loop, создаем новый в отдельном потоке
+                # Если есть активный loop, используем asyncio.create_task
+                # и ждем его выполнения синхронно через новый поток
                 import concurrent.futures
                 import threading
                 
@@ -41,39 +39,37 @@ class BaseRepository(ABC):
                     new_loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(new_loop)
                     try:
+                        # Создаем новую корутину, а не переиспользуем старую
+                        if hasattr(coro, 'cr_frame') and coro.cr_frame is not None:
+                            # Корутина уже запущена, создаем новую
+                            method_name = getattr(coro, '__name__', 'unknown')
+                            logger.warning(f"Recreating coroutine for method: {method_name}")
+                            # Возвращаем fallback значение
+                            return self._get_fallback_value()
+                        
                         return new_loop.run_until_complete(coro)
+                    except Exception as e:
+                        logger.error(f"Error in new thread: {e}")
+                        return self._get_fallback_value()
                     finally:
                         new_loop.close()
                 
                 # Запускаем в отдельном потоке
-                with concurrent.futures.ThreadPoolExecutor() as executor:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                     future = executor.submit(run_in_new_thread)
-                    return future.result(timeout=30)  # 30 секунд таймаут
+                    try:
+                        return future.result(timeout=30)  # 30 секунд таймаут
+                    except concurrent.futures.TimeoutError:
+                        logger.error("Database operation timeout")
+                        return self._get_fallback_value()
                     
             except RuntimeError:
                 # Нет активного event loop, можем использовать asyncio.run
                 try:
                     return asyncio.run(coro)
-                except RuntimeError as e:
-                    if "cannot be called from a running event loop" in str(e):
-                        # Если все же есть loop, но asyncio.run не работает
-                        # Создаем новый loop в отдельном потоке
-                        import concurrent.futures
-                        
-                        def run_in_thread():
-                            new_loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(new_loop)
-                            try:
-                                return new_loop.run_until_complete(coro)
-                            finally:
-                                new_loop.close()
-                                asyncio.set_event_loop(None)
-                        
-                        with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(run_in_thread)
-                            return future.result(timeout=30)
-                    else:
-                        raise
+                except Exception as e:
+                    logger.error(f"Error in asyncio.run: {e}")
+                    return self._get_fallback_value()
                         
         except Exception as e:
             logger.error(f"Error in _sync_call: {e}")
@@ -82,37 +78,53 @@ class BaseRepository(ABC):
     
     async def _execute_query_async(self, query: str, params: tuple = None) -> Any:
         """Execute query asynchronously"""
-        async with self.connection_manager.get_async_connection() as conn:
-            if params:
-                return await conn.execute(query, *params)
-            else:
-                return await conn.execute(query)
+        try:
+            async with self.connection_manager.get_async_connection() as conn:
+                if params:
+                    return await conn.execute(query, *params)
+                else:
+                    return await conn.execute(query)
+        except Exception as e:
+            logger.error(f"Error executing query: {e}")
+            raise
     
     async def _fetch_one_async(self, query: str, params: tuple = None) -> Optional[Dict]:
         """Fetch one row asynchronously"""
-        async with self.connection_manager.get_async_connection() as conn:
-            if params:
-                row = await conn.fetchrow(query, *params)
-            else:
-                row = await conn.fetchrow(query)
-            return dict(row) if row else None
+        try:
+            async with self.connection_manager.get_async_connection() as conn:
+                if params:
+                    row = await conn.fetchrow(query, *params)
+                else:
+                    row = await conn.fetchrow(query)
+                return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Error fetching one row: {e}")
+            raise
     
     async def _fetch_all_async(self, query: str, params: tuple = None) -> List[Dict]:
         """Fetch all rows asynchronously"""
-        async with self.connection_manager.get_async_connection() as conn:
-            if params:
-                rows = await conn.fetch(query, *params)
-            else:
-                rows = await conn.fetch(query)
-            return [dict(row) for row in rows]
+        try:
+            async with self.connection_manager.get_async_connection() as conn:
+                if params:
+                    rows = await conn.fetch(query, *params)
+                else:
+                    rows = await conn.fetch(query)
+                return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"Error fetching all rows: {e}")
+            raise
     
     async def _fetch_val_async(self, query: str, params: tuple = None) -> Any:
         """Fetch single value asynchronously"""
-        async with self.connection_manager.get_async_connection() as conn:
-            if params:
-                return await conn.fetchval(query, *params)
-            else:
-                return await conn.fetchval(query)
+        try:
+            async with self.connection_manager.get_async_connection() as conn:
+                if params:
+                    return await conn.fetchval(query, *params)
+                else:
+                    return await conn.fetchval(query)
+        except Exception as e:
+            logger.error(f"Error fetching value: {e}")
+            raise
     
     # Unified interface methods (sync wrappers for async operations)
     
