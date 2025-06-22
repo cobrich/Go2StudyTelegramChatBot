@@ -8,41 +8,27 @@
 
 import os
 import sys
-import asyncio
 import logging
 from pathlib import Path
 
 # Добавляем корневую директорию в путь
-root_dir = Path(__file__).parent
+root_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(root_dir))
 
-# Загружаем переменные окружения из корневой директории проекта
+# Загружаем переменные окружения
 try:
     from dotenv import load_dotenv
-    
-    # Ищем .env файл в корневой директории проекта (на уровень выше src)
-    env_path = root_dir.parent / ".env"
-    
+    env_path = root_dir / ".env"
     if env_path.exists():
         load_dotenv(dotenv_path=env_path, override=True)
         print(f"✅ Загружен .env файл: {env_path}")
     else:
         print(f"⚠️ .env файл не найден: {env_path}")
-        # Попробуем в текущей директории
-        current_env = Path(".env")
-        
-        if current_env.exists():
-            load_dotenv(dotenv_path=current_env, override=True)
-            print(f"✅ Загружен .env файл: {current_env.absolute()}")
-        else:
-            print("❌ .env файл не найден")
-            
 except ImportError:
     print("⚠️ dotenv не установлен - переменные окружения не загружены")
 
 # Импортируем нашу базу данных
-from db.repositories.admin_repository import AdminRepository
-from db.sync_connection_manager import get_sync_connection_manager
+from src.db.sync_database_facade import get_sync_database_facade
 
 # Настраиваем логирование
 logging.basicConfig(
@@ -50,43 +36,43 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-async def check_database_connection():
+def check_database_connection():
     """Проверяем подключение к базе данных"""
     try:
-        admin_repo = AdminRepository()
-        # Пытаемся выполнить простой запрос
-        result = await admin_repo._fetch_val_async("SELECT 1")
-        return result == 1
+        db = get_sync_database_facade()
+        # Пытаемся выполнить простой запрос через админ репозиторий
+        admins = db.get_all_admins()
+        return True
     except Exception as e:
         print(f"Ошибка подключения к БД: {e}")
         return False
 
-async def init_superadmin():
+def init_superadmin():
     """Инициализация суперадминистратора"""
     print("🔧 Инициализация суперадминистратора...")
     
     # Проверяем подключение к БД
-    if not await check_database_connection():
+    if not check_database_connection():
         print("\n❌ ОШИБКА: Нет подключения к базе данных!")
         print("\n🔧 РЕШЕНИЕ:")
         print("1. Проверьте переменные окружения DATABASE_URL")
         print("2. Убедитесь, что PostgreSQL сервер доступен")
+        print("3. Запустите сначала: python src/init_database.py")
         return False
     
     try:
-        admin_repo = AdminRepository()
+        db = get_sync_database_facade()
         
         # Проверяем, есть ли уже суперадмин
-        admins = await admin_repo._fetch_all_async(
-            "SELECT user_id, username, full_name, is_super_admin FROM admins WHERE is_super_admin = true"
-        )
+        admins = db.get_all_admins()
+        super_admins = [admin for admin in admins if admin.get('is_super_admin')]
         
-        if admins:
-            admin = admins[0]
+        if super_admins:
+            admin = super_admins[0]
             print(f"\n✅ Суперадмин уже существует:")
             print(f"  ID: {admin['user_id']}")
-            print(f"  Username: @{admin['username']}")
-            print(f"  Имя: {admin['full_name']}")
+            print(f"  Username: @{admin.get('username', 'Не указан')}")
+            print(f"  Имя: {admin.get('full_name', 'Не указано')}")
             return True
         
         print("Суперадмин не найден. Создаем нового...")
@@ -107,27 +93,21 @@ async def init_superadmin():
         if not full_name:
             full_name = f"Суперадмин {user_id}"
         
-        # Создаем суперадмина используя async метод
-        success = await admin_repo.add_admin_async(
+        # Создаем суперадмина
+        success = db.add_admin(
             user_id=user_id,
             username=username,
             full_name=full_name,
-            is_super=True,
-            added_by=None
+            is_super_admin=True,
+            created_by=None
         )
         
         if not success:
             print(f"\n❌ Ошибка при создании суперадмина.")
             return False
         
-        # Ждем немного для завершения транзакции
-        await asyncio.sleep(0.5)
-        
         # Проверяем, что админ действительно создан
-        created_admin = await admin_repo._fetch_one_async(
-            "SELECT user_id, username, full_name, is_super_admin FROM admins WHERE user_id = $1",
-            (user_id,)
-        )
+        created_admin = db.get_admin_by_id(user_id)
         
         if created_admin and created_admin.get('is_super_admin'):
             print(f"\n✅ Суперадмин успешно создан!")
@@ -144,23 +124,22 @@ async def init_superadmin():
         print(f"\n❌ Ошибка: {e}")
         return False
 
-async def main():
-    """Главная асинхронная функция"""
+def main():
+    """Главная функция"""
     try:
-        success = await init_superadmin()
+        success = init_superadmin()
+        if success:
+            print("\n🚀 Инициализация суперадмина завершена успешно!")
+        else:
+            print("\n❌ Инициализация суперадмина не удалась!")
         return success
-    finally:
-        # Корректно закрываем пул соединений
-        try:
-            connection_manager = get_sync_connection_manager()
-            await connection_manager.close_pool()
-            print("\n🔧 Соединения с БД корректно закрыты")
-        except Exception as e:
-            print(f"\n⚠️ Ошибка при закрытии соединений: {e}")
+    except Exception as e:
+        print(f"\n❌ Критическая ошибка: {e}")
+        return False
 
 if __name__ == "__main__":
     try:
-        success = asyncio.run(main())
+        success = main()
         sys.exit(0 if success else 1)
     except KeyboardInterrupt:
         print("\n❌ Прервано пользователем")

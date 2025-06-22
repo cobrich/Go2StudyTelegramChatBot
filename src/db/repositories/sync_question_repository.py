@@ -111,23 +111,63 @@ class SyncQuestionRepository(SyncBaseRepository):
             
             topic_id = topic_result
             
+            # Обрабатываем варианты ответов
+            correct_answer_text = question.get('answer', '')
+            incorrect_options = question.get('incorrect_options', '').split('\n')
+            
+            # Убираем пустые строки
+            incorrect_options = [opt.strip() for opt in incorrect_options if opt.strip()]
+            
+            # Создаем список всех вариантов (правильный + неправильные)
+            all_options = [correct_answer_text] + incorrect_options
+            
+            # Дополняем до 4 вариантов если нужно
+            while len(all_options) < 4:
+                all_options.append(f"Вариант {len(all_options) + 1}")
+            
+            # Берем только первые 4 варианта
+            all_options = all_options[:4]
+            
+            # Перемешиваем варианты и запоминаем позицию правильного ответа
+            import random
+            correct_position = 0  # Правильный ответ всегда на первой позиции изначально
+            random.shuffle(all_options)
+            
+            # Находим новую позицию правильного ответа после перемешивания
+            try:
+                correct_position = all_options.index(correct_answer_text)
+            except ValueError:
+                # Если не нашли, ставим на первое место
+                all_options[0] = correct_answer_text
+                correct_position = 0
+            
+            # Назначаем варианты на позициях A, B, C, D
+            option_a, option_b, option_c, option_d = all_options
+            
+            # Определяем букву правильного ответа
+            correct_answer_letter = ['A', 'B', 'C', 'D'][correct_position]
+            
             # Добавляем вопрос
             query = """
-                INSERT INTO questions (topic_id, question_text, correct_answer, explanation, 
-                                     incorrect_options, source)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO questions (topic_id, question_text, option_a, option_b, option_c, option_d,
+                                     correct_answer, explanation, incorrect_options, source)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             
             self.execute_query(query, (
                 topic_id,
                 question.get('question'),
-                question.get('answer'),
+                option_a,
+                option_b,
+                option_c,
+                option_d,
+                correct_answer_letter,  # Сохраняем букву правильного ответа (A, B, C, D)
                 question.get('explanation'),
                 question.get('incorrect_options', ''),
                 question.get('source', 'manual')
             ))
             
-            logger.info(f"✅ Question added successfully")
+            logger.info(f"✅ Question added successfully: {correct_answer_letter}) {all_options[correct_position][:20]}...")
             return True
             
         except Exception as e:
@@ -140,9 +180,17 @@ class SyncQuestionRepository(SyncBaseRepository):
         
         try:
             query = """
-                SELECT q.id, q.question_text as question, q.correct_answer as answer,
+                SELECT q.id, q.question_text as question, 
+                       CASE q.correct_answer
+                           WHEN 'A' THEN q.option_a
+                           WHEN 'B' THEN q.option_b
+                           WHEN 'C' THEN q.option_c
+                           WHEN 'D' THEN q.option_d
+                           ELSE q.correct_answer
+                       END as answer,
                        q.explanation, q.incorrect_options, q.source,
-                       s.subtopic_name as topic, q.created_at
+                       s.subtopic_name as topic, q.created_at, q.topic_id,
+                       q.option_a, q.option_b, q.option_c, q.option_d, q.correct_answer as correct_letter
                 FROM questions q
                 JOIN subtopics s ON q.topic_id = s.id
                 ORDER BY q.created_at DESC
@@ -154,12 +202,18 @@ class SyncQuestionRepository(SyncBaseRepository):
                 question = {
                     'id': row['id'],
                     'question': row['question'],
-                    'answer': row['answer'],
+                    'answer': row['answer'],  # Текст правильного ответа
                     'explanation': row['explanation'],
                     'incorrect_options': row['incorrect_options'],
                     'source': row['source'],
                     'topic': row['topic'],
-                    'created_at': row['created_at']
+                    'topic_id': row['topic_id'],
+                    'created_at': row['created_at'],
+                    'option_a': row['option_a'],
+                    'option_b': row['option_b'],
+                    'option_c': row['option_c'],
+                    'option_d': row['option_d'],
+                    'correct_letter': row['correct_letter']  # Буква правильного ответа
                 }
                 questions.append(question)
             
