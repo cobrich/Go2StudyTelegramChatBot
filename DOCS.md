@@ -3771,3 +3771,9 @@ The security implementation is **complete and functional** - admin data is autom
   - Completely rewrote `get_student_detailed_statistics()` to return expected structure
 - Fixed methods: `get_user_test_results()`, `get_error_topics()`, `add_test_result()`, `add_user_error()`
 - All admin panel buttons now work correctly with PostgreSQL schema
+
+**Bug Fix**: Fixed admin users appearing in student statistics (causing 100% activity rate).
+- Problem: Admins were included in class statistics and student lists
+- Solution: Added `WHERE user_id NOT IN (SELECT user_id FROM admins)` to exclude admins
+- Fixed methods: `get_detailed_class_statistics()`, `get_all_users_with_history()`, `get_class_statistics()`
+- Now only actual students appear in statistics, not admins

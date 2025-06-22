@@ -447,7 +447,7 @@ class SyncUserRepository(SyncBaseRepository):
             return {}
     
     def get_all_users_with_history(self) -> List[Dict[str, Any]]:
-        """Get all users with history"""
+        """Get all users with history - ONLY students, NOT admins"""
         try:
             query = """
                 SELECT u.user_id, u.username, u.full_name, u.grade, u.language,
@@ -456,6 +456,7 @@ class SyncUserRepository(SyncBaseRepository):
                        AVG(tr.percentage) as avg_score
                 FROM allowed_users u
                 LEFT JOIN test_results tr ON u.user_id = tr.user_id
+                WHERE u.user_id NOT IN (SELECT user_id FROM admins)
                 GROUP BY u.user_id, u.username, u.full_name, u.grade, u.language,
                          u.is_active, u.has_access, u.added_at, u.last_activity
                 ORDER BY u.added_at DESC
@@ -489,7 +490,7 @@ class SyncUserRepository(SyncBaseRepository):
         return self.get_all_users_with_history()
     
     def get_class_statistics(self, grade: int = None) -> Dict[str, Any]:
-        """Get class statistics"""
+        """Get class statistics - ONLY for students, NOT admins"""
         try:
             query = """
                 SELECT 
@@ -498,11 +499,12 @@ class SyncUserRepository(SyncBaseRepository):
                     COUNT(CASE WHEN is_active = true THEN 1 END) as currently_active,
                     AVG(CASE WHEN grade IS NOT NULL THEN grade END) as avg_grade
                 FROM allowed_users
+                WHERE user_id NOT IN (SELECT user_id FROM admins)
             """
             params = []
             
             if grade is not None:
-                query += " WHERE grade = %s"
+                query += " AND grade = %s"
                 params.append(grade)
             
             result = self.fetch_one(query, params)
@@ -523,9 +525,9 @@ class SyncUserRepository(SyncBaseRepository):
             return {}
     
     def get_detailed_class_statistics(self) -> Dict[str, Any]:
-        """Get detailed statistics grouped by class"""
+        """Get detailed statistics grouped by class - ONLY for students, NOT admins"""
         try:
-            # Get statistics by class
+            # Get statistics by class - EXCLUDE ADMINS
             query = """
                 SELECT 
                     u.grade,
@@ -536,7 +538,8 @@ class SyncUserRepository(SyncBaseRepository):
                     AVG(tr.percentage) as avg_score
                 FROM allowed_users u
                 LEFT JOIN test_results tr ON u.user_id = tr.user_id
-                WHERE u.grade IS NOT NULL
+                WHERE u.grade IS NOT NULL 
+                AND u.user_id NOT IN (SELECT user_id FROM admins)
                 GROUP BY u.grade
                 ORDER BY u.grade
             """
