@@ -462,7 +462,7 @@ class SyncQuestionRepository(SyncBaseRepository):
             # Get questions for that language
             query = """
                 SELECT q.id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d,
-                       q.correct_answer, s.subtopic_name as topic, q.source, q.created_at
+                       q.correct_answer, q.explanation, s.subtopic_name as topic, q.source, q.created_at
                 FROM questions q
                 JOIN subtopics s ON q.topic_id = s.id
                 JOIN main_topics m ON s.main_topic_id = m.id
