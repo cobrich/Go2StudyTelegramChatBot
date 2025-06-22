@@ -209,33 +209,8 @@ class ConnectionManager:
 
     async def initialize_pool(self, min_size: int = 1, max_size: int = 10):
         """Initialize connection pool for Supabase"""
-        if not self._pool:
+        if not self._pool and not hasattr(self, '_fallback_conn'):
             try:
-                # Check if we're in the main thread and have an active event loop
-                try:
-                    loop = asyncio.get_running_loop()
-                    if loop.is_closed():
-                        raise RuntimeError("Event loop is closed")
-                except RuntimeError:
-                    # No event loop running, create a new one
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                
-                # Force IPv4 resolution to avoid IPv6 connectivity issues
-                def force_ipv4_resolver(host, port, family=socket.AF_INET):
-                    """Custom resolver that forces IPv4 resolution"""
-                    try:
-                        # Get all addresses for the host
-                        addresses = socket.getaddrinfo(host, port, family, socket.SOCK_STREAM)
-                        if addresses:
-                            # Return the first IPv4 address
-                            return addresses[0][4][0]
-                    except socket.gaierror as e:
-                        logger.warning(f"Failed to resolve {host} to IPv4: {e}")
-                        # Fallback to original host
-                        return host
-                    return host
-                
                 self._pool = await asyncpg.create_pool(
                     self.connection_string,
                     min_size=min_size,
@@ -244,9 +219,8 @@ class ConnectionManager:
                     server_settings={
                         'application_name': 'go2study_bot',
                     },
-                    # Force IPv4 by setting socket family
-                    connection_class=None,
-                    ssl='prefer'  # Use SSL but allow fallback
+                    ssl=None,  # Явно устанавливаем None для избежания проблем
+                    statement_cache_size=0  # Отключаем кэш для стабильности
                 )
                 logger.info(f"Supabase connection pool initialized (min={min_size}, max={max_size})")
                 
@@ -256,118 +230,135 @@ class ConnectionManager:
                     
             except Exception as e:
                 logger.error(f"Failed to initialize Supabase pool: {e}")
-                # Try fallback with different connection parameters
+                # Try fallback with single connection
                 try:
-                    await self._try_fallback_connection(min_size, max_size)
+                    await self._try_fallback_connection()
                 except Exception as fallback_error:
                     logger.error(f"Fallback connection also failed: {fallback_error}")
                     raise
 
-    async def _try_fallback_connection(self, min_size: int, max_size: int):
-        """Try fallback connection with modified parameters"""
+    async def _try_fallback_connection(self):
+        """Try fallback connection with single persistent connection"""
+        last_error = None
+        
         try:
-            logger.info("Attempting fallback connection with modified parameters...")
+            logger.info("Attempting fallback connection with single connection...")
             
-            # Parse the connection string to modify the host
-            conn_str = self.connection_string
+            # Try direct connection without pool
+            self._fallback_conn = await asyncpg.connect(
+                self.connection_string,
+                command_timeout=30,
+                server_settings={
+                    'application_name': 'go2study_bot_fallback',
+                },
+                ssl=None
+            )
+            logger.info("Fallback connection successful - using single connection mode")
             
-            # Replace the host with IP if possible
-            if 'supabase.co' in conn_str:
+            # Initialize tables with fallback connection
+            await self._check_and_create_tables(self._fallback_conn)
+            return
+            
+        except Exception as e:
+            last_error = e
+            logger.error(f"Direct connection failed: {e}")
+            
+            # Try with IPv4 resolution if possible
+            if 'supabase.co' in self.connection_string:
                 try:
                     import re
                     # Extract host from connection string
-                    host_match = re.search(r'@([^:]+):', conn_str)
+                    host_match = re.search(r'@([^:]+):', self.connection_string)
                     if host_match:
                         original_host = host_match.group(1)
                         logger.info(f"Attempting to resolve {original_host} to IPv4...")
                         
                         # Try to resolve to IPv4
                         try:
+                            import socket
                             ipv4_addr = socket.getaddrinfo(original_host, None, socket.AF_INET)[0][4][0]
-                            modified_conn_str = conn_str.replace(original_host, ipv4_addr)
+                            modified_conn_str = self.connection_string.replace(original_host, ipv4_addr)
                             logger.info(f"Resolved {original_host} to {ipv4_addr}")
                             
-                            self._pool = await asyncpg.create_pool(
+                            self._fallback_conn = await asyncpg.connect(
                                 modified_conn_str,
-                                min_size=min_size,
-                                max_size=max_size,
-                                command_timeout=60,
+                                command_timeout=30,
                                 server_settings={
-                                    'application_name': 'go2study_bot',
+                                    'application_name': 'go2study_bot_ipv4',
                                 },
-                                ssl='prefer'
+                                ssl=None
                             )
                             logger.info("Fallback connection successful with IPv4 address")
                             
-                            # Initialize tables on first connection
-                            async with self._pool.acquire() as conn:
-                                await self._check_and_create_tables(conn)
+                            # Initialize tables with fallback connection
+                            await self._check_and_create_tables(self._fallback_conn)
                             return
                             
                         except socket.gaierror as e:
+                            last_error = e
                             logger.warning(f"Failed to resolve {original_host} to IPv4: {e}")
                         
                 except Exception as e:
+                    last_error = e
                     logger.warning(f"Failed to modify connection string: {e}")
             
-            # If all else fails, try with disabled IPv6
-            try:
-                # Set environment variable to prefer IPv4
-                os.environ['ASYNCPG_PREFER_IPV4'] = '1'
-                
-                self._pool = await asyncpg.create_pool(
-                    self.connection_string,
-                    min_size=min_size,
-                    max_size=max_size,
-                    command_timeout=30,  # Reduced timeout
-                    server_settings={
-                        'application_name': 'go2study_bot',
-                    }
-                )
-                logger.info("Fallback connection successful with IPv4 preference")
-                
-                # Initialize tables on first connection
-                async with self._pool.acquire() as conn:
-                    await self._check_and_create_tables(conn)
-                    
-            except Exception as e:
-                logger.error(f"All connection attempts failed: {e}")
-                raise
-                
-        except Exception as e:
-            logger.error(f"Fallback connection method failed: {e}")
-            raise
+            # If all fails, raise the last error
+            raise Exception(f"All connection attempts failed: {last_error}")
 
     async def close_pool(self):
-        """Close connection pool"""
+        """Close connection pool or fallback connection"""
         if self._pool:
             await self._pool.close()
             self._pool = None
             logger.info("Supabase connection pool closed")
+        
+        if hasattr(self, '_fallback_conn') and self._fallback_conn:
+            await self._fallback_conn.close()
+            self._fallback_conn = None
+            logger.info("Supabase fallback connection closed")
     
     @asynccontextmanager
     async def get_async_connection(self) -> AsyncGenerator[Any, None]:
         """Get async Supabase database connection"""
-        if not self._pool:
+        if not self._pool and not hasattr(self, '_fallback_conn'):
             await self.initialize_pool()
         
-        # Получаем соединение с таймаутом
-        conn = None
-        try:
-            conn = await asyncio.wait_for(self._pool.acquire(), timeout=10.0)
-            yield conn
-        except asyncio.TimeoutError:
-            logger.error("Timeout acquiring database connection")
-            raise
-        except Exception as e:
-            logger.error(f"Error acquiring database connection: {e}")
-            raise
-        finally:
-            if conn:
+        # Use pool if available
+        if self._pool:
+            conn = None
+            try:
+                conn = await asyncio.wait_for(self._pool.acquire(), timeout=10.0)
+                yield conn
+            except asyncio.TimeoutError:
+                logger.error("Timeout acquiring database connection from pool")
+                raise
+            except Exception as e:
+                logger.error(f"Error acquiring database connection from pool: {e}")
+                raise
+            finally:
+                if conn:
+                    try:
+                        await self._pool.release(conn)
+                    except Exception as e:
+                        logger.error(f"Error releasing database connection: {e}")
+        
+        # Use fallback connection if pool is not available
+        elif hasattr(self, '_fallback_conn') and self._fallback_conn:
+            try:
+                # Check if connection is still alive
+                await self._fallback_conn.fetchval("SELECT 1")
+                yield self._fallback_conn
+            except Exception as e:
+                logger.error(f"Fallback connection failed: {e}")
+                # Try to reconnect
                 try:
-                    await self._pool.release(conn)
-                except Exception as e:
-                    logger.error(f"Error releasing database connection: {e}")
+                    await self._try_fallback_connection()
+                    yield self._fallback_conn
+                except Exception as reconnect_error:
+                    logger.error(f"Failed to reconnect: {reconnect_error}")
+                    raise
+        else:
+            raise RuntimeError("No available PostgreSQL connection")
 
 # Global connection manager instance
 _connection_manager = None

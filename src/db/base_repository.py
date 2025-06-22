@@ -29,6 +29,9 @@ class BaseRepository(ABC):
             # Проверяем, есть ли активный event loop
             try:
                 loop = asyncio.get_running_loop()
+                if loop.is_closed():
+                    raise RuntimeError("Event loop is closed")
+                
                 # Если есть активный loop, создаем новый в отдельном потоке
                 import concurrent.futures
                 import threading
@@ -41,26 +44,40 @@ class BaseRepository(ABC):
                         return new_loop.run_until_complete(coro)
                     finally:
                         new_loop.close()
-                        asyncio.set_event_loop(None)
                 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                # Запускаем в отдельном потоке
+                with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(run_in_new_thread)
                     return future.result(timeout=30)  # 30 секунд таймаут
                     
             except RuntimeError:
-                # Нет активного loop, можем создать новый
-                return asyncio.run(coro)
-                
-        except OSError as e:
-            if "Network is unreachable" in str(e):
-                logger.warning(f"Database unreachable (IPv6 issue): {e}. Returning fallback value.")
-                return self._get_fallback_value()
-            else:
-                logger.error(f"Database connection error: {e}")
-                raise
+                # Нет активного event loop, можем использовать asyncio.run
+                try:
+                    return asyncio.run(coro)
+                except RuntimeError as e:
+                    if "cannot be called from a running event loop" in str(e):
+                        # Если все же есть loop, но asyncio.run не работает
+                        # Создаем новый loop в отдельном потоке
+                        import concurrent.futures
+                        
+                        def run_in_thread():
+                            new_loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(new_loop)
+                            try:
+                                return new_loop.run_until_complete(coro)
+                            finally:
+                                new_loop.close()
+                                asyncio.set_event_loop(None)
+                        
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(run_in_thread)
+                            return future.result(timeout=30)
+                    else:
+                        raise
+                        
         except Exception as e:
             logger.error(f"Error in _sync_call: {e}")
-            # Возвращаем fallback значение вместо поднятия исключения
+            # Возвращаем fallback значение вместо падения
             return self._get_fallback_value()
     
     async def _execute_query_async(self, query: str, params: tuple = None) -> Any:

@@ -8,19 +8,22 @@
 
 import os
 import sys
+import asyncio
 import logging
+from pathlib import Path
 
 # Добавляем корневую директорию в путь
 root_dir = Path(__file__).parent
 sys.path.insert(0, str(root_dir))
 
 # Загружаем переменные окружения
-from dotenv import load_dotenv
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv не обязателен
 
 # Импортируем нашу базу данных
-from db import get_database
-
 from db.repositories.admin_repository import AdminRepository
 
 # Настраиваем логирование
@@ -29,34 +32,23 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-def check_database_connection():
+async def check_database_connection():
     """Проверяем подключение к базе данных"""
     try:
         admin_repo = AdminRepository()
-        # Пытаемся получить статистику - это проверит реальное подключение
-        stats = admin_repo.get_admin_activity_stats()
-        
-        # Если получили fallback значения - значит БД недоступна
-        if stats == {'total_admins': 0, 'super_admins': 0, 'regular_admins': 0, 'recent_additions': 0}:
-            # Проверяем, действительно ли это fallback или просто нет админов
-            # Пытаемся выполнить простой запрос
-            try:
-                admin_repo.fetch_val("SELECT 1")
-                return True  # Запрос выполнился, БД доступна
-            except:
-                return False  # Запрос не выполнился, БД недоступна
-        
-        return True
+        # Пытаемся выполнить простой запрос
+        result = await admin_repo._fetch_val_async("SELECT 1")
+        return result == 1
     except Exception as e:
         print(f"Ошибка подключения к БД: {e}")
         return False
 
-def init_superadmin():
+async def init_superadmin():
     """Инициализация суперадминистратора"""
     print("🔧 Инициализация суперадминистратора...")
     
     # Проверяем подключение к БД
-    if not check_database_connection():
+    if not await check_database_connection():
         print("\n❌ ОШИБКА: Нет подключения к базе данных!")
         print("\n🔧 РЕШЕНИЕ:")
         print("1. Проверьте переменные окружения SUPABASE_URL и SUPABASE_KEY")
@@ -71,15 +63,17 @@ def init_superadmin():
         admin_repo = AdminRepository()
         
         # Проверяем, есть ли уже суперадмин
-        admins = admin_repo.get_all_admins()
-        if isinstance(admins, list) and len(admins) > 0:
-            for admin in admins:
-                if admin.get('is_super'):
-                    print(f"\n✅ Суперадмин уже существует:")
-                    print(f"  ID: {admin['user_id']}")
-                    print(f"  Username: @{admin['username']}")
-                    print(f"  Имя: {admin['name']}")
-                    return True
+        admins = await admin_repo._fetch_all_async(
+            "SELECT user_id, username, full_name, is_super_admin FROM admins WHERE is_super_admin = true"
+        )
+        
+        if admins:
+            admin = admins[0]
+            print(f"\n✅ Суперадмин уже существует:")
+            print(f"  ID: {admin['user_id']}")
+            print(f"  Username: @{admin['username']}")
+            print(f"  Имя: {admin['full_name']}")
+            return True
         
         print("Суперадмин не найден. Создаем нового...")
         
@@ -100,28 +94,33 @@ def init_superadmin():
             full_name = f"Суперадмин {user_id}"
         
         # Создаем суперадмина
-        success = admin_repo.add_admin(
-            user_id=user_id,
-            username=username,
-            full_name=full_name,
-            is_super=True,
-            added_by=None
+        query = """
+            INSERT INTO admins (user_id, username, full_name, is_super_admin, created_by)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (user_id) DO UPDATE SET
+                username = EXCLUDED.username,
+                full_name = EXCLUDED.full_name,
+                is_super_admin = EXCLUDED.is_super_admin
+        """
+        
+        await admin_repo._execute_query_async(
+            query, 
+            (user_id, username, full_name, True, None)
         )
         
-        if success:
-            # Проверяем, что админ действительно создан
-            created_admin = admin_repo.get_admin_info(user_id)
-            if created_admin and created_admin.get('is_super_admin'):
-                print(f"\n✅ Суперадмин успешно создан!")
-                print(f"  ID: {user_id}")
-                print(f"  Username: @{username}")
-                print(f"  ФИО: {full_name}")
-                print(f"\nТеперь пользователь с ID {user_id} может использовать команду /admin в боте.")
-                return True
-            else:
-                print(f"\n⚠️ Суперадмин создан в fallback режиме (БД недоступна)")
-                print(f"Создайте суперадмина вручную через Supabase Dashboard")
-                return False
+        # Проверяем, что админ действительно создан
+        created_admin = await admin_repo._fetch_one_async(
+            "SELECT user_id, username, full_name, is_super_admin FROM admins WHERE user_id = $1",
+            (user_id,)
+        )
+        
+        if created_admin and created_admin.get('is_super_admin'):
+            print(f"\n✅ Суперадмин успешно создан!")
+            print(f"  ID: {user_id}")
+            print(f"  Username: @{username}")
+            print(f"  ФИО: {full_name}")
+            print(f"\nТеперь пользователь с ID {user_id} может использовать команду /admin в боте.")
+            return True
         else:
             print(f"\n❌ Ошибка при создании суперадмина.")
             print(f"Создайте суперадмина вручную через Supabase Dashboard")
@@ -132,6 +131,18 @@ def init_superadmin():
         print(f"Создайте суперадмина вручную через Supabase Dashboard")
         return False
 
+async def main():
+    """Главная асинхронная функция"""
+    success = await init_superadmin()
+    return success
+
 if __name__ == "__main__":
-    success = init_superadmin()
-    sys.exit(0 if success else 1) 
+    try:
+        success = asyncio.run(main())
+        sys.exit(0 if success else 1)
+    except KeyboardInterrupt:
+        print("\n❌ Прервано пользователем")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Критическая ошибка: {e}")
+        sys.exit(1) 

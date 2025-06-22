@@ -281,4 +281,86 @@ class AdminRepository(BaseRepository):
         for admin in admins:
             admin['is_super'] = bool(admin['is_super_admin'])
         
-        return admins 
+        return admins
+    
+    # ============== ASYNC METHODS FOR BETTER PERFORMANCE ==============
+    
+    async def is_super_admin_async(self, user_id: int) -> bool:
+        """Check if user is super admin (async version)."""
+        try:
+            result = await self._fetch_val_async(
+                'SELECT is_super_admin FROM admins WHERE user_id = $1', 
+                (user_id,)
+            )
+            return bool(result)
+        except Exception as e:
+            logger.error(f"Error checking super admin status: {e}")
+            return False
+    
+    async def is_admin_async(self, user_id: int) -> bool:
+        """Check if user is admin (async version)."""
+        try:
+            result = await self._fetch_val_async(
+                'SELECT 1 FROM admins WHERE user_id = $1', 
+                (user_id,)
+            )
+            return result is not None
+        except Exception as e:
+            logger.error(f"Error checking admin status: {e}")
+            return False
+    
+    async def add_admin_async(self, user_id: int, username: str, full_name: str, is_super: bool = False, added_by: int = None) -> bool:
+        """Add new admin (async version)."""
+        try:
+            query = '''
+                INSERT INTO admins (user_id, username, full_name, is_super_admin, created_by)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (user_id) DO UPDATE SET
+                    username = EXCLUDED.username,
+                    full_name = EXCLUDED.full_name,
+                    is_super_admin = EXCLUDED.is_super_admin
+            '''
+            await self._execute_query_async(query, (user_id, username, full_name, is_super, added_by))
+            return True
+        except Exception as e:
+            logger.error(f"Error adding admin: {e}")
+            return False
+    
+    async def get_all_admins_async(self) -> List[Dict]:
+        """Get list of all admins (async version)."""
+        try:
+            query = '''
+                SELECT user_id, username, full_name, is_super_admin, created_at
+                FROM admins
+                ORDER BY is_super_admin DESC, created_at ASC
+            '''
+            admins = await self._fetch_all_async(query)
+            
+            # Convert boolean values for consistency
+            for admin in admins:
+                admin['is_super'] = bool(admin['is_super_admin'])
+                admin['name'] = admin['full_name']
+                admin['added_at'] = admin['created_at']
+            
+            return admins
+        except Exception as e:
+            logger.error(f"Error getting all admins: {e}")
+            return []
+    
+    async def get_admin_info_async(self, user_id: int) -> Optional[Dict]:
+        """Get admin information by user_id (async version)."""
+        try:
+            query = '''
+                SELECT user_id, username, full_name, is_super_admin, created_at, created_by
+                FROM admins 
+                WHERE user_id = $1
+            '''
+            admin = await self._fetch_one_async(query, (user_id,))
+            
+            if admin:
+                admin['is_super_admin'] = bool(admin['is_super_admin'])
+            
+            return admin
+        except Exception as e:
+            logger.error(f"Error getting admin info: {e}")
+            return None 
