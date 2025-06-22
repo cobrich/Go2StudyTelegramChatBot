@@ -558,28 +558,15 @@ class CommandHandlers(BaseHandler):
                 ))
                 
             else:
-                # Unknown command
+                # Unknown command - обычное сообщение без автоудаления
                 unknown_text = get_message('topic_not_selected', user_language)
                 
-                # Удаляем сообщение пользователя
-                try:
-                    await update.message.delete()
-                except Exception:
-                    pass  # Игнорируем ошибки удаления
-                
-                # Отправляем сообщение и удаляем его через 3 секунды
-                unknown_msg = await update.message.reply_text(
+                # НЕ удаляем сообщение пользователя в обычном режиме
+                # Просто отвечаем обычным сообщением с клавиатурой
+                await update.message.reply_text(
                     unknown_text,
                     reply_markup=get_main_menu_markup(user_id)
                 )
-                
-                # Асинхронно удаляем сообщение через 3 секунды
-                asyncio.create_task(self._delete_message_after_delay(
-                    context.bot, 
-                    unknown_msg.chat_id, 
-                    unknown_msg.message_id, 
-                    3
-                ))
 
     async def handle_language_change(self, update: Update, context: ContextTypes.DEFAULT_TYPE, language_text: str) -> None:
         """Handle language change request."""
