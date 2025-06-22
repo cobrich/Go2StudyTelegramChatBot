@@ -270,6 +270,20 @@ class DatabaseFacade:
     def register_user(self, user_id: int, username: str) -> None:
         return self.users.register_user(user_id, username)
     
+    def auto_update_username_from_telegram(self, user_id: int, username: str) -> bool:
+        """Automatically update username from Telegram data."""
+        return self.users.auto_update_username_from_telegram(user_id, username)
+    
+    def auto_setup_user_from_whitelist(self, user_id: int, username: str) -> Dict:
+        """Auto setup user from whitelist (stub implementation)."""
+        # Заглушка - возвращаем что автонастройка не выполнена
+        return {
+            'success': False,
+            'auto_configured': False,
+            'message': 'Auto setup not implemented',
+            'user_data': {'full_name': None, 'grade': None}
+        }
+    
     def get_explanation_by_question_text(self, question_text: str) -> Optional[str]:
         return self.questions.get_explanation_by_question_text(question_text)
     
@@ -351,6 +365,11 @@ class DatabaseFacade:
     
     def check_user_access(self, user_id: int, username: str = None) -> bool:
         """Check if user has access to the bot"""
+        # Сначала проверяем, является ли пользователь админом
+        if self.admins.is_admin(user_id):
+            return True
+        
+        # Если не админ, проверяем в whitelist обычных пользователей
         return self.users.has_user_access(user_id)
     
     # Additional methods for error tracking with question IDs
