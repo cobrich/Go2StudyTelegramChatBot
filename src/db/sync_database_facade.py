@@ -530,6 +530,10 @@ class SyncDatabaseFacade:
         """Get class statistics"""
         return self.users.get_class_statistics(grade)
     
+    def get_detailed_class_statistics(self) -> Dict[str, Any]:
+        """Get detailed statistics grouped by class"""
+        return self.users.get_detailed_class_statistics()
+    
     def get_student_contact_info(self, user_id: int) -> Dict[str, Any]:
         """Get student contact info"""
         return self.statistics.get_student_contact_info(user_id)

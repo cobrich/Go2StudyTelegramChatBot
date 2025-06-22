@@ -3749,3 +3749,15 @@ success = self.db.add_allowed_user_by_id(...)
 - Clear documentation for future development
 
 The security implementation is **complete and functional** - admin data is automatically excluded from student statistics without requiring handler modifications.
+
+**Bug Fix**: Fixed "список учеников" (students list) button KeyError issue.
+- Problem: Handler was trying to access `student['total_tests']` but database returned `student['test_count']`
+- Solution: Updated field names in handler to match database schema
+- Fixed fields: `total_tests` → `test_count`, removed non-existent `unique_errors` and `status` fields
+- Also fixed corrupted emoji encoding in the calendar emoji
+
+**Bug Fix**: Fixed "статистика по классам" (class statistics) button not working.
+- Problem: Handler expected `class_stats['class_stats']` structure but `get_class_statistics()` returned flat dict
+- Solution: Created new `get_detailed_class_statistics()` method that returns proper grouped data
+- Added method to both repository and database facade
+- Updated handler to use the correct method

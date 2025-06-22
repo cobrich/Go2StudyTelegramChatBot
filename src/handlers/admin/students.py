@@ -271,9 +271,7 @@ class StudentsHandler(AdminBaseHandler):
                     identifier = "Неизвестен"
                 
                 # Краткая статистика
-                stats = f"Тестов: {student['total_tests']}, Балл: {student['avg_score']}%"
-                if student['unique_errors'] > 0:
-                    stats += f", Ошибок: {student['unique_errors']}"
+                stats = f"Тестов: {student['test_count']}, Балл: {student['avg_score']}%"
                 
                 # Добавляем индикатор активности в тесте
                 test_activity = "🔄 В тесте" if student['is_active'] else "💤 Не в тесте"
@@ -281,7 +279,7 @@ class StudentsHandler(AdminBaseHandler):
                 text += f"{i}. {status} <b>{identifier}</b>\n"
                 text += f"   {student['full_name']} ({student['grade']} класс)\n"
                 text += f"   {stats}\n"
-                text += f"   Статус: {student['status']} | {test_activity}\n\n"
+                text += f"   Активность: {test_activity}\n\n"
                 
                 # Кнопка для детального просмотра
                 if student.get('user_id'):
@@ -385,7 +383,7 @@ class StudentsHandler(AdminBaseHandler):
         query = update.callback_query
         await self.safe_answer_callback(query)
         
-        class_stats = self.db.get_class_statistics()
+        class_stats = self.db.get_detailed_class_statistics()
         
         if not class_stats['class_stats']:
             text = "📈 <b>Статистика по классам</b>\n\nДанных нет."

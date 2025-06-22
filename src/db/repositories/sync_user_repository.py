@@ -522,6 +522,48 @@ class SyncUserRepository(SyncBaseRepository):
             logger.error(f"Error getting class statistics: {e}")
             return {}
     
+    def get_detailed_class_statistics(self) -> Dict[str, Any]:
+        """Get detailed statistics grouped by class"""
+        try:
+            # Get statistics by class
+            query = """
+                SELECT 
+                    u.grade,
+                    COUNT(*) as students_count,
+                    COUNT(CASE WHEN u.has_access = true THEN 1 END) as active_students,
+                    COUNT(CASE WHEN u.is_active = true THEN 1 END) as currently_active,
+                    COUNT(tr.id) as total_tests,
+                    AVG(tr.percentage) as avg_score
+                FROM allowed_users u
+                LEFT JOIN test_results tr ON u.user_id = tr.user_id
+                WHERE u.grade IS NOT NULL
+                GROUP BY u.grade
+                ORDER BY u.grade
+            """
+            
+            results = self.fetch_all(query)
+            
+            class_stats = []
+            for row in results:
+                activity_rate = round((row['active_students'] / row['students_count'] * 100) if row['students_count'] > 0 else 0, 1)
+                class_stats.append({
+                    'grade': row['grade'],
+                    'students_count': row['students_count'],
+                    'active_students': row['active_students'],
+                    'currently_active': row['currently_active'],
+                    'activity_rate': activity_rate,
+                    'total_tests': row['total_tests'] or 0,
+                    'avg_score': round(row['avg_score'] or 0, 1)
+                })
+            
+            return {
+                'class_stats': class_stats
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting detailed class statistics: {e}")
+            return {'class_stats': []}
+    
     def find_student_by_identifier(self, identifier: str) -> Optional[Dict[str, Any]]:
         """Find student by identifier (username, full_name, or user_id)"""
         try:
