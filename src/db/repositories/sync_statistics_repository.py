@@ -232,7 +232,8 @@ class SyncStatisticsRepository(SyncBaseRepository):
             query = """
                 SELECT DISTINCT q.question_text as question, q.correct_answer as answer,
                        q.explanation as explanation, s.subtopic_name as topic,
-                       q.incorrect_options, NULL as image_path, ue.last_error_date
+                       q.incorrect_options, NULL as image_path, ue.last_error_date,
+                       ue.error_count
                 FROM user_errors ue
                 JOIN questions q ON ue.question_id = q.id
                 JOIN subtopics s ON q.topic_id = s.id
@@ -250,7 +251,8 @@ class SyncStatisticsRepository(SyncBaseRepository):
                     'explanation': row['explanation'],
                     'topic': row['topic'],
                     'incorrect_options': row['incorrect_options'],
-                    'image_path': row['image_path']
+                    'image_path': row['image_path'],
+                    'error_count': row['error_count']
                 }
                 error_tasks.append(task)
             
