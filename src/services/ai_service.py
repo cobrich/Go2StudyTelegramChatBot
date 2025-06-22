@@ -235,7 +235,8 @@ class AIService:
 НЕПРАВИЛЬНЫЙ ОТВЕТ 3: [третий неправильный вариант]
 ОБЪЯСНЕНИЕ: [ОЧЕНЬ ПОДРОБНОЕ пошаговое объяснение простым языком для детей с проверкой]
 
-ВНИМАНИЕ: НЕ добавляй дополнительные неправильные ответы! Только 3!"""
+ВНИМАНИЕ: НЕ добавляй дополнительные неправильные ответы! Только 3!
+ПРОВЕРЬ ПЕРЕД ОТПРАВКОЙ: считай неправильные ответы - их должно быть ровно 3!"""
 
     def _get_meta_kazakh_prompt(self, topic: str, main_topic: str) -> str:
         """Создает Meta-prompt для казахского языка"""
@@ -317,6 +318,15 @@ class AIService:
         
         # Валидация - требуем точно 3 неправильных ответа
         if not (question and correct_answer and explanation and len(incorrect_options) == 3):
+            if not question:
+                logging.warning(f"[_parse_response_v3] Missing question in AI response")
+            if not correct_answer:
+                logging.warning(f"[_parse_response_v3] Missing correct answer in AI response")
+            if not explanation:
+                logging.warning(f"[_parse_response_v3] Missing explanation in AI response")
+            if len(incorrect_options) != 3:
+                logging.warning(f"[_parse_response_v3] Wrong number of incorrect options: got {len(incorrect_options)}, need exactly 3. Options: {incorrect_options}")
+            
             logging.warning(f"[_parse_response_v3] Validation failed: question={bool(question)}, answer={bool(correct_answer)}, explanation={bool(explanation)}, incorrect_options={len(incorrect_options)} (need exactly 3)")
             return None, None, None, None
         

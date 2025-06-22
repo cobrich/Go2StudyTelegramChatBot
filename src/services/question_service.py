@@ -389,23 +389,38 @@ class QuestionService:
                                     options.extend([opt.strip() for opt in incorrect_options.split('\n') if opt.strip()])
                             
                             options = [str(opt) for opt in options if opt and str(opt).strip()]
-                            if len(options) < 2:  # Добавляем фиктивные варианты если их мало
-                                options.extend([f"Вариант {i}" for i in range(len(options), 4)])
-                            
-                            if correct_answer not in options:
-                                options.append(correct_answer)
-                            options = list(dict.fromkeys(options))  # remove duplicates, preserve order
-                            
-                            # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ФОРМИРОВАНИЯ ВАРИАНТОВ
-                            logging.info(f"🔍 [AI ВОПРОС] Формирование вариантов для: {question[:50]}...")
-                            logging.info(f"  ✅ Правильный ответ: '{correct_answer}' (тип: {type(correct_answer)})")
-                            logging.info(f"  ❌ Неправильные варианты: {incorrect_options}")
-                            logging.info(f"  📋 Финальные варианты ДО перемешивания: {options}")
-                            
+
+                            # Убираем дубликаты, сохраняя порядок
+                            unique_options = []
+                            seen = set()
+                            for opt in options:
+                                if opt not in seen:
+                                    unique_options.append(opt)
+                                    seen.add(opt)
+                            options = unique_options
+
+                            # ГАРАНТИРУЕМ 4 ВАРИАНТА: добавляем фиктивные если нужно
+                            while len(options) < 4:
+                                fake_option = f"Вариант {len(options)}"
+                                if fake_option not in options:
+                                    options.append(fake_option)
+
+                            # Ограничиваем до 4 вариантов максимум
+                            options = options[:4]
+
+                            # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ФОРМИРОВАНИЯ ВАРИАНТОВ (только если меньше 4 вариантов)
+                            if len(options) != 4:
+                                logging.warning(f"⚠️ [AI ВОПРОС] Неправильное количество вариантов для: {question[:50]}...")
+                                logging.warning(f"  ✅ Правильный ответ: '{correct_answer}' (тип: {type(correct_answer)})")
+                                logging.warning(f"  ❌ Неправильные варианты: {incorrect_options}")
+                                logging.warning(f"  📋 Финальные варианты: {options} (количество: {len(options)})")
+                            else:
+                                # Краткое логирование для нормальных случаев
+                                logging.info(f"✅ [AI ВОПРОС] Сформированы варианты ({len(options)}): {question[:30]}...")
+
                             random.shuffle(options)
                             
-                            logging.info(f"  🔄 Финальные варианты ПОСЛЕ перемешивания: {options}")
-                            logging.info(f"  🎯 Правильный ответ остался: '{correct_answer}' в позиции {options.index(correct_answer) if correct_answer in options else 'НЕ НАЙДЕН!'}")
+                            logging.info(f"  🎯 Правильный ответ '{correct_answer}' в позиции {options.index(correct_answer) if correct_answer in options else 'НЕ НАЙДЕН!'}")
                             
                             new_tasks.append((
                                 question,
@@ -545,12 +560,12 @@ class QuestionService:
             # ИСПРАВЛЕНИЕ: Убираем ограничения и генерируем до достижения нужного количества
             valid_questions = 0
             attempt_batch = 1
-            max_batches = 10  # Максимум батчей для предотвращения бесконечного цикла
+            max_batches = 5  # Уменьшаем количество батчей
             
             while valid_questions < ai_questions_to_generate and attempt_batch <= max_batches:
-                # Генерируем батч вопросов
+                # Генерируем батч вопросов - ОПТИМИЗАЦИЯ: уменьшаем избыточность
                 remaining_needed = ai_questions_to_generate - valid_questions
-                batch_size = min(remaining_needed * 3, 20)  # Генерируем с запасом, но не слишком много за раз
+                batch_size = min(remaining_needed * 2, 15)  # Уменьшаем с *3 до *2 и с 20 до 15
                 
                 logging.info(f"[get_or_generate_tasks] AI generation batch {attempt_batch}: need {remaining_needed} more questions, generating {batch_size} attempts")
                 
@@ -612,23 +627,38 @@ class QuestionService:
                                     options.extend([opt.strip() for opt in incorrect_options.split('\n') if opt.strip()])
                             
                             options = [str(opt) for opt in options if opt and str(opt).strip()]
-                            if len(options) < 2:  # Добавляем фиктивные варианты если их мало
-                                options.extend([f"Вариант {i}" for i in range(len(options), 4)])
-                            
-                            if correct_answer not in options:
-                                options.append(correct_answer)
-                            options = list(dict.fromkeys(options))  # remove duplicates, preserve order
-                            
-                            # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ФОРМИРОВАНИЯ ВАРИАНТОВ
-                            logging.info(f"🔍 [AI ВОПРОС] Формирование вариантов для: {question[:50]}...")
-                            logging.info(f"  ✅ Правильный ответ: '{correct_answer}' (тип: {type(correct_answer)})")
-                            logging.info(f"  ❌ Неправильные варианты: {incorrect_options}")
-                            logging.info(f"  📋 Финальные варианты ДО перемешивания: {options}")
-                            
+
+                            # Убираем дубликаты, сохраняя порядок
+                            unique_options = []
+                            seen = set()
+                            for opt in options:
+                                if opt not in seen:
+                                    unique_options.append(opt)
+                                    seen.add(opt)
+                            options = unique_options
+
+                            # ГАРАНТИРУЕМ 4 ВАРИАНТА: добавляем фиктивные если нужно
+                            while len(options) < 4:
+                                fake_option = f"Вариант {len(options)}"
+                                if fake_option not in options:
+                                    options.append(fake_option)
+
+                            # Ограничиваем до 4 вариантов максимум
+                            options = options[:4]
+
+                            # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ФОРМИРОВАНИЯ ВАРИАНТОВ (только если меньше 4 вариантов)
+                            if len(options) != 4:
+                                logging.warning(f"⚠️ [AI ВОПРОС] Неправильное количество вариантов для: {question[:50]}...")
+                                logging.warning(f"  ✅ Правильный ответ: '{correct_answer}' (тип: {type(correct_answer)})")
+                                logging.warning(f"  ❌ Неправильные варианты: {incorrect_options}")
+                                logging.warning(f"  📋 Финальные варианты: {options} (количество: {len(options)})")
+                            else:
+                                # Краткое логирование для нормальных случаев
+                                logging.info(f"✅ [AI ВОПРОС] Сформированы варианты ({len(options)}): {question[:30]}...")
+
                             random.shuffle(options)
                             
-                            logging.info(f"  🔄 Финальные варианты ПОСЛЕ перемешивания: {options}")
-                            logging.info(f"  🎯 Правильный ответ остался: '{correct_answer}' в позиции {options.index(correct_answer) if correct_answer in options else 'НЕ НАЙДЕН!'}")
+                            logging.info(f"  🎯 Правильный ответ '{correct_answer}' в позиции {options.index(correct_answer) if correct_answer in options else 'НЕ НАЙДЕН!'}")
                             
                             new_tasks.append((
                                 question,
