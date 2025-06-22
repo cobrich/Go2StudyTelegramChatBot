@@ -79,6 +79,50 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 ## 📋 Changelog
 
+### ✅ XX.XX.2025 - Исправлены проблемы запуска на Railway
+
+**🎯 Проблема**: После успешной сборки Docker-образа приложение не проходило health check на Railway, что приводило к ошибке "1/1 replicas never became healthy!".
+
+**🔍 Анализ**:
+- Railway ожидал HTTP-ответы на health check, но Telegram бот не является веб-сервером
+- Отсутствовали необходимые переменные окружения для инициализации PostgreSQL
+- Недостаточное логирование для диагностики проблем запуска
+
+**✅ РЕШЕНИЕ - Настроена правильная конфигурация для Railway**:
+
+**🔧 Обновлен `railway.json`**:
+```json
+{
+  "deploy": {
+    "startCommand": "python main.py",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10,
+    "environmentVariables": {
+      "USE_POSTGRESQL": "true",
+      "PYTHONUNBUFFERED": "1"
+    }
+  }
+}
+```
+
+**🔧 Улучшен `main.py`**:
+- ✅ **Детальное логирование**: добавлены логи на каждом этапе инициализации
+- ✅ **Обработка ошибок**: улучшена обработка исключений с полным stack trace
+- ✅ **Корректное завершение**: при критических ошибках приложение завершается с кодом 1
+- ✅ **Диагностика**: логи помогают определить на каком этапе происходит сбой
+
+**🔧 Убрана health check конфигурация**:
+- ✅ **Удален `healthcheckPath`**: Telegram боты не отвечают на HTTP-запросы
+- ✅ **Увеличен timeout**: до 300 секунд для корректной инициализации
+- ✅ **Автоматический restart**: приложение перезапускается при сбоях
+
+**🎯 Результат**:
+- ✅ Railway больше не ожидает HTTP-ответы от Telegram бота
+- ✅ Приложение корректно инициализируется с PostgreSQL
+- ✅ Детальные логи помогают диагностировать проблемы
+- ✅ Автоматический restart при сбоях
+
 ### ✅ XX.XX.2025 - Исправлен конфликт зависимостей в requirements.txt
 
 **🎯 Проблема**: Сборка Docker-образа на Railway завершалась с ошибкой `ResolutionImpossible` из-за конфликта зависимостей между `python-telegram-bot` и `supabase`.
