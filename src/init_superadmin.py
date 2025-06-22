@@ -16,12 +16,60 @@ from pathlib import Path
 root_dir = Path(__file__).parent
 sys.path.insert(0, str(root_dir))
 
-# Загружаем переменные окружения
+# Загружаем переменные окружения из корневой директории проекта
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    
+    print("🔍 DEBUG: Проверка загрузки .env файла")
+    print(f"DEBUG BEFORE LOAD: DATABASE_URL = {os.getenv('DATABASE_URL')}")
+    print(f"DEBUG BEFORE LOAD: USE_POSTGRESQL = {os.getenv('USE_POSTGRESQL')}")
+    
+    # Ищем .env файл в корневой директории проекта (на уровень выше src)
+    env_path = root_dir.parent / ".env"
+    print(f"🔍 Ищем .env файл по пути: {env_path}")
+    print(f"🔍 Файл существует: {env_path.exists()}")
+    
+    if env_path.exists():
+        # Читаем содержимое файла для проверки
+        with open(env_path, 'r') as f:
+            content = f.read()
+            print(f"🔍 Содержимое .env файла:")
+            for line_num, line in enumerate(content.split('\n'), 1):
+                if line.strip() and not line.strip().startswith('#'):
+                    print(f"  {line_num}: {line}")
+        
+        load_dotenv(dotenv_path=env_path, override=True)
+        print(f"✅ Загружен .env файл: {env_path}")
+        
+        print(f"DEBUG AFTER LOAD: DATABASE_URL = {os.getenv('DATABASE_URL')}")
+        print(f"DEBUG AFTER LOAD: USE_POSTGRESQL = {os.getenv('USE_POSTGRESQL')}")
+        
+    else:
+        print(f"⚠️ .env файл не найден: {env_path}")
+        # Попробуем в текущей директории
+        current_env = Path(".env")
+        print(f"🔍 Проверяем текущую директорию: {current_env.absolute()}")
+        
+        if current_env.exists():
+            load_dotenv(dotenv_path=current_env, override=True)
+            print(f"✅ Загружен .env файл: {current_env.absolute()}")
+        else:
+            print("❌ .env файл не найден ни в корне проекта, ни в текущей директории")
+            
+        # Проверим все возможные места
+        possible_paths = [
+            Path.cwd() / ".env",
+            Path.cwd().parent / ".env", 
+            Path(__file__).parent / ".env",
+            Path(__file__).parent.parent / ".env"
+        ]
+        
+        print("🔍 Проверяем все возможные пути к .env:")
+        for path in possible_paths:
+            print(f"  {path}: {'✅ НАЙДЕН' if path.exists() else '❌ НЕТ'}")
+            
 except ImportError:
-    pass  # dotenv не обязателен
+    print("⚠️ dotenv не установлен - переменные окружения не загружены")
 
 # Импортируем нашу базу данных
 from db.repositories.admin_repository import AdminRepository
@@ -46,6 +94,12 @@ async def check_database_connection():
 async def init_superadmin():
     """Инициализация суперадминистратора"""
     print("🔧 Инициализация суперадминистратора...")
+    
+    # Диагностика подключения к БД
+    print("\n🔍 ДИАГНОСТИКА ПОДКЛЮЧЕНИЯ:")
+    print(f"DATABASE_URL: {os.getenv('DATABASE_URL', 'НЕ УСТАНОВЛЕНО')}")
+    print(f"SUPABASE_DATABASE_URL: {os.getenv('SUPABASE_DATABASE_URL', 'НЕ УСТАНОВЛЕНО')}")
+    print(f"USE_POSTGRESQL: {os.getenv('USE_POSTGRESQL', 'НЕ УСТАНОВЛЕНО')}")
     
     # Проверяем подключение к БД
     if not await check_database_connection():
@@ -93,20 +147,21 @@ async def init_superadmin():
         if not full_name:
             full_name = f"Суперадмин {user_id}"
         
-        # Создаем суперадмина
-        query = """
-            INSERT INTO admins (user_id, username, full_name, is_super_admin, created_by)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (user_id) DO UPDATE SET
-                username = EXCLUDED.username,
-                full_name = EXCLUDED.full_name,
-                is_super_admin = EXCLUDED.is_super_admin
-        """
-        
-        await admin_repo._execute_query_async(
-            query, 
-            (user_id, username, full_name, True, None)
+        # Создаем суперадмина используя async метод
+        success = await admin_repo.add_admin_async(
+            user_id=user_id,
+            username=username,
+            full_name=full_name,
+            is_super=True,
+            added_by=None
         )
+        
+        if not success:
+            print(f"\n❌ Ошибка при создании суперадмина.")
+            return False
+        
+        # Ждем немного для завершения транзакции
+        await asyncio.sleep(0.5)
         
         # Проверяем, что админ действительно создан
         created_admin = await admin_repo._fetch_one_async(
@@ -133,8 +188,18 @@ async def init_superadmin():
 
 async def main():
     """Главная асинхронная функция"""
-    success = await init_superadmin()
-    return success
+    try:
+        success = await init_superadmin()
+        return success
+    finally:
+        # Корректно закрываем пул соединений
+        try:
+            from db.connection_manager import get_connection_manager
+            connection_manager = get_connection_manager()
+            await connection_manager.close_pool()
+            print("\n🔧 Соединения с БД корректно закрыты")
+        except Exception as e:
+            print(f"\n⚠️ Ошибка при закрытии соединений: {e}")
 
 if __name__ == "__main__":
     try:
