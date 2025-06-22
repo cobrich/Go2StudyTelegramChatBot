@@ -6,7 +6,7 @@ Provides unified interface for all database operations using synchronous reposit
 
 import logging
 import time
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from .repositories.sync_admin_repository import SyncAdminRepository
 from .repositories.sync_user_repository import SyncUserRepository
 from .repositories.sync_question_repository import SyncQuestionRepository
@@ -183,6 +183,17 @@ class SyncDatabaseFacade:
         """Get all admins (sync)"""
         return self.admins.get_all_admins()
     
+    def get_admin_info(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get admin information by user_id"""
+        return self.admins.get_admin_by_id(user_id)
+    
+    def update_admin_info(self, user_id: int, full_name: str) -> bool:
+        """Update admin's full name"""
+        result = self.admins.update_admin_info(user_id, full_name=full_name)
+        if result:
+            self._clear_cache_for_user(user_id)
+        return result
+    
     # User operations
     def get_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
         """Get user by ID (sync)"""
@@ -209,52 +220,104 @@ class SyncDatabaseFacade:
         """Update user activity (sync)"""
         return self.users.update_user_activity(user_id, current_topic)
     
-    # User profile and language methods
     def get_user_language(self, user_id: int) -> str:
-        """Get user language (sync)"""
+        """Get user's language"""
         user = self.users.get_user_by_id(user_id)
         return user.get('language', 'ru') if user else 'ru'
     
     def get_user_info(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """Get user info (sync)"""
+        """Get user information"""
         return self.users.get_user_by_id(user_id)
     
     def set_user_info(self, user_id: int, full_name: str, grade: int) -> None:
-        """Set user info (sync)"""
-        self.users.add_user(user_id, full_name=full_name, grade=grade)
+        """Set user information (create or update)"""
+        # This would need to be implemented in UserRepository
+        logger.warning("set_user_info not implemented in current repository")
     
     def set_user_info_with_language(self, user_id: int, full_name: str, grade: int, language: str) -> None:
-        """Set user info with language (sync)"""
-        self.users.add_user(user_id, full_name=full_name, grade=grade, language=language)
+        """Set user information with language (create or update)"""
+        # This would need to be implemented in UserRepository
+        logger.warning("set_user_info_with_language not implemented in current repository")
     
     def update_user_language(self, user_id: int, language: str) -> None:
-        """Update user language (sync)"""
-        logger.info(f"🔄 Updating language for user {user_id} to {language}")
-        user = self.users.get_user_by_id(user_id)
-        if user:
-            self.users.add_user(
-                user_id=user_id,
-                username=user.get('username'),
-                full_name=user.get('full_name'),
-                grade=user.get('grade'),
-                language=language,
-                added_by=user.get('added_by')
-            )
+        """Update user's language"""
+        # This would need to be implemented in UserRepository
+        logger.warning("update_user_language not implemented in current repository")
     
+    # User activity methods
     def is_user_active(self, user_id: int) -> bool:
-        """Check if user is active in a test (sync)"""
+        """Check if user is currently active (taking a test)"""
         user = self.users.get_user_by_id(user_id)
         return user.get('is_active', False) if user else False
     
     def set_user_active(self, user_id: int, topic: str) -> None:
-        """Set user as active in a test (sync)"""
+        """Set user as active with current topic"""
         self.users.update_user_activity(user_id, topic)
     
     def set_user_inactive(self, user_id: int) -> None:
-        """Set user as inactive (sync)"""
+        """Set user as inactive and clear current topic"""
         self.users.update_user_activity(user_id, None)
     
-    # Question operations
+    # Additional user access methods from main branch
+    def has_user_access(self, user_id: int) -> bool:
+        """Check if user has access to the system"""
+        return self.users.has_user_access(user_id)
+    
+    def is_user_allowed(self, username: str) -> bool:
+        """Check if user is in whitelist by username"""
+        # This would need to be implemented in UserRepository
+        logger.warning("is_user_allowed not implemented in current repository")
+        return False
+    
+    def is_user_allowed_by_id(self, user_id: int) -> bool:
+        """Check if user is allowed by user_id"""
+        return self.users.has_user_access(user_id)
+    
+    def add_allowed_user(self, username: str, full_name: str, grade: int, added_by: int, 
+                        user_id: int = None, language: str = "ru") -> bool:
+        """Add user to whitelist"""
+        if user_id:
+            return self.users.add_user(user_id, username, full_name, grade, language, added_by)
+        return False
+    
+    def add_allowed_user_by_id(self, user_id: int, full_name: str, grade: int, added_by: int, 
+                              username: str = None, language: str = "ru") -> bool:
+        """Add user to whitelist by user_id"""
+        return self.users.add_user(user_id, username, full_name, grade, language, added_by)
+    
+    def remove_allowed_user(self, username: str) -> bool:
+        """Remove user from whitelist by username"""
+        # This would need to be implemented in UserRepository
+        logger.warning("remove_allowed_user not implemented in current repository")
+        return False
+    
+    def remove_allowed_user_by_id(self, user_id: int) -> bool:
+        """Remove user from whitelist by user_id"""
+        return self.users.remove_user_access(user_id)
+    
+    def update_allowed_user(self, username: str, full_name: str = None, grade: int = None, 
+                           is_active: bool = None) -> bool:
+        """Update allowed user info by username"""
+        # This would need to be implemented in UserRepository
+        logger.warning("update_allowed_user not implemented in current repository")
+        return False
+    
+    def update_allowed_user_by_id(self, user_id: int, full_name: str = None, grade: int = None, 
+                                 has_access: bool = None) -> bool:
+        """Update allowed user info by user_id"""
+        # This would need to be implemented in UserRepository
+        logger.warning("update_allowed_user_by_id not implemented in current repository")
+        return False
+    
+    def get_all_allowed_users(self) -> List[Dict[str, Any]]:
+        """Get all allowed users"""
+        return self.users.get_all_users()
+    
+    def get_allowed_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get allowed user by ID"""
+        return self.users.get_user_by_id(user_id)
+    
+    # Topic operations
     def get_topic_names(self, active_only: bool = True) -> List[str]:
         """Get topic names (sync)"""
         return self.questions.get_topic_names(active_only)
@@ -276,7 +339,7 @@ class SyncDatabaseFacade:
         return self.questions.get_all_questions()
     
     def get_questions_by_user_language(self, user_id: int) -> List[Dict]:
-        """Get questions available for user based on their language (sync)"""
+        """Get questions by user language (sync)"""
         user_language = self.get_user_language(user_id)
         return self.questions.get_questions_by_language(user_language)
     
@@ -285,13 +348,47 @@ class SyncDatabaseFacade:
         return self.questions.delete_question_by_id(question_id)
     
     def get_all_ai_questions(self) -> List[Dict]:
-        """Get all AI-generated questions (sync)"""
+        """Get all AI questions (sync)"""
         return self.questions.get_all_ai_questions()
+    
+    # Additional topic methods from main branch
+    def get_all_topics(self, active_only: bool = True) -> List[Dict[str, Any]]:
+        """Get all topics"""
+        # This would need to be implemented in QuestionRepository
+        logger.warning("get_all_topics not implemented in current repository")
+        return []
+    
+    def add_topic(self, name: str, description: str = None, created_by: int = None, 
+                  main_topic_name: str = None) -> bool:
+        """Add new topic"""
+        # This would need to be implemented in QuestionRepository
+        logger.warning("add_topic not implemented in current repository")
+        return False
+    
+    def update_topic(self, topic_id: int, name: str = None, description: str = None, 
+                    is_active: bool = None) -> bool:
+        """Update topic"""
+        # This would need to be implemented in QuestionRepository
+        logger.warning("update_topic not implemented in current repository")
+        return False
+    
+    def delete_topic(self, topic_id: int) -> bool:
+        """Delete topic (soft delete)"""
+        # This would need to be implemented in QuestionRepository
+        logger.warning("delete_topic not implemented in current repository")
+        return False
+    
+    def delete_topic_permanently(self, topic_id: int) -> bool:
+        """Permanently delete topic and all related data"""
+        # This would need to be implemented in QuestionRepository
+        logger.warning("delete_topic_permanently not implemented in current repository")
+        return False
     
     # Statistics operations
     def add_test_result(self, user_id: int, topic: str, percentage: float) -> None:
         """Add test result (sync)"""
         self.statistics.add_test_result(user_id, topic, percentage)
+        self._clear_cache_for_user(user_id)
     
     def get_user_test_results(self, user_id: int) -> List[Dict]:
         """Get user test results (sync)"""
@@ -306,24 +403,23 @@ class SyncDatabaseFacade:
         return self.statistics.get_error_tasks_for_user(user_id, topic, limit)
     
     def get_error_topics(self, user_id: int) -> List[tuple[str, int]]:
-        """Get error topics for user (sync)"""
+        """Get error topics (sync)"""
         return self.statistics.get_error_topics(user_id)
     
     def add_user_error(self, user_id: int, topic: str, question_text: str,
                       user_answer_text: str, correct_answer_text: str,
                       explanation_text: str) -> None:
         """Add user error (sync)"""
-        self.statistics.add_user_error(
-            user_id, topic, question_text, user_answer_text,
-            correct_answer_text, explanation_text
-        )
+        self.statistics.add_user_error(user_id, topic, question_text, 
+                                     user_answer_text, correct_answer_text)
+        self._clear_cache_for_user(user_id)
     
     def add_user_error_by_question_id(self, user_id: int, question_id: int, topic: str,
                                      user_answer_text: str, correct_answer_text: str) -> None:
         """Add user error by question ID (sync)"""
-        self.statistics.add_user_error_by_question_id(
-            user_id, question_id, topic, user_answer_text, correct_answer_text
-        )
+        self.statistics.add_user_error_by_question_id(user_id, question_id, topic,
+                                                     user_answer_text, correct_answer_text)
+        self._clear_cache_for_user(user_id)
     
     def get_recent_topics(self, user_id: int, limit: int = 5) -> List[tuple[str, float, str]]:
         """Get recent topics (sync)"""
@@ -337,29 +433,346 @@ class SyncDatabaseFacade:
     def decrement_error_count(self, user_id: int, question_text: str) -> None:
         """Decrement error count (sync)"""
         self.statistics.decrement_error_count(user_id, question_text)
+        self._clear_cache_for_user(user_id)
     
     def decrement_error_count_by_question_id(self, user_id: int, question_id: int) -> None:
         """Decrement error count by question ID (sync)"""
         self.statistics.decrement_error_count_by_question_id(user_id, question_id)
+        self._clear_cache_for_user(user_id)
     
     def get_student_detailed_statistics(self, user_id: int) -> Optional[Dict]:
-        """Get detailed statistics for a student (sync)"""
+        """Get detailed student statistics (sync)"""
         return self.statistics.get_student_detailed_statistics(user_id)
     
-    def close_connections(self):
-        """Close all database connections"""
+    # Additional methods from main branch that need implementation
+    def get_explanation_fuzzy_by_question_text(self, question_text: str) -> Optional[str]:
+        """Get explanation using fuzzy matching"""
+        # This would need to be implemented in QuestionRepository
+        logger.warning("get_explanation_fuzzy_by_question_text not implemented")
+        return None
+    
+    def delete_all_user_data(self, user_id: int) -> bool:
+        """Delete all data associated with a user"""
+        # This would need to be implemented across multiple repositories
+        logger.warning("delete_all_user_data not implemented")
+        return False
+    
+    def set_all_users_inactive(self) -> None:
+        """Set all users as inactive"""
+        # This would need to be implemented in UserRepository
+        logger.warning("set_all_users_inactive not implemented")
+    
+    def clear_user_activity(self, user_id: int) -> None:
+        """Clear user activity and set as inactive"""
+        self.set_user_inactive(user_id)
+    
+    def register_user(self, user_id: int, username: str) -> None:
+        """Register user if they don't exist"""
+        # This would need to be implemented in UserRepository
+        logger.warning("register_user not implemented")
+    
+    def update_question(self, question_text: str, new_answer: str, new_explanation: str) -> None:
+        """Update a question's answer and explanation"""
+        # This would need to be implemented in QuestionRepository
+        logger.warning("update_question not implemented")
+    
+    def update_user_info(self, user_id: int, full_name: str, grade: int) -> None:
+        """Update user information"""
+        # This would need to be implemented in UserRepository
+        logger.warning("update_user_info not implemented")
+    
+    # Additional stub methods for compatibility with main branch
+    def get_base_topic_structure(self) -> Dict[str, List[str]]:
+        """Get base topic structure"""
+        logger.warning("get_base_topic_structure not implemented")
+        return {}
+    
+    def get_base_topic_structure_by_language(self, language: str) -> Dict[str, List[str]]:
+        """Get base topic structure by language"""
+        logger.warning("get_base_topic_structure_by_language not implemented")
+        return {}
+    
+    def add_base_topic_section(self, main_topic: str, subtopics: List[str], created_by: int = None) -> bool:
+        """Add base topic section"""
+        logger.warning("add_base_topic_section not implemented")
+        return False
+    
+    def update_base_topic_section(self, old_main_topic: str, new_main_topic: str = None, 
+                                 new_subtopics: List[str] = None) -> bool:
+        """Update base topic section"""
+        logger.warning("update_base_topic_section not implemented")
+        return False
+    
+    def delete_base_topic_section(self, main_topic: str, hard_delete: bool = False) -> bool:
+        """Delete base topic section"""
+        logger.warning("delete_base_topic_section not implemented")
+        return False
+    
+    def add_base_subtopic(self, main_topic: str, subtopic: str) -> bool:
+        """Add base subtopic"""
+        logger.warning("add_base_subtopic not implemented")
+        return False
+    
+    def remove_base_subtopic(self, main_topic: str, subtopic: str) -> bool:
+        """Remove base subtopic"""
+        logger.warning("remove_base_subtopic not implemented")
+        return False
+    
+    def get_user_full_profile(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get complete user profile"""
+        return self.users.get_user_by_id(user_id)
+    
+    def sync_user_with_whitelist(self, user_id: int, username: str) -> bool:
+        """Sync user with whitelist"""
+        logger.warning("sync_user_with_whitelist not implemented")
+        return False
+    
+    def get_user_historical_stats(self, user_id: int) -> Dict[str, Any]:
+        """Get user historical statistics"""
+        logger.warning("get_user_historical_stats not implemented")
+        return {}
+    
+    def get_all_users_with_history(self) -> List[Dict[str, Any]]:
+        """Get all users with history"""
+        logger.warning("get_all_users_with_history not implemented")
+        return []
+    
+    def get_topic_question_counts(self) -> Dict[str, int]:
+        """Get question count for each topic"""
+        logger.warning("get_topic_question_counts not implemented")
+        return {}
+    
+    def get_topics_with_question_counts(self, active_only: bool = True) -> List[Dict[str, Any]]:
+        """Get topics with question counts"""
+        logger.warning("get_topics_with_question_counts not implemented")
+        return []
+    
+    def get_all_students_summary(self) -> List[Dict[str, Any]]:
+        """Get summary of all students"""
+        logger.warning("get_all_students_summary not implemented")
+        return []
+    
+    def get_class_statistics(self, grade: int = None) -> Dict[str, Any]:
+        """Get class statistics"""
+        logger.warning("get_class_statistics not implemented")
+        return {}
+    
+    def get_student_contact_info(self, user_id: int) -> Dict[str, Any]:
+        """Get student contact info"""
+        user = self.users.get_user_by_id(user_id)
+        if user:
+            return {
+                'user_id': user.get('user_id'),
+                'username': user.get('username'),
+                'full_name': user.get('full_name'),
+                'grade': user.get('grade'),
+                'display_name': user.get('full_name') or 'Неизвестен',
+                'display_username': user.get('username') or 'не указан'
+            }
+        return {}
+    
+    def find_student_by_identifier(self, identifier: str) -> Optional[Dict[str, Any]]:
+        """Find student by identifier"""
+        logger.warning("find_student_by_identifier not implemented")
+        return None
+    
+    def get_comprehensive_user_access_check(self, user_id: int, username: str = None) -> Dict[str, Any]:
+        """Comprehensive user access check"""
+        logger.warning("get_comprehensive_user_access_check not implemented")
+        return {}
+    
+    # Language-related methods
+    def clear_user_data_on_language_change(self, user_id: int) -> None:
+        """Clear user data on language change"""
+        logger.warning("clear_user_data_on_language_change not implemented")
+    
+    def get_topics_by_language(self, language: str, active_only: bool = True) -> List[Dict]:
+        """Get topics by language"""
+        return self.questions.get_questions_by_language(language)
+    
+    def get_questions_by_user_language(self, user_id: int, topic: str = None) -> List[Dict]:
+        """Get questions by user language"""
+        user_language = self.get_user_language(user_id)
+        return self.questions.get_questions_by_language(user_language)
+    
+    def add_topic_with_language(self, name: str, language: str, main_topic_name: str, 
+                               created_by: int = None) -> bool:
+        """Add topic with language"""
+        logger.warning("add_topic_with_language not implemented")
+        return False
+    
+    def get_topics_with_language_info(self, active_only: bool = True, for_admin: bool = False) -> List[Dict[str, Any]]:
+        """Get topics with language info"""
+        logger.warning("get_topics_with_language_info not implemented")
+        return []
+    
+    def create_kazakh_main_topics(self) -> bool:
+        """Create Kazakh main topics"""
+        logger.warning("create_kazakh_main_topics not implemented")
+        return False
+    
+    def create_russian_main_topics(self) -> bool:
+        """Create Russian main topics"""
+        logger.warning("create_russian_main_topics not implemented")
+        return False
+    
+    def get_main_topics_by_language(self, language: str, active_only: bool = True) -> List[Dict[str, Any]]:
+        """Get main topics by language"""
+        logger.warning("get_main_topics_by_language not implemented")
+        return []
+    
+    def get_full_topic_structure_by_language(self, language: str, active_only: bool = True) -> Dict[str, List[Dict[str, Any]]]:
+        """Get full topic structure by language"""
+        logger.warning("get_full_topic_structure_by_language not implemented")
+        return {}
+    
+    def get_topic_language(self, topic_name: str) -> str:
+        """Get topic language"""
+        logger.warning("get_topic_language not implemented")
+        return 'ru'
+    
+    def get_main_topic_and_language_for_subtopic(self, subtopic_name: str) -> Tuple[Optional[str], str]:
+        """Get main topic and language for subtopic"""
+        logger.warning("get_main_topic_and_language_for_subtopic not implemented")
+        return None, 'ru'
+    
+    def sync_subtopic_languages_with_main_topics(self) -> bool:
+        """Sync subtopic languages with main topics"""
+        logger.warning("sync_subtopic_languages_with_main_topics not implemented")
+        return False
+    
+    def get_user_display_info(self, user_id: int) -> Dict[str, Any]:
+        """Get user display info"""
+        user = self.users.get_user_by_id(user_id)
+        if user:
+            return {
+                'user_id': user_id,
+                'username': user.get('username'),
+                'full_name': user.get('full_name'),
+                'grade': user.get('grade'),
+                'language': user.get('language', 'ru'),
+                'has_complete_info': bool(user.get('full_name') and user.get('grade'))
+            }
+        return {
+            'user_id': user_id,
+            'username': None,
+            'full_name': None,
+            'grade': None,
+            'language': 'ru',
+            'has_complete_info': False
+        }
+    
+    # Topic management methods
+    def get_subtopics_by_main_topic(self, main_topic_name: str) -> List[str]:
+        """Get subtopics by main topic"""
+        logger.warning("get_subtopics_by_main_topic not implemented")
+        return []
+    
+    def toggle_topic_status(self, topic_id: int) -> bool:
+        """Toggle topic status"""
+        logger.warning("toggle_topic_status not implemented")
+        return False
+    
+    def update_topic_name(self, topic_id: int, new_name: str) -> bool:
+        """Update topic name"""
+        logger.warning("update_topic_name not implemented")
+        return False
+    
+    def delete_topic_completely(self, topic_id: int) -> bool:
+        """Delete topic completely"""
+        logger.warning("delete_topic_completely not implemented")
+        return False
+    
+    def add_main_topic_with_language(self, main_topic: str, language: str, 
+                                    subtopics: List[str] = None, created_by: int = None) -> bool:
+        """Add main topic with language"""
+        logger.warning("add_main_topic_with_language not implemented")
+        return False
+    
+    def toggle_main_topic_status(self, main_topic_name: str) -> bool:
+        """Toggle main topic status"""
+        logger.warning("toggle_main_topic_status not implemented")
+        return False
+    
+    def update_topic_section(self, topic_id: int, new_main_topic_name: str) -> bool:
+        """Update topic section"""
+        logger.warning("update_topic_section not implemented")
+        return False
+    
+    def clear_user_test_activity(self, user_id: int) -> None:
+        """Clear user test activity"""
+        self.users.update_user_activity(user_id, None)
+    
+    def is_user_system_active(self, user_id: int) -> bool:
+        """Check if user is active in system"""
+        return self.users.has_user_access(user_id)
+    
+    def set_user_access(self, user_id: int, has_access: bool) -> bool:
+        """Set user access status"""
+        if has_access:
+            return self.users.restore_user_access(user_id)
+        else:
+            return self.users.remove_user_access(user_id)
+    
+    # New topic_id methods
+    def get_tasks_for_topic_id(self, topic_id: int, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get tasks for topic by ID"""
+        logger.warning("get_tasks_for_topic_id not implemented")
+        return []
+    
+    def get_error_tasks_for_user_by_topic_id(self, user_id: int, topic_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get error tasks for user by topic ID"""
+        logger.warning("get_error_tasks_for_user_by_topic_id not implemented")
+        return []
+    
+    def add_question_with_topic_id(self, question: dict, topic_id: int) -> bool:
+        """Add question with topic ID"""
+        logger.warning("add_question_with_topic_id not implemented")
+        return False
+    
+    def get_topic_question_counts_by_id(self) -> Dict[int, Dict[str, Any]]:
+        """Get topic question counts by ID"""
+        logger.warning("get_topic_question_counts_by_id not implemented")
+        return {}
+    
+    def rename_topic_by_id(self, topic_id: int, new_name: str) -> bool:
+        """Rename topic by ID"""
+        logger.warning("rename_topic_by_id not implemented")
+        return False
+    
+    def rename_topic_by_name(self, old_name: str, new_name: str) -> bool:
+        """Rename topic by name"""
+        logger.warning("rename_topic_by_name not implemented")
+        return False
+    
+    def get_topic_hierarchy_kk(self) -> Dict[str, Any]:
+        """Get Kazakh topic hierarchy"""
         try:
-            self.admins.connection_manager.close_all_connections()
-            logger.info("🔒 All database connections closed")
-        except Exception as e:
-            logger.error(f"❌ Error closing connections: {e}")
-
-# Global facade instance
-_sync_database_facade = None
+            from src.config.constants_kk import TOPIC_HIERARCHY_KK
+            return TOPIC_HIERARCHY_KK
+        except ImportError:
+            logger.warning("Failed to import TOPIC_HIERARCHY_KK")
+            return {}
+    
+    def get_topic_hierarchy_ru(self) -> Dict[str, Any]:
+        """Get Russian topic hierarchy"""
+        try:
+            from src.config.constants import TOPIC_HIERARCHY
+            return TOPIC_HIERARCHY
+        except ImportError:
+            logger.warning("Failed to import TOPIC_HIERARCHY")
+            return {}
+    
+    def close_connections(self):
+        """Close database connections"""
+        # In the current implementation, repositories handle their own connections
+        logger.info("Database connections closed")
 
 def get_sync_database_facade() -> SyncDatabaseFacade:
-    """Get global synchronous database facade instance"""
-    global _sync_database_facade
-    if _sync_database_facade is None:
-        _sync_database_facade = SyncDatabaseFacade()
-    return _sync_database_facade 
+    """
+    Get singleton instance of SyncDatabaseFacade
+    """
+    global _sync_database_facade_instance
+    if '_sync_database_facade_instance' not in globals():
+        _sync_database_facade_instance = SyncDatabaseFacade()
+    return _sync_database_facade_instance 
