@@ -163,17 +163,17 @@ class TopicManager:
                 cursor.execute('''
                     SELECT 
                         st.id,
-                        st.name,
-                        mt.name as main_topic,
+                        st.subtopic_name as name,
+                        mt.topic_name as main_topic,
                         st.is_active,
                         st.created_at,
                         COUNT(q.id) as question_count
                     FROM subtopics st
                     JOIN main_topics mt ON st.main_topic_id = mt.id
                     LEFT JOIN questions q ON st.id = q.topic_id
-                    WHERE st.is_active = 1 AND mt.is_active = 1
-                    GROUP BY st.id, st.name, mt.name, st.is_active, st.created_at
-                    ORDER BY mt.order_index, st.order_index
+                    WHERE st.is_active = true AND mt.is_active = true
+                    GROUP BY st.id, st.subtopic_name, mt.topic_name, st.is_active, st.created_at
+                    ORDER BY mt.topic_name, st.subtopic_name
                 ''')
                 
                 results = cursor.fetchall()
@@ -201,16 +201,15 @@ class TopicManager:
                 cursor.execute('''
                     SELECT 
                         mt.id,
-                        mt.name,
-                        mt.order_index,
+                        mt.topic_name as name,
                         COUNT(st.id) as subtopics_count,
                         COUNT(q.id) as total_questions
                     FROM main_topics mt
-                    LEFT JOIN subtopics st ON mt.id = st.main_topic_id AND st.is_active = 1
+                    LEFT JOIN subtopics st ON mt.id = st.main_topic_id AND st.is_active = true
                     LEFT JOIN questions q ON st.id = q.topic_id
-                    WHERE mt.is_active = 1
-                    GROUP BY mt.id, mt.name, mt.order_index
-                    ORDER BY mt.order_index
+                    WHERE mt.is_active = true
+                    GROUP BY mt.id, mt.topic_name
+                    ORDER BY mt.topic_name
                 ''')
                 
                 results = cursor.fetchall()
@@ -218,9 +217,8 @@ class TopicManager:
                     {
                         'id': row[0],
                         'name': row[1],
-                        'order_index': row[2],
-                        'subtopics_count': row[3],
-                        'total_questions': row[4]
+                        'subtopics_count': row[2],
+                        'total_questions': row[3]
                     }
                     for row in results
                 ]
@@ -297,17 +295,17 @@ class TopicManager:
                 cursor = conn.cursor()
                 cursor.execute('''
                     SELECT 
-                        st.name,
+                        st.subtopic_name as name,
                         st.id,
-                        mt.name as main_topic,
+                        mt.topic_name as main_topic,
                         st.is_active,
                         st.created_at,
                         COUNT(q.id) as question_count
                     FROM subtopics st
                     JOIN main_topics mt ON st.main_topic_id = mt.id
                     LEFT JOIN questions q ON st.id = q.topic_id
-                    GROUP BY st.id, st.name, mt.name, st.is_active, st.created_at
-                    ORDER BY mt.order_index, st.order_index
+                    GROUP BY st.id, st.subtopic_name, mt.topic_name, st.is_active, st.created_at
+                    ORDER BY mt.topic_name, st.subtopic_name
                 ''')
                 
                 results = cursor.fetchall()

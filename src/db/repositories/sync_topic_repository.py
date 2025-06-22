@@ -185,7 +185,7 @@ class SyncTopicRepository(SyncBaseRepository):
         """Get main topics by language"""
         try:
             query = """
-                SELECT id, topic_name as name, language, is_active, created_at
+                SELECT id, topic_name, language, is_active, created_at
                 FROM main_topics
                 WHERE language = %s
             """

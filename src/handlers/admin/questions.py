@@ -215,14 +215,14 @@ class QuestionsHandler(AdminBaseHandler):
             for topic in ru_main_topics:
                 topic_with_lang = topic.copy()
                 topic_with_lang['language'] = 'ru'
-                topic_with_lang['display_name'] = f"🇷🇺 {topic['name']}"
+                topic_with_lang['display_name'] = f"🇷🇺 {topic['topic_name']}"
                 all_main_topics.append(topic_with_lang)
             
             # Добавляем казахские разделы с пометкой языка
             for topic in kk_main_topics:
                 topic_with_lang = topic.copy()
                 topic_with_lang['language'] = 'kk'
-                topic_with_lang['display_name'] = f"🇰🇿 {topic['name']}"
+                topic_with_lang['display_name'] = f"🇰🇿 {topic['topic_name']}"
                 all_main_topics.append(topic_with_lang)
                 
         except Exception as e:
@@ -271,7 +271,7 @@ class QuestionsHandler(AdminBaseHandler):
             return
         
         selected_main_topic = main_topics[main_topic_index]
-        main_topic_name = selected_main_topic['name']
+        main_topic_name = selected_main_topic['topic_name']
         main_topic_language = selected_main_topic.get('language', 'ru')
         main_topic_display_name = selected_main_topic.get('display_name', main_topic_name)
         
@@ -1597,14 +1597,14 @@ class QuestionsHandler(AdminBaseHandler):
             for topic in ru_main_topics:
                 topic_with_lang = topic.copy()
                 topic_with_lang['language'] = 'ru'
-                topic_with_lang['display_name'] = f"🇷🇺 {topic['name']}"
+                topic_with_lang['display_name'] = f"🇷🇺 {topic['topic_name']}"
                 all_main_topics.append(topic_with_lang)
             
             # Добавляем казахские разделы с пометкой языка
             for topic in kk_main_topics:
                 topic_with_lang = topic.copy()
                 topic_with_lang['language'] = 'kk'
-                topic_with_lang['display_name'] = f"🇰🇿 {topic['name']}"
+                topic_with_lang['display_name'] = f"🇰🇿 {topic['topic_name']}"
                 all_main_topics.append(topic_with_lang)
                 
         except Exception as e:
@@ -1635,7 +1635,7 @@ class QuestionsHandler(AdminBaseHandler):
         for i, main_topic in enumerate(all_main_topics):
             # Используем display_name с флагом языка
             display_name = main_topic['display_name']
-            if main_topic['name'] == current_main_topic:
+            if main_topic['topic_name'] == current_main_topic:
                 display_name += " ✅ (текущий)"
             
             if len(display_name) > 50:
@@ -1669,7 +1669,7 @@ class QuestionsHandler(AdminBaseHandler):
             return
         
         selected_main_topic = main_topics[section_index]
-        main_topic_name = selected_main_topic['name']
+        main_topic_name = selected_main_topic['topic_name']
         main_topic_display_name = selected_main_topic.get('display_name', main_topic_name)
         
         # Получаем темы для выбранного раздела

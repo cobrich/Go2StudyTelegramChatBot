@@ -21,14 +21,14 @@ def build_topic_selection_keyboard(user_id: int = None) -> InlineKeyboardMarkup:
         russian_topics = db.get_main_topics_by_language('ru', active_only=True)
         kazakh_topics = db.get_main_topics_by_language('kk', active_only=True)
         main_topics = russian_topics + kazakh_topics
-        # Сортируем по order_index
-        main_topics.sort(key=lambda x: x['order_index'])
+        # Сортируем по названию
+        main_topics.sort(key=lambda x: x['topic_name'])
     else:
         # Ученики видят только разделы на своем языке
         main_topics = db.get_main_topics_by_language(user_language, active_only=True)
     
     keyboard = [
-        [InlineKeyboardButton(topic['name'], callback_data=f"main_topic_{i}")]
+        [InlineKeyboardButton(topic['topic_name'], callback_data=f"main_topic_{i}")]
         for i, topic in enumerate(main_topics)
     ]
     # Add "Back to main menu" button at the end

@@ -60,14 +60,18 @@ def clear_existing_topics(db):
         
         # Удаляем все main topics (каскадно удалятся subtopics и questions)
         for topic in ru_topics:
-            success = db.topics.delete_main_topic_permanently(topic['name'], 'ru')
-            if success:
-                print(f"  ✅ Удален русский раздел: {topic['name']}")
+            try:
+                success = db.topics.delete_main_topic_permanently(topic['topic_name'], 'ru')
+                if success:
+                    print(f"  ✅ Удален русский раздел: {topic['topic_name']}")
+            except: pass
         
         for topic in kk_topics:
-            success = db.topics.delete_main_topic_permanently(topic['name'], 'kk')
-            if success:
-                print(f"  ✅ Удален казахский раздел: {topic['name']}")
+            try:
+                success = db.topics.delete_main_topic_permanently(topic['topic_name'], 'kk')
+                if success:
+                    print(f"  ✅ Удален казахский раздел: {topic['topic_name']}")
+            except: pass
         
         print("✅ Очистка завершена")
         return True

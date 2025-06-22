@@ -999,13 +999,13 @@ class CallbackHandlers(BaseHandler):
                 russian_topics = self.db.get_main_topics_by_language('ru', active_only=True)
                 kazakh_topics = self.db.get_main_topics_by_language('kk', active_only=True)
                 all_topics = russian_topics + kazakh_topics
-                # Сортируем по order_index
-                all_topics.sort(key=lambda x: x['order_index'])
-                main_topic = all_topics[main_topic_index]['name']
+                # Сортируем по названию
+                all_topics.sort(key=lambda x: x['topic_name'])
+                main_topic = all_topics[main_topic_index]['topic_name']
             else:
                 # Ученики видят только разделы на своем языке
                 user_topics = self.db.get_main_topics_by_language(user_language, active_only=True)
-                main_topic = user_topics[main_topic_index]['name']
+                main_topic = user_topics[main_topic_index]['topic_name']
             
             logging.info(f"[handle_main_topic_selection] main_topic_index={main_topic_index}, main_topic={main_topic}")
         except (ValueError, IndexError):

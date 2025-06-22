@@ -512,13 +512,13 @@ class SyncDatabaseFacade:
             # Сначала попробуем русский
             ru_topics = self.topics.get_main_topics_by_language('ru', active_only=False)
             for topic in ru_topics:
-                if topic['name'] == main_topic:
+                if topic['topic_name'] == main_topic:
                     return self.topics.delete_main_topic_permanently(main_topic, 'ru')
             
             # Если не найден в русских, попробуем казахский
             kk_topics = self.topics.get_main_topics_by_language('kk', active_only=False)
             for topic in kk_topics:
-                if topic['name'] == main_topic:
+                if topic['topic_name'] == main_topic:
                     return self.topics.delete_main_topic_permanently(main_topic, 'kk')
             
             # Если не найден ни в одном языке, попробуем удалить без указания языка
@@ -621,12 +621,12 @@ class SyncDatabaseFacade:
         
         for mt in main_topics:
             # Check exact match first
-            if mt['name'] == main_topic_name:
+            if mt['topic_name'] == main_topic_name:
                 return self.topics.add_topic(name, mt['id'], created_by)
             
             # Check if topic name matches without emoji (for backward compatibility)
             # Remove emoji and extra spaces from stored topic name
-            clean_stored_name = mt['name']
+            clean_stored_name = mt['topic_name']
             # Remove common emojis
             emojis_to_remove = ['📊', '📐', '🔢', '🔤', '🧠', '⚡', '🎯', '💡', '🔥', '✨']
             for emoji in emojis_to_remove:
