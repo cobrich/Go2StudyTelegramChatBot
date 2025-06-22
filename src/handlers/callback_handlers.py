@@ -803,25 +803,53 @@ class CallbackHandlers(BaseHandler):
         self.db.clear_user_test_activity(user_id)  # Очищаем только тему теста
         self.db.set_user_inactive(user_id)  # Очищаем статус активного теста
         self.clear_user_data(context)
-        # Устанавливаем флаг выбора темы
-        context.user_data['in_topic_selection'] = True
+        # Очищаем флаг выбора темы
+        context.user_data.pop('in_topic_selection', None)
+        
+        # Формируем приветственное сообщение как в /start
+        is_admin = self.db.is_admin(user_id)
+        
+        if not is_admin:
+            # Для обычных пользователей
+            user_info = self.db.get_user_info(user_id)
+            welcome_name = user_info.get('full_name') if user_info else query.from_user.first_name or "пользователь"
+            grade_text = f", {user_info.get('grade')} класс" if user_info and user_info.get('grade') else ""
+            if user_language == 'kk':
+                grade_text = f", {user_info.get('grade')} сынып" if user_info and user_info.get('grade') else ""
+                welcome_text = get_message('welcome', user_language, name=welcome_name, grade=user_info.get('grade') if user_info else '') + "\n\n" + get_message('bot_description', user_language)
+            else:
+                welcome_text = f"👋 Привет, {welcome_name}{grade_text}!\n\n📚 Я бот для изучения математики. Выбери действие:"
+        else:
+            # Для админов
+            admin_info = self.db.get_admin_info(user_id)
+            welcome_name = admin_info['full_name'] if admin_info and admin_info.get('full_name') else query.from_user.first_name or "администратор"
+            if user_language == 'kk':
+                welcome_text = f"👋 Қош келдіңіз, {welcome_name}!\n\n🔧 Сіз <b>әкімші</b> ретінде кірдіңіз.\n\nӘрекетті таңдаңыз:"
+            else:
+                welcome_text = f"👋 Добро пожаловать, {welcome_name}!\n\n🔧 Вы вошли как <b>администратор</b>.\n\nВыберите действие:"
         
         try:
-            # Показываем выбор разделов математики (inline-клавиатура)
-            await query.message.edit_text(
-                get_message('select_topic', user_language),
-                reply_markup=build_topic_selection_keyboard(user_id),
-                parse_mode='Markdown'
+            # Удаляем inline-клавиатуру у старого сообщения
+            await query.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        
+        try:
+            # Отправляем новое сообщение с приветствием и обычной клавиатурой
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=welcome_text,
+                reply_markup=get_main_menu_markup(user_id),
+                parse_mode='HTML'
             )
         except Exception as e:
-            logging.error(f"Error editing message for main menu: {e}")
-            # Fallback: отправляем новое сообщение
+            logging.error(f"Error sending main menu message: {e}")
+            # Fallback: пытаемся отправить простое сообщение
             try:
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
-                    text=get_message('select_topic', user_language),
-                    reply_markup=build_topic_selection_keyboard(user_id),
-                    parse_mode='Markdown'
+                    text=get_message('topic_not_selected', user_language),
+                    reply_markup=get_main_menu_markup(user_id)
                 )
             except Exception as e2:
                 logging.error(f"Error sending fallback main menu message: {e2}")
