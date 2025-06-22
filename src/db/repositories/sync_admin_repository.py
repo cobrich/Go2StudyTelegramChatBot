@@ -15,21 +15,13 @@ class SyncAdminRepository(SyncBaseRepository):
     
     def is_admin(self, user_id: int) -> bool:
         """Check if user is admin (sync)"""
-        logger.info(f"🔍 SyncAdminRepository.is_admin: проверяем user_id={user_id}")
-        
         try:
             query = "SELECT 1 FROM admins WHERE user_id = %s"
-            logger.info(f"📝 SyncAdminRepository.is_admin: выполняем запрос: {query} с параметром {user_id}")
-            
             result = self.fetch_val(query, (user_id,))
-            logger.info(f"📊 SyncAdminRepository.is_admin: результат запроса: {result} (тип: {type(result)})")
-            
-            is_admin = result is not None
-            logger.info(f"🎯 SyncAdminRepository.is_admin: финальный результат для {user_id}: {is_admin}")
-            return is_admin
+            return result is not None
             
         except Exception as e:
-            logger.error(f"❌ Error checking admin status for user {user_id}: {e}")
+            logger.error(f"❌ Error checking admin status for {user_id}: {e}")
             return False
     
     def get_admin_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:

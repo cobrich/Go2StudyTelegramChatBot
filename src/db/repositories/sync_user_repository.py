@@ -15,18 +15,10 @@ class SyncUserRepository(SyncBaseRepository):
     
     def has_user_access(self, user_id: int) -> bool:
         """Check if user has access (sync)"""
-        logger.info(f"🔍 SyncUserRepository.has_user_access: проверяем user_id={user_id}")
-        
         try:
             query = "SELECT 1 FROM allowed_users WHERE user_id = %s AND has_access = %s"
-            logger.info(f"📝 SyncUserRepository.has_user_access: выполняем запрос: {query} с параметрами ({user_id}, True)")
-            
             result = self.fetch_val(query, (user_id, True))
-            logger.info(f"📊 SyncUserRepository.has_user_access: результат запроса: {result} (тип: {type(result)})")
-            
-            has_access = result is not None
-            logger.info(f"🎯 SyncUserRepository.has_user_access: финальный результат для {user_id}: {has_access}")
-            return has_access
+            return result is not None
             
         except Exception as e:
             logger.error(f"❌ Error checking user access for {user_id}: {e}")

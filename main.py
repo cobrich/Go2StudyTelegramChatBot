@@ -30,22 +30,22 @@ logger = logging.getLogger(__name__)
 
 def main() -> None:
     """Start the bot."""
-    # Create custom request with increased timeouts
+    # Create custom request with optimized timeouts
     request = HTTPXRequest(
         connection_pool_size=8,
-        connect_timeout=30.0,
-        read_timeout=30.0,
-        write_timeout=30.0,
-        pool_timeout=30.0
+        connect_timeout=10.0,  # Уменьшено с 30 до 10 секунд
+        read_timeout=15.0,     # Уменьшено с 30 до 15 секунд
+        write_timeout=15.0,    # Уменьшено с 30 до 15 секунд
+        pool_timeout=10.0      # Уменьшено с 30 до 10 секунд
     )
     
-    # Create separate request for get_updates with longer timeouts
+    # Create separate request for get_updates with reasonable timeouts
     get_updates_request = HTTPXRequest(
         connection_pool_size=8,
-        connect_timeout=60.0,
-        read_timeout=60.0,
-        write_timeout=60.0,
-        pool_timeout=60.0
+        connect_timeout=15.0,  # Уменьшено с 60 до 15 секунд
+        read_timeout=30.0,     # Уменьшено с 60 до 30 секунд
+        write_timeout=15.0,    # Уменьшено с 60 до 15 секунд
+        pool_timeout=15.0      # Уменьшено с 60 до 15 секунд
     )
     
     # Create the Application with custom requests FIRST

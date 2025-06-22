@@ -5,6 +5,7 @@ Provides unified interface for all database operations using synchronous reposit
 """
 
 import logging
+import time
 from typing import Optional, List, Dict, Any
 from .repositories.sync_admin_repository import SyncAdminRepository
 from .repositories.sync_user_repository import SyncUserRepository
@@ -21,32 +22,74 @@ class SyncDatabaseFacade:
         self.users = SyncUserRepository()
         self.questions = SyncQuestionRepository()
         self.statistics = SyncStatisticsRepository()
+        
+        # Кеширование для улучшения производительности
+        self._cache = {}
+        self._cache_ttl = 300  # 5 минут
+        
         logger.info("SyncDatabaseFacade initialized for Neon PostgreSQL")
     
+    def _get_cache_key(self, operation: str, *args) -> str:
+        """Генерирует ключ кеша"""
+        return f"{operation}:{':'.join(map(str, args))}"
+    
+    def _get_cached_result(self, cache_key: str) -> Optional[Any]:
+        """Получает результат из кеша если он не устарел"""
+        if cache_key in self._cache:
+            result, timestamp = self._cache[cache_key]
+            if time.time() - timestamp < self._cache_ttl:
+                return result
+            else:
+                # Удаляем устаревший результат
+                del self._cache[cache_key]
+        return None
+    
+    def _set_cache_result(self, cache_key: str, result: Any) -> None:
+        """Сохраняет результат в кеш"""
+        self._cache[cache_key] = (result, time.time())
+    
+    def _clear_cache_for_user(self, user_id: int) -> None:
+        """Очищает кеш для конкретного пользователя"""
+        keys_to_remove = []
+        for key in self._cache.keys():
+            if f":{user_id}" in key or key.endswith(f":{user_id}"):
+                keys_to_remove.append(key)
+        
+        for key in keys_to_remove:
+            del self._cache[key]
+    
+    def _clear_all_cache(self) -> None:
+        """Очищает весь кеш"""
+        self._cache.clear()
+    
     def check_user_access(self, user_id: int, username: str = None) -> bool:
-        """Check if user has access to the bot (sync)"""
+        """Check if user has access to the bot (sync) - с кешированием"""
+        cache_key = self._get_cache_key("user_access", user_id)
+        cached_result = self._get_cached_result(cache_key)
+        if cached_result is not None:
+            return cached_result
+        
         logger.info(f"🔍 Проверка доступа для пользователя: user_id={user_id}, username={username}")
         
         try:
             # First check if user is admin
-            logger.info(f"📋 Проверяем является ли пользователь {user_id} админом...")
-            is_admin = self.admins.is_admin(user_id)
-            logger.info(f"🔧 Результат проверки админа для {user_id}: {is_admin}")
+            is_admin = self.is_admin(user_id)
             
             if is_admin:
                 logger.info(f"✅ Пользователь {user_id} является админом - доступ разрешен")
+                self._set_cache_result(cache_key, True)
                 return True
             
             # If not admin, check whitelist of regular users
-            logger.info(f"👤 Пользователь {user_id} не админ, проверяем в whitelist обычных пользователей...")
             has_access = self.users.has_user_access(user_id)
-            logger.info(f"📝 Результат проверки whitelist для {user_id}: {has_access}")
             
             if has_access:
                 logger.info(f"✅ Пользователь {user_id} найден в whitelist - доступ разрешен")
+                self._set_cache_result(cache_key, True)
                 return True
             else:
                 logger.warning(f"❌ Пользователь {user_id} НЕ найден ни в админах, ни в whitelist - доступ запрещен")
+                self._set_cache_result(cache_key, False)
                 return False
                 
         except Exception as e:
@@ -89,25 +132,52 @@ class SyncDatabaseFacade:
     
     # Admin operations
     def is_admin(self, user_id: int) -> bool:
-        """Check if user is admin (sync)"""
-        return self.admins.is_admin(user_id)
+        """Check if user is admin (sync) - с кешированием"""
+        cache_key = self._get_cache_key("is_admin", user_id)
+        cached_result = self._get_cached_result(cache_key)
+        if cached_result is not None:
+            return cached_result
+        
+        result = self.admins.is_admin(user_id)
+        self._set_cache_result(cache_key, result)
+        return result
     
     def is_super_admin(self, user_id: int) -> bool:
-        """Check if user is super admin (sync)"""
-        return self.admins.is_super_admin(user_id)
+        """Check if user is super admin (sync) - с кешированием"""
+        cache_key = self._get_cache_key("is_super_admin", user_id)
+        cached_result = self._get_cached_result(cache_key)
+        if cached_result is not None:
+            return cached_result
+        
+        result = self.admins.is_super_admin(user_id)
+        self._set_cache_result(cache_key, result)
+        return result
     
     def get_admin_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """Get admin by ID (sync)"""
-        return self.admins.get_admin_by_id(user_id)
+        """Get admin by ID (sync) - с кешированием"""
+        cache_key = self._get_cache_key("admin_by_id", user_id)
+        cached_result = self._get_cached_result(cache_key)
+        if cached_result is not None:
+            return cached_result
+        
+        result = self.admins.get_admin_by_id(user_id)
+        self._set_cache_result(cache_key, result)
+        return result
     
     def add_admin(self, user_id: int, username: str = None, full_name: str = None,
                   is_super_admin: bool = False, created_by: int = None) -> bool:
         """Add new admin (sync)"""
-        return self.admins.add_admin(user_id, username, full_name, is_super_admin, created_by)
+        result = self.admins.add_admin(user_id, username, full_name, is_super_admin, created_by)
+        if result:
+            self._clear_cache_for_user(user_id)
+        return result
     
     def remove_admin(self, user_id: int) -> bool:
         """Remove admin (sync)"""
-        return self.admins.remove_admin(user_id)
+        result = self.admins.remove_admin(user_id)
+        if result:
+            self._clear_cache_for_user(user_id)
+        return result
     
     def get_all_admins(self) -> List[Dict[str, Any]]:
         """Get all admins (sync)"""
