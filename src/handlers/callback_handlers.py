@@ -1207,11 +1207,11 @@ class CallbackHandlers(BaseHandler):
             await self.handle_topic_selection(update, context)
         elif callback_data.startswith('answer_'):
             await self.handle_answer(update, context)
-        elif callback_data == 'continue':
+        elif callback_data == 'continue_test':
             await self.handle_continue(update, context)
         elif callback_data == 'show_results':
             await self.handle_show_results(update, context)
-        elif callback_data.startswith('show_explanation_'):
+        elif callback_data.startswith('show_expl_'):
             await self.handle_show_explanation(update, context)
         elif callback_data == 'back_to_results':
             await self.handle_back_to_results(update, context)

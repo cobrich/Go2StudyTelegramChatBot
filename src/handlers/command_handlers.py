@@ -1,5 +1,5 @@
 import logging
-from telegram import Update, ReplyKeyboardRemove
+from telegram import Update, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 import random
@@ -847,3 +847,79 @@ class CommandHandlers(BaseHandler):
         except Exception as e:
             # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
             logging.debug(f"Could not delete message {message_id} in chat {chat_id}: {e}") 
+
+    async def language_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Show language selection menu."""
+        user_id = update.effective_user.id
+        current_language = self.db.get_user_language(user_id)
+        
+        current_lang_name = "Русский" if current_language == 'ru' else "Қазақша"
+        
+        text = f"🌐 **Выбор языка / Тіл таңдау**\n\n"
+        text += f"Текущий язык / Ағымдағы тіл: {current_lang_name}\n\n"
+        text += f"Выберите язык / Тілді таңдаңыз:"
+        
+        keyboard = [
+            [InlineKeyboardButton("🇷🇺 Русский", callback_data="change_lang_ru")],
+            [InlineKeyboardButton("🇰🇿 Қазақша", callback_data="change_lang_kk")],
+            [InlineKeyboardButton("🔙 Назад / Артқа", callback_data="main_menu")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='Markdown')
+
+    async def handle_language_change_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle language change from inline keyboard."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        user_id = query.from_user.id
+        current_language = self.db.get_user_language(user_id)
+        
+        # Extract new language from callback data
+        new_language = query.data.split('_')[-1]  # ru or kk
+        
+        if current_language == new_language:
+            # Same language selected
+            same_lang_text = "Вы уже используете русский язык." if new_language == 'ru' else "Сіз қазірдің өзінде қазақ тілін пайдаланып жатырсыз."
+            await query.edit_message_text(
+                same_lang_text,
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="main_menu")]])
+            )
+            return
+        
+        # Show warning and confirmation buttons
+        warning_text = get_language_change_warning(current_language)
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ Да / Иә", callback_data=f"confirm_lang_{new_language}")],
+            [InlineKeyboardButton("❌ Отмена / Болдырмау", callback_data="main_menu")]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(warning_text, reply_markup=reply_markup, parse_mode='Markdown')
+
+    async def handle_language_change_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Confirm and execute language change."""
+        query = update.callback_query
+        await self.safe_answer_callback(query)
+        
+        user_id = query.from_user.id
+        new_language = query.data.split('_')[-1]  # ru or kk
+        
+        # Clear user data when changing language
+        self.db.clear_user_data_on_language_change(user_id)
+        
+        # Update user language
+        self.db.update_user_language(user_id, new_language)
+        
+        # Clear context
+        context.user_data.clear()
+        
+        success_text = "✅ Язык изменен на русский. Все данные очищены." if new_language == 'ru' else "✅ Тіл қазақшаға өзгертілді. Барлық деректер тазаланды."
+        
+        await query.edit_message_text(
+            success_text,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Главное меню / Басты мәзір", callback_data="main_menu")]])
+        ) 

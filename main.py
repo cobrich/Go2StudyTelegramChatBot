@@ -63,6 +63,7 @@ def main() -> None:
     application.add_handler(CommandHandler("change_fio", command_handlers.handle_text))
     application.add_handler(CommandHandler("change_grade", command_handlers.handle_text))
     application.add_handler(CommandHandler("change_language", command_handlers.handle_text))
+    application.add_handler(CommandHandler("language", command_handlers.language_menu))
     application.add_handler(CommandHandler("myid", command_handlers.get_my_id))
     
     # Add admin command
@@ -492,6 +493,16 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(
         admin_handlers.remove_topic_execute,
         pattern="^remove_topic_execute_"
+    ))
+    
+    # Language change handlers
+    application.add_handler(CallbackQueryHandler(
+        command_handlers.handle_language_change_callback,
+        pattern="^change_lang_(ru|kk)$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        command_handlers.handle_language_change_confirm,
+        pattern="^confirm_lang_(ru|kk)$"
     ))
     
     # Start the Bot
