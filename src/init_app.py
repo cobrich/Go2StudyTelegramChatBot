@@ -42,18 +42,18 @@ def initialize_app_if_needed():
     from src.init_superadmin import main as init_admin
 
     conn_manager = SyncConnectionManager()
-    conn = None
     try:
-        conn = conn_manager.get_connection()
-        with conn.cursor() as cur:
-            # Проверяем наличие таблицы 'admins' как индикатор инициализации
-            cur.execute("""
-                SELECT EXISTS (
-                   SELECT FROM information_schema.tables 
-                   WHERE table_schema = 'public' AND table_name = 'admins'
-                );
-            """)
-            table_exists = cur.fetchone()[0]
+        # Используем контекстный менеджер для получения соединения
+        with conn_manager.get_connection() as conn:
+            with conn.cursor() as cur:
+                # Проверяем наличие таблицы 'admins' как индикатор инициализации
+                cur.execute("""
+                    SELECT EXISTS (
+                       SELECT FROM information_schema.tables 
+                       WHERE table_schema = 'public' AND table_name = 'admins'
+                    );
+                """)
+                table_exists = cur.fetchone()[0]
 
         if not table_exists:
             logger.warning("База данных не инициализирована. Запуск полной автоматической настройки...")
@@ -83,9 +83,6 @@ def initialize_app_if_needed():
     except Exception as e:
         logger.error(f"❌ Произошла ошибка во время процесса инициализации: {e}", exc_info=True)
         logger.error("Приложение может работать некорректно. Проверьте подключение к БД и переменные окружения.")
-    finally:
-        if conn:
-            conn_manager.release_connection(conn)
 
 if __name__ == "__main__":
     from dotenv import load_dotenv
