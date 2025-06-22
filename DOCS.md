@@ -3710,3 +3710,42 @@ def add_user(self, user_id: int, username: str = None, full_name: str = None,
 - ✅ Data integrity maintained across all operations
 
 This ensures clean separation between administrative functions and student academic data, maintaining statistical accuracy and system security.
+
+### 2024-12-19: Handler Comments and Documentation Updates
+
+**Documentation Enhancement**: Added clarifying comments to handlers explaining the implemented security measures.
+
+#### Handler Updates:
+
+**CallbackHandlers** (`src/handlers/callback_handlers.py`):
+```python
+# ✅ ЗАЩИТА РЕАЛИЗОВАНА: add_test_result автоматически проверяет is_admin() 
+# и НЕ записывает результаты админов в студенческую статистику
+self.db.add_test_result(user_id, topic, percentage)
+
+# ✅ ЗАЩИТА РЕАЛИЗОВАНА: add_user_error_by_question_id автоматически 
+# проверяет is_admin() и НЕ записывает ошибки админов в студенческую статистику
+self.db.add_user_error_by_question_id(...)
+```
+
+**StudentsHandler** (`src/handlers/admin/students.py`):
+```python
+# ⚠️ ИСПОЛЬЗУЕТ DEPRECATED МЕТОД: add_allowed_user_by_id()
+# Рекомендуется использовать add_user() с полными Telegram данными
+success = self.db.add_allowed_user_by_id(...)
+```
+
+#### Security Implementation Status:
+
+- ✅ **Repository Level**: All security checks implemented in database repositories
+- ✅ **Handler Level**: Comments added explaining automatic protection
+- ✅ **Method Level**: Deprecated methods clearly marked with warnings
+- ✅ **Documentation**: Complete audit trail of security implementations
+
+**Key Points**:
+- Handlers continue to work normally - security is transparent
+- Protection happens automatically at the repository level
+- No breaking changes to existing handler code
+- Clear documentation for future development
+
+The security implementation is **complete and functional** - admin data is automatically excluded from student statistics without requiring handler modifications.

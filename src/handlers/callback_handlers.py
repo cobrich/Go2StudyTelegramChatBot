@@ -341,6 +341,8 @@ class CallbackHandlers(BaseHandler):
                 
                 # Используем новый метод если есть question_id
                 if question_id is not None:
+                    # ✅ ЗАЩИТА РЕАЛИЗОВАНА: add_user_error_by_question_id автоматически 
+                    # проверяет is_admin() и НЕ записывает ошибки админов в студенческую статистику
                     self.db.add_user_error_by_question_id(
                         user_id=user_id,
                         question_id=question_id,
@@ -350,6 +352,7 @@ class CallbackHandlers(BaseHandler):
                     )
                 else:
                     # Fallback к старому методу для AI-генерированных вопросов
+                    # ✅ ЗАЩИТА РЕАЛИЗОВАНА: add_user_error автоматически проверяет is_admin()
                     self.db.add_user_error(
                         user_id=user_id,
                         topic=question_topic,
@@ -384,6 +387,8 @@ class CallbackHandlers(BaseHandler):
                 
                 # Используем новый метод если есть question_id
                 if question_id is not None:
+                    # ✅ ЗАЩИТА РЕАЛИЗОВАНА: add_user_error_by_question_id автоматически 
+                    # проверяет is_admin() и НЕ записывает ошибки админов в студенческую статистику
                     self.db.add_user_error_by_question_id(
                         user_id=user_id,
                         question_id=question_id,
@@ -393,6 +398,7 @@ class CallbackHandlers(BaseHandler):
                     )
                 else:
                     # Fallback к старому методу для AI-генерированных вопросов
+                    # ✅ ЗАЩИТА РЕАЛИЗОВАНА: add_user_error автоматически проверяет is_admin()
                     self.db.add_user_error(
                         user_id=user_id,
                         topic=current_topic,
@@ -560,6 +566,8 @@ class CallbackHandlers(BaseHandler):
         logging.info(f"  📚 Тема: {topic}")
         logging.info(f"  ✅ Правильных ответов: {correct}/{total} ({percentage:.1f}%)")
         
+        # ✅ ЗАЩИТА РЕАЛИЗОВАНА: add_test_result автоматически проверяет is_admin() 
+        # и НЕ записывает результаты админов в студенческую статистику
         self.db.add_test_result(user_id, topic, percentage)
         errors = [r for r in user_results if not r['is_correct']]
         

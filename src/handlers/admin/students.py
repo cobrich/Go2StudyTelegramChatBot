@@ -190,6 +190,8 @@ class StudentsHandler(AdminBaseHandler):
         username = auto_info.get('username')
         
         # Добавляем ученика в базу данных
+        # ⚠️ ИСПОЛЬЗУЕТ DEPRECATED МЕТОД: add_allowed_user_by_id()
+        # Рекомендуется использовать add_user() с полными Telegram данными
         success = self.db.add_allowed_user_by_id(
             user_id=student_user_id,
             full_name=fullname,
