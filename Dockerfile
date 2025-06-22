@@ -8,29 +8,25 @@ RUN apt-get update && apt-get install -y \
 # Создание рабочей директории
 WORKDIR /app
 
-# Копирование файлов проекта
+# Копирование файлов зависимостей
 COPY requirements.txt .
 COPY setup.py .
-COPY src/ ./src/
-COPY main.py .
-COPY .env.template .
 
 # Установка Python зависимостей
 RUN python setup.py
+
+# Копирование исходного кода
+COPY src/ ./src/
+COPY main.py .
 
 # Создание пользователя для безопасности
 RUN useradd -m -u 1000 botuser && chown -R botuser:botuser /app
 USER botuser
 
-# Создание директории для данных
-RUN mkdir -p /app/data
-
-# Переменные окружения
+# Переменные окружения для Railway
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
-
-# Порт (если понадобится веб-интерфейс)
-EXPOSE 8000
+ENV PORT=8000
 
 # Команда запуска
 CMD ["python", "main.py"] 
