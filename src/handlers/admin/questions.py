@@ -1191,7 +1191,7 @@ class QuestionsHandler(AdminBaseHandler):
         else:
             text += "<b>Варианты ответов:</b> Отсутствуют\n"
         
-        text += f"<b>Объяснение:</b> {(explanation or 'Отсутствует')[:200]}{'...' if explanation and len(explanation) > 200 else ''}\n\n"
+        text += f"<b>Объяснение:</b> {explanation or 'Отсутствует'}\n\n"
         text += "Выберите что хотите изменить:"
         
         keyboard = [
@@ -1228,7 +1228,7 @@ class QuestionsHandler(AdminBaseHandler):
             text += f"<b>Новое объяснение:</b> {new_explanation}"
             
             keyboard = [
-                [InlineKeyboardButton("✏️ Редактировать еще", callback_data="edit_question")],
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_question_select_{question_id}")],
                 [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1236,20 +1236,8 @@ class QuestionsHandler(AdminBaseHandler):
             await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
             
         except Exception as e:
-            logging.error(f"Error updating question explanation: {e}")
-            text = f"❌ <b>Ошибка обновления объяснения</b>\n\n"
-            text += f"Не удалось обновить объяснение для вопроса {question_id}.\n"
-            text += f"Ошибка: {str(e)}"
-            
-            keyboard = [
-                [InlineKeyboardButton("🔄 Попробовать снова", callback_data=f"manual_explanation_{question_id}")],
-                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(text, reply_markup=reply_markup)
+            await update.message.reply_text(f"❌ Ошибка обновления объяснения: {e}")
         
-        # Очищаем данные
         context.user_data.pop('admin_action', None)
         context.user_data.pop('edit_question_id', None)
 
@@ -1883,7 +1871,7 @@ class QuestionsHandler(AdminBaseHandler):
             return
         
         text = f"💡 <b>Изменение объяснения ID {question_id}</b>\n\n"
-        text += f"<b>Текущее объяснение:</b>\n{current_explanation[:500]}{'...' if len(current_explanation) > 500 else ''}\n\n"
+        text += f"<b>Текущее объяснение:</b>\n{current_explanation}\n\n"
         text += "Введите новое объяснение:"
         
         context.user_data['admin_action'] = 'edit_question_explanation'
@@ -2041,7 +2029,7 @@ class QuestionsHandler(AdminBaseHandler):
             
             text = f"✅ <b>Объяснение обновлено</b>\n\n"
             text += f"<b>ID вопроса:</b> {question_id}\n"
-            text += f"<b>Новое объяснение:</b> {new_explanation[:200]}{'...' if len(new_explanation) > 200 else ''}"
+            text += f"<b>Новое объяснение:</b> {new_explanation}"
             
             keyboard = [
                 [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_question_select_{question_id}")],
