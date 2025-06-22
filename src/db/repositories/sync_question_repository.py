@@ -102,7 +102,7 @@ class SyncQuestionRepository(SyncBaseRepository):
                 logger.error("❌ Topic name is required")
                 return False
             
-            topic_query = "SELECT id FROM subtopics WHERE name = %s LIMIT 1"
+            topic_query = "SELECT id FROM subtopics WHERE subtopic_name = %s LIMIT 1"
             topic_result = self.fetch_val(topic_query, (topic_name,))
             
             if not topic_result:
@@ -114,8 +114,8 @@ class SyncQuestionRepository(SyncBaseRepository):
             # Добавляем вопрос
             query = """
                 INSERT INTO questions (topic_id, question_text, correct_answer, explanation, 
-                                     incorrect_options, question_type, source)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                     incorrect_options, source)
+                VALUES (%s, %s, %s, %s, %s, %s)
             """
             
             self.execute_query(query, (
@@ -124,7 +124,6 @@ class SyncQuestionRepository(SyncBaseRepository):
                 question.get('answer'),
                 question.get('explanation'),
                 question.get('incorrect_options', ''),
-                question.get('question_type', 'standard'),
                 question.get('source', 'manual')
             ))
             
@@ -142,8 +141,8 @@ class SyncQuestionRepository(SyncBaseRepository):
         try:
             query = """
                 SELECT q.id, q.question_text as question, q.correct_answer as answer,
-                       q.explanation, q.incorrect_options, q.image_path, q.source,
-                       s.name as topic, q.created_at
+                       q.explanation, q.incorrect_options, q.source,
+                       s.subtopic_name as topic, q.created_at
                 FROM questions q
                 JOIN subtopics s ON q.topic_id = s.id
                 ORDER BY q.created_at DESC
@@ -158,7 +157,6 @@ class SyncQuestionRepository(SyncBaseRepository):
                     'answer': row['answer'],
                     'explanation': row['explanation'],
                     'incorrect_options': row['incorrect_options'],
-                    'image_path': row['image_path'],
                     'source': row['source'],
                     'topic': row['topic'],
                     'created_at': row['created_at']
@@ -179,8 +177,8 @@ class SyncQuestionRepository(SyncBaseRepository):
         try:
             query = """
                 SELECT q.id, q.question_text as question, q.correct_answer as answer,
-                       q.explanation, q.incorrect_options, q.image_path, q.source,
-                       s.name as topic
+                       q.explanation, q.incorrect_options, q.source,
+                       s.subtopic_name as topic
                 FROM questions q
                 JOIN subtopics s ON q.topic_id = s.id
                 JOIN main_topics m ON s.main_topic_id = m.id
@@ -197,7 +195,6 @@ class SyncQuestionRepository(SyncBaseRepository):
                     'answer': row['answer'],
                     'explanation': row['explanation'],
                     'incorrect_options': row['incorrect_options'],
-                    'image_path': row['image_path'],
                     'source': row['source'],
                     'topic': row['topic']
                 }

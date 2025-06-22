@@ -257,6 +257,42 @@ class SyncTopicRepository(SyncBaseRepository):
             logger.error(f"Error toggling main topic status {main_topic_name}: {e}")
             return False
     
+    def toggle_main_topic_status_by_language(self, main_topic_name: str, language: str) -> bool:
+        """Toggle main topic status by name and language"""
+        try:
+            # Get current status for specific language
+            query = "SELECT id, is_active FROM main_topics WHERE topic_name = %s AND language = %s"
+            result = self.fetch_one(query, (main_topic_name, language))
+            
+            if not result:
+                return False
+            
+            main_topic_id = result['id']
+            new_status = not result['is_active']
+            
+            # Update main topic status
+            query = """
+                UPDATE main_topics 
+                SET is_active = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE topic_name = %s AND language = %s
+            """
+            self.execute_query(query, (new_status, main_topic_name, language))
+            
+            # Update all subtopics status to match main topic
+            query = """
+                UPDATE subtopics 
+                SET is_active = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE main_topic_id = %s
+            """
+            self.execute_query(query, (new_status, main_topic_id))
+            
+            logger.info(f"✅ Toggled main topic {main_topic_name} ({language}) and its subtopics to {new_status}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error toggling main topic status {main_topic_name} ({language}): {e}")
+            return False
+    
     def get_base_topic_structure(self) -> Dict[str, List[str]]:
         """Get base topic structure (all languages)"""
         try:

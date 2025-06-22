@@ -634,6 +634,10 @@ class SyncDatabaseFacade:
         """Toggle main topic status"""
         return self.topics.toggle_main_topic_status(main_topic_name)
     
+    def toggle_main_topic_status_by_language(self, main_topic_name: str, language: str) -> bool:
+        """Toggle main topic status by name and language"""
+        return self.topics.toggle_main_topic_status_by_language(main_topic_name, language)
+    
     def update_topic_section(self, topic_id: int, new_main_topic_name: str) -> bool:
         """Update topic section"""
         # Find new main topic ID

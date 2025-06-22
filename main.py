@@ -181,6 +181,10 @@ def main() -> None:
         pattern="^admin_topics$"
     ))
     application.add_handler(CallbackQueryHandler(
+        admin_handlers.sections_menu,
+        pattern="^admin_sections$"
+    ))
+    application.add_handler(CallbackQueryHandler(
         admin_handlers.add_topic_start,
         pattern="^add_topic$"
     ))
@@ -206,8 +210,16 @@ def main() -> None:
         pattern="^add_section_start$"
     ))
     application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_section_language_selected,
+        pattern="^add_section_lang_(ru|kk)$"
+    ))
+    application.add_handler(CallbackQueryHandler(
         admin_handlers.edit_section_start,
         pattern="^edit_section_start$"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_section_select,
+        pattern="^edit_section_select_"
     ))
     application.add_handler(CallbackQueryHandler(
         admin_handlers.edit_section_name_start,

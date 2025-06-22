@@ -137,28 +137,34 @@ class AdminHandlers:
         return self.sections.sections_menu(update, context)
     
     def list_all_sections(self, update, context):
-        return self.sections.list_sections(update, context)
+        return self.sections.list_all_sections(update, context)
     
     def add_section_start(self, update, context):
         return self.sections.add_section_start(update, context)
     
+    def add_section_language_selected(self, update, context):
+        return self.sections.add_section_language_selected(update, context)
+    
     def edit_section_start(self, update, context):
         return self.sections.edit_section_start(update, context)
+    
+    def edit_section_select(self, update, context):
+        return self.sections.edit_section_select(update, context)
     
     def edit_section_name_start(self, update, context):
         return self.sections.edit_section_name_start(update, context)
     
     def edit_section_toggle_status(self, update, context):
-        return self.sections.edit_section_status_toggle(update, context)
+        return self.sections.edit_section_toggle_status(update, context)
     
     def delete_section_start(self, update, context):
-        return self.sections.remove_section_start(update, context)
+        return self.sections.delete_section_start(update, context)
     
     def delete_section_confirm(self, update, context):
-        return self.sections.remove_section_confirm(update, context)
+        return self.sections.delete_section_confirm(update, context)
     
     def delete_section_execute(self, update, context):
-        return self.sections.remove_section_execute(update, context)
+        return self.sections.delete_section_execute(update, context)
     
     # Questions methods
     def questions_menu(self, update, context):

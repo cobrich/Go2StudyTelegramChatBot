@@ -169,6 +169,30 @@ class AdminBaseHandler:
             
             return True
         
+        # Обработка для разделов
+        if action in ['add_section_name', 'edit_section_name']:
+            from .sections import SectionsHandler
+            sections_handler = SectionsHandler()
+            
+            if action == 'add_section_name':
+                await sections_handler.handle_section_name(update, context)
+            elif action == 'edit_section_name':
+                await sections_handler.handle_section_new_name(update, context)
+            
+            return True
+        
+        # Обработка для тем
+        if action in ['add_topic_name', 'edit_topic_name']:
+            from .topics import TopicsHandler
+            topics_handler = TopicsHandler()
+            
+            if action == 'add_topic_name':
+                await topics_handler.handle_add_topic_name(update, context, text)
+            elif action == 'edit_topic_name':
+                await topics_handler.handle_edit_topic_name(update, context, text)
+            
+            return True
+        
         return False
 
     async def handle_admin_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

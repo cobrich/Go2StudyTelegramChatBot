@@ -274,7 +274,7 @@ class SectionsHandler(AdminBaseHandler):
             return
         
         # Переключаем статус в базе данных
-        success = self.db.toggle_main_topic_status(section_info['name'])
+        success = self.db.toggle_main_topic_status_by_language(section_info['name'], section_info['language'])
         
         if success:
             # Получаем обновленную информацию о разделе

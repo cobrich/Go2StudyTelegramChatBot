@@ -80,6 +80,8 @@ class DatabaseModels:
                     option_c TEXT NOT NULL,
                     option_d TEXT NOT NULL,
                     correct_answer TEXT NOT NULL CHECK (correct_answer IN ('A', 'B', 'C', 'D')),
+                    explanation TEXT,
+                    incorrect_options TEXT,
                     topic_id INTEGER NOT NULL REFERENCES subtopics(id) ON DELETE CASCADE,
                     source TEXT DEFAULT 'manual',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
