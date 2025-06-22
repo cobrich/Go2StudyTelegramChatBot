@@ -246,6 +246,15 @@ class AdminHandlers:
     def manual_explanation_for_edit(self, update, context):
         return self.questions.manual_explanation_for_edit(update, context)
     
+    def edit_question_change_section_start(self, update, context):
+        return self.questions.edit_question_change_section_start(update, context)
+    
+    def edit_question_section_select(self, update, context):
+        return self.questions.edit_question_section_select(update, context)
+    
+    def edit_question_move_to_topic(self, update, context):
+        return self.questions.edit_question_move_to_topic(update, context)
+    
     # Admins methods
     def admins_menu(self, update, context):
         return self.admins.admins_menu(update, context)

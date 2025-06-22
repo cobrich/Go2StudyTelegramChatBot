@@ -344,6 +344,20 @@ def main() -> None:
         pattern="^manual_explanation_"
     ))
     
+    # Change section handlers for questions
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_question_change_section_start,
+        pattern="^edit_question_change_section_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_question_section_select,
+        pattern="^edit_question_section_select_"
+    ))
+    application.add_handler(CallbackQueryHandler(
+        admin_handlers.edit_question_move_to_topic,
+        pattern="^edit_question_move_to_topic_"
+    ))
+    
     # Admin management handlers
     application.add_handler(CallbackQueryHandler(
         admin_handlers.add_admin_start,

@@ -1500,8 +1500,12 @@ class QuestionsHandler(AdminBaseHandler):
             )])
         
         keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data=f"edit_question_select_{question_id}")])
-        reply_markup = InlineKeyboardMarkup(keyboard)
         
+        # Добавляем кнопку для выбора из другого раздела (менее заметная, в конце)
+        if main_topic:
+            keyboard.insert(-1, [InlineKeyboardButton("🔄 Выбрать из другого раздела", callback_data=f"edit_question_change_section_{question_id}")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def edit_question_topic_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1545,6 +1549,207 @@ class QuestionsHandler(AdminBaseHandler):
             
         except Exception as e:
             await query.edit_message_text(f"❌ Ошибка изменения темы: {e}")
+    
+    async def edit_question_change_section_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Начало изменения раздела вопроса (для перемещения в другой раздел)."""
+        query = update.callback_query
+        question_id = int(query.data.split('_')[-1])
+        await self.safe_answer_callback(query)
+        
+        # Получаем информацию о текущем вопросе
+        try:
+            question_data = self.db.get_question_with_topic_by_id(question_id)
+            if not question_data:
+                await query.edit_message_text("❌ Вопрос не найден.")
+                return
+            
+            current_topic = question_data.get('topic', '')
+            current_main_topic, language = self.db.get_main_topic_and_language_for_subtopic(current_topic)
+            
+            # Получаем все разделы
+            ru_main_topics = self.db.get_main_topics_by_language('ru', active_only=True)
+            kk_main_topics = self.db.get_main_topics_by_language('kk', active_only=True)
+            
+            # Объединяем все разделы
+            all_main_topics = []
+            
+            # Добавляем русские разделы с пометкой языка
+            for topic in ru_main_topics:
+                topic_with_lang = topic.copy()
+                topic_with_lang['language'] = 'ru'
+                topic_with_lang['display_name'] = f"🇷🇺 {topic['name']}"
+                all_main_topics.append(topic_with_lang)
+            
+            # Добавляем казахские разделы с пометкой языка
+            for topic in kk_main_topics:
+                topic_with_lang = topic.copy()
+                topic_with_lang['language'] = 'kk'
+                topic_with_lang['display_name'] = f"🇰🇿 {topic['name']}"
+                all_main_topics.append(topic_with_lang)
+                
+        except Exception as e:
+            await query.edit_message_text(f"❌ Ошибка получения разделов: {e}")
+            return
+        
+        if not all_main_topics:
+            text = f"🔄 <b>Изменение раздела вопроса ID {question_id}</b>\n\n"
+            text += "❌ Доступные разделы не найдены."
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_question_topic_{question_id}")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            return
+        
+        text = f"🔄 <b>Изменение раздела вопроса ID {question_id}</b>\n\n"
+        text += f"<b>Текущая тема:</b> {current_topic}\n"
+        text += f"<b>Текущий раздел:</b> {current_main_topic if current_main_topic else 'Неизвестный'}\n\n"
+        text += "⚠️ <b>ВНИМАНИЕ:</b> При изменении раздела вопрос будет перемещен в другую предметную область!\n"
+        text += "🎯 <b>Рекомендация:</b> Используйте только если вопрос действительно относится к другому предмету.\n\n"
+        text += "Выберите новый раздел:"
+        
+        keyboard = []
+        
+        # Сохраняем разделы в контексте для использования по индексу
+        context.user_data['change_section_main_topics'] = all_main_topics
+        context.user_data['change_section_question_id'] = question_id
+        
+        for i, main_topic in enumerate(all_main_topics):
+            # Используем display_name с флагом языка
+            display_name = main_topic['display_name']
+            if main_topic['name'] == current_main_topic:
+                display_name += " ✅ (текущий)"
+            
+            if len(display_name) > 50:
+                display_name = display_name[:47] + "..."
+            
+            keyboard.append([InlineKeyboardButton(
+                display_name,
+                callback_data=f"edit_question_section_select_{i}"
+            )])
+        
+        keyboard.append([InlineKeyboardButton("🔙 К изменению темы", callback_data=f"edit_question_topic_{question_id}")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def edit_question_section_select(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Раздел выбран, показываем темы этого раздела для перемещения вопроса."""
+        query = update.callback_query
+        section_index = int(query.data.replace('edit_question_section_select_', ''))
+        await self.safe_answer_callback(query)
+        
+        # Получаем раздел по индексу
+        main_topics = context.user_data.get('change_section_main_topics', [])
+        question_id = context.user_data.get('change_section_question_id')
+        
+        if section_index >= len(main_topics) or not question_id:
+            await query.edit_message_text(
+                "❌ Ошибка: раздел не найден. Попробуйте снова.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data=f"edit_question_select_{question_id}")]])
+            )
+            return
+        
+        selected_main_topic = main_topics[section_index]
+        main_topic_name = selected_main_topic['name']
+        main_topic_display_name = selected_main_topic.get('display_name', main_topic_name)
+        
+        # Получаем темы для выбранного раздела
+        try:
+            subtopics = self.db.get_subtopics_by_main_topic(main_topic_name)
+            
+            # Фильтруем только активные темы
+            active_subtopics = []
+            all_topics = self.db.get_all_topics(active_only=True)
+            for subtopic in subtopics:
+                for topic in all_topics:
+                    if topic['name'] == subtopic:
+                        active_subtopics.append(topic)
+                        break
+            
+        except Exception as e:
+            logging.error(f"Error getting subtopics for {main_topic_name}: {e}")
+            active_subtopics = []
+        
+        if not active_subtopics:
+            text = f"🔄 <b>Изменение раздела вопроса ID {question_id}</b>\n\n"
+            text += f"<b>Выбранный раздел:</b> {main_topic_display_name}\n\n"
+            text += "❌ В этом разделе нет активных тем."
+            keyboard = [
+                [InlineKeyboardButton("🔙 Выбрать другой раздел", callback_data=f"edit_question_change_section_{question_id}")],
+                [InlineKeyboardButton("🏠 К редактированию вопроса", callback_data=f"edit_question_select_{question_id}")]
+            ]
+        else:
+            text = f"🔄 <b>Изменение раздела вопроса ID {question_id}</b>\n\n"
+            text += f"<b>Выбранный раздел:</b> {main_topic_display_name}\n\n"
+            text += "⚠️ <b>Последний шаг!</b> Выберите тему в новом разделе:"
+            
+            keyboard = []
+            
+            for topic in active_subtopics:
+                # Ограничиваем длину названия темы для отображения
+                display_name = topic['name'][:40] + "..." if len(topic['name']) > 40 else topic['name']
+                keyboard.append([InlineKeyboardButton(
+                    f"📖 {display_name}",
+                    callback_data=f"edit_question_move_to_topic_{question_id}_{topic['id']}"
+                )])
+            
+            keyboard.extend([
+                [InlineKeyboardButton("🔙 Выбрать другой раздел", callback_data=f"edit_question_change_section_{question_id}")],
+                [InlineKeyboardButton("🏠 К редактированию вопроса", callback_data=f"edit_question_select_{question_id}")]
+            ])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+    
+    async def edit_question_move_to_topic(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Перемещение вопроса в выбранную тему из нового раздела."""
+        query = update.callback_query
+        parts = query.data.split('_')
+        # Формат: edit_question_move_to_topic_{question_id}_{topic_id}
+        question_id = int(parts[5])  # parts[5] - question_id
+        new_topic_id = int(parts[6])  # parts[6] - topic_id
+        await self.safe_answer_callback(query)
+        
+        try:
+            # Получаем название новой темы
+            new_topic_name = self.db.get_topic_name_by_id_for_edit(new_topic_id)
+            
+            if not new_topic_name:
+                await query.edit_message_text("❌ Тема не найдена.")
+                return
+            
+            # Получаем информацию о новом разделе
+            new_main_topic, new_language = self.db.get_main_topic_and_language_for_subtopic(new_topic_name)
+            
+            # Обновляем тему вопроса
+            success = self.db.update_question_in_database(question_id, 'topic_id', str(new_topic_id))
+            
+            if success:
+                # Автоматически обновляем объяснение с учетом нового раздела и языка
+                await self._auto_update_explanation_after_change(question_id, "topic")
+                
+                text = f"✅ <b>Вопрос перемещен в новый раздел</b>\n\n"
+                text += f"<b>ID вопроса:</b> {question_id}\n"
+                text += f"<b>Новая тема:</b> {new_topic_name}\n"
+                text += f"<b>Новый раздел:</b> {new_main_topic}\n"
+                text += f"<b>Язык:</b> {new_language}\n\n"
+                text += f"🤖 <b>Объяснение:</b> Автоматически обновлено с учетом нового раздела и языка"
+            else:
+                text = "❌ Ошибка при перемещении вопроса."
+            
+            keyboard = [
+                [InlineKeyboardButton("✏️ Продолжить редактирование", callback_data=f"edit_question_select_{question_id}")],
+                [InlineKeyboardButton("🔙 К управлению вопросами", callback_data="admin_questions")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+            
+        except Exception as e:
+            await query.edit_message_text(f"❌ Ошибка перемещения вопроса: {e}")
+        
+        # Очищаем контекст
+        context.user_data.pop('change_section_main_topics', None)
+        context.user_data.pop('change_section_question_id', None)
     
     async def edit_question_text_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Начало изменения текста вопроса."""
