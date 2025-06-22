@@ -2688,16 +2688,60 @@ SUPABASE_DATABASE_URL=your_supabase_connection_string
 
 **✅ Полностью работает:**
 - Database Facade и все repositories
-- Инициализация таблиц в отдельном потоке
-- Telegram Bot запуск и получение обновлений
-- Async/Sync совместимость
+- Telegram Bot запуск и получение обновлений ✅ РАБОТАЕТ!
+- Async/Sync совместимость ✅ РЕШЕНО!
 - Graceful fallback при ошибках БД
+- HTTP запросы к Telegram API
+- getUpdates polling
+
+**✅ Успешно протестировано:**
+- ConnectionManager для Supabase инициализирован
+- DatabaseFacade инициализирован  
+- Application started успешно
+- HTTP запросы к api.telegram.org работают
+- getUpdates получает обновления
+- Graceful shutdown работает
 
 **⚠️ Требует внимания:**
 - IPv6 подключение к Supabase (системная проблема)
 - Ручное создание таблиц через Supabase Dashboard
 
 **🎯 Результат:**
-Бот полностью функционален и готов к работе. Все критические проблемы с async/sync и event loop решены.
+✅ **БОТ ПОЛНОСТЬЮ ФУНКЦИОНАЛЕН И ГОТОВ К РАБОТЕ!**
+Все критические проблемы с async/sync и event loop решены.
+Успешно протестирован запуск и работа с Telegram API.
+
+### 🚀 Финальное решение проблем (22.06.2025)
+
+**✅ РЕШЕНО - Event Loop конфликты:**
+- Использован синхронный `application.run_polling()` вместо async
+- Убрана сложная логика с `asyncio.run()` и `asyncio.get_event_loop()`
+- Совместимость с python-telegram-bot 20.x обеспечена
+
+**✅ РЕШЕНО - Database инициализация:**
+- Убрана предварительная инициализация таблиц из main()
+- Используется lazy initialization при первом обращении к БД
+- ThreadPoolExecutor изолирует async операции БД
+
+**✅ РЕШЕНО - Telegram Bot стабильность:**
+- Успешный запуск: "Application started"
+- Работающие HTTP запросы к api.telegram.org
+- Функционирующий getUpdates polling
+- Корректный graceful shutdown
+
+### 🎉 Команда для запуска:
+```bash
+python3 main.py
+```
+
+**Ожидаемый вывод:**
+```
+INFO - Initialized ConnectionManager for Supabase
+INFO - DatabaseFacade initialized for Supabase  
+INFO - Bot starting - database tables will be initialized on first access...
+INFO - HTTP Request: POST https://api.telegram.org/bot.../getMe "HTTP/1.1 200 OK"
+INFO - Application started
+INFO - HTTP Request: POST https://api.telegram.org/bot.../getUpdates "HTTP/1.1 200 OK"
+```
 
 ---
