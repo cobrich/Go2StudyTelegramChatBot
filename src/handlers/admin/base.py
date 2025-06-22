@@ -74,6 +74,8 @@ class AdminBaseHandler:
         
         keyboard = [
             [InlineKeyboardButton("👥 Управление учениками", callback_data="admin_students")],
+            [InlineKeyboardButton("📑 Управление разделами", callback_data="admin_sections")],
+            [InlineKeyboardButton("📚 Управление темами", callback_data="admin_topics")],
             [InlineKeyboardButton("❓ Управление вопросами", callback_data="admin_questions")],
         ]
         

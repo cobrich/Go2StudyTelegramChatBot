@@ -79,6 +79,55 @@ Go2Study Bot is a Telegram bot for mathematics learning with an adaptive learnin
 
 ## 📋 Changelog
 
+### ✅ 22.06.2025 - Рефакторинг main.py и создание единого AdminHandlers
+
+**🎯 Проблема**: В main.py была сложная структура с множественными импортами отдельных админ-хендлеров, что делало код трудным для поддержки и понимания.
+
+**🔍 Анализ**:
+- main.py импортировал 7 отдельных админ-хендлеров (AdminBaseHandler, QuestionsHandler, StudentsHandler и т.д.)
+- Каждый хендлер инициализировался отдельно
+- Было более 100 строк кода только для регистрации callback handlers
+- Отсутствовала унификация интерфейса для работы с админ-функциями
+
+**✅ РЕШЕНИЕ - Унификация админ-хендлеров**:
+
+**🔧 Создан унифицированный AdminHandlers**:
+- ✅ **Новый файл**: `src/services/database.py` - алиас для `get_sync_database_facade()`
+- ✅ **Обновлен**: `src/handlers/admin/__init__.py` - добавлен класс `AdminHandlers`
+- ✅ **Унифицирован**: все админ-методы теперь доступны через один объект
+- ✅ **Делегирование**: AdminHandlers делегирует вызовы соответствующим специализированным хендлерам
+
+**📦 Структура AdminHandlers**:
+```python
+class AdminHandlers:
+    def __init__(self, db, question_service):
+        self.base = AdminBaseHandler()
+        self.questions = QuestionsHandler()
+        self.students = StudentsHandler()
+        self.topics = TopicsHandler()
+        self.sections = SectionsHandler()
+        self.stats = StatsHandler()
+        self.admins = AdminsHandler()
+```
+
+**🔧 Упрощен main.py**:
+- ✅ **Один импорт**: `from src.handlers.admin import AdminHandlers`
+- ✅ **Одна инициализация**: `admin_handlers = AdminHandlers(db, question_service)`
+- ✅ **Чистый код**: убраны множественные импорты и инициализации
+- ✅ **Совместимость**: сохранена совместимость с рабочим кодом из главной ветки
+
+**🎯 Удалены несуществующие методы**:
+- ✅ Убраны обработчики для методов, которые не существуют в исходных хендлерах
+- ✅ Оставлены только реально работающие методы
+- ✅ Исправлены паттерны callback handlers для соответствия существующим методам
+
+**✅ Результат**:
+- main.py стал значительно чище и понятнее
+- Упрощена поддержка и добавление новых админ-функций
+- Сохранена вся функциональность админ-панели
+- Код готов для дальнейшего развития
+- Бот успешно запускается и работает корректно
+
 ### ✅ 22.12.2024 - Исправление синтаксических ошибок в TopicManager
 
 **🎯 Проблема**: В файле `src/services/topic_manager.py` были проблемы с отступами и синтаксисом после предыдущих изменений.
