@@ -292,6 +292,10 @@ def main() -> None:
         pattern="^add_question$"
     ))
     application.add_handler(CallbackQueryHandler(
+        admin_handlers.add_question_main_topic_selected,
+        pattern="^add_question_main_topic_"
+    ))
+    application.add_handler(CallbackQueryHandler(
         admin_handlers.add_question_topic_selected,
         pattern="^add_question_topic_"
     ))

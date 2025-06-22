@@ -182,32 +182,128 @@ class QuestionsHandler(AdminBaseHandler):
     # === ВРЕМЕННЫЕ ЗАГЛУШКИ ДЛЯ СОВМЕСТИМОСТИ ===
     
     async def add_question_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Начало добавления нового вопроса."""
+        """Начало добавления нового вопроса - выбор раздела."""
         query = update.callback_query
         await self.safe_answer_callback(query)
         
-        # Получаем список активных тем
-        topics = self.db.get_all_topics(active_only=True)
+        # Получаем список разделов (main topics) из всех языков
+        try:
+            # Получаем разделы русского языка
+            ru_main_topics = self.db.get_main_topics_by_language('ru', active_only=True)
+            # Получаем разделы казахского языка
+            kk_main_topics = self.db.get_main_topics_by_language('kk', active_only=True)
+            
+            # Объединяем все разделы
+            all_main_topics = []
+            
+            # Добавляем русские разделы с пометкой языка
+            for topic in ru_main_topics:
+                topic_with_lang = topic.copy()
+                topic_with_lang['language'] = 'ru'
+                topic_with_lang['display_name'] = f"🇷🇺 {topic['name']}"
+                all_main_topics.append(topic_with_lang)
+            
+            # Добавляем казахские разделы с пометкой языка
+            for topic in kk_main_topics:
+                topic_with_lang = topic.copy()
+                topic_with_lang['language'] = 'kk'
+                topic_with_lang['display_name'] = f"🇰🇿 {topic['name']}"
+                all_main_topics.append(topic_with_lang)
+                
+        except Exception as e:
+            logging.error(f"Error getting main topics: {e}")
+            all_main_topics = []
         
-        if not topics:
-            text = "➕ <b>Добавление вопроса</b>\n\nАктивные темы не найдены."
+        if not all_main_topics:
+            text = "➕ <b>Добавление вопроса</b>\n\nАктивные разделы не найдены."
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="admin_questions")]]
         else:
-            text = "➕ <b>Добавление вопроса</b>\n\nВыберите тему для нового вопроса:\n\n"
+            text = "➕ <b>Добавление вопроса</b>\n\nВыберите раздел:\n\n"
             keyboard = []
             
-            # Сохраняем темы в контексте для использования по индексу
-            context.user_data['add_question_topics'] = topics
+            # Сохраняем разделы в контексте для использования по индексу
+            context.user_data['add_question_main_topics'] = all_main_topics
             
-            for i, topic in enumerate(topics):
-                # Ограничиваем длину названия темы для отображения
-                display_name = topic['name'][:40] + "..." if len(topic['name']) > 40 else topic['name']
+            for i, main_topic in enumerate(all_main_topics):
+                # Используем display_name с флагом языка
+                display_name = main_topic['display_name']
+                if len(display_name) > 50:
+                    display_name = display_name[:47] + "..."
+                
                 keyboard.append([InlineKeyboardButton(
                     f"📚 {display_name}",
-                    callback_data=f"add_question_topic_{i}"
+                    callback_data=f"add_question_main_topic_{i}"
                 )])
             
             keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="admin_questions")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+
+    async def add_question_main_topic_selected(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Раздел выбран, показываем темы этого раздела."""
+        query = update.callback_query
+        main_topic_index = int(query.data.replace('add_question_main_topic_', ''))
+        await self.safe_answer_callback(query)
+        
+        # Получаем раздел по индексу
+        main_topics = context.user_data.get('add_question_main_topics', [])
+        if main_topic_index >= len(main_topics):
+            await query.edit_message_text(
+                "❌ Ошибка: раздел не найден. Попробуйте снова.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="admin_questions")]])
+            )
+            return
+        
+        selected_main_topic = main_topics[main_topic_index]
+        main_topic_name = selected_main_topic['name']
+        main_topic_language = selected_main_topic.get('language', 'ru')
+        main_topic_display_name = selected_main_topic.get('display_name', main_topic_name)
+        
+        # Получаем темы для выбранного раздела
+        try:
+            subtopics = self.db.get_subtopics_by_main_topic(main_topic_name)
+            
+            # Фильтруем только активные темы
+            active_subtopics = []
+            all_topics = self.db.get_all_topics(active_only=True)
+            for subtopic in subtopics:
+                for topic in all_topics:
+                    if topic['name'] == subtopic:
+                        active_subtopics.append(topic)
+                        break
+            
+        except Exception as e:
+            logging.error(f"Error getting subtopics for {main_topic_name}: {e}")
+            active_subtopics = []
+        
+        if not active_subtopics:
+            text = f"➕ <b>Добавление вопроса</b>\n\n<b>Раздел:</b> {main_topic_display_name}\n\nАктивные темы в этом разделе не найдены."
+            keyboard = [
+                [InlineKeyboardButton("🔙 Выбрать другой раздел", callback_data="add_question")],
+                [InlineKeyboardButton("🏠 К управлению вопросами", callback_data="admin_questions")]
+            ]
+        else:
+            text = f"➕ <b>Добавление вопроса</b>\n\n<b>Раздел:</b> {main_topic_display_name}\n\nВыберите тему:\n\n"
+            keyboard = []
+            
+            # Сохраняем темы в контексте для использования по индексу
+            context.user_data['add_question_topics'] = active_subtopics
+            context.user_data['selected_main_topic'] = main_topic_name
+            context.user_data['selected_main_topic_language'] = main_topic_language
+            
+            for i, topic in enumerate(active_subtopics):
+                # Ограничиваем длину названия темы для отображения
+                display_name = topic['name'][:40] + "..." if len(topic['name']) > 40 else topic['name']
+                keyboard.append([InlineKeyboardButton(
+                    f"📖 {display_name}",
+                    callback_data=f"add_question_topic_{i}"
+                )])
+            
+            keyboard.extend([
+                [InlineKeyboardButton("🔙 Выбрать другой раздел", callback_data="add_question")],
+                [InlineKeyboardButton("🏠 Отмена", callback_data="admin_questions")]
+            ])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')

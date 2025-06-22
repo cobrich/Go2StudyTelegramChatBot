@@ -203,6 +203,9 @@ class AdminHandlers:
     def add_question_start(self, update, context):
         return self.questions.add_question_start(update, context)
     
+    def add_question_main_topic_selected(self, update, context):
+        return self.questions.add_question_main_topic_selected(update, context)
+    
     def add_question_topic_selected(self, update, context):
         return self.questions.add_question_topic_selected(update, context)
     
