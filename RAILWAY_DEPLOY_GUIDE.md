@@ -65,9 +65,9 @@
 4. **Выберите "Deploy from GitHub repo"**
 5. **Выберите ваш репозиторий** `go2study_bot`
 
-### 3. Настройка переменных окружения
+### 3. Настройка базы данных и переменных окружения
 
-В Railway Dashboard → Variables добавьте:
+В Railway Dashboard вашего проекта перейдите во вкладку **Variables** и добавьте следующие переменные. Просто вставьте ссылку на вашу Neon БД в `DATABASE_URL`.
 
 ```env
 # Telegram Bot
@@ -77,26 +77,20 @@ TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
 GEMINI_API_KEY1=AIzaSy...
 GEMINI_MODEL=gemini-pro
 
-# Database (Neon)
+# Database (Neon) - вставьте вашу ссылку из Neon
 DATABASE_URL=postgresql://username:password@ep-xxx-xxx-xxx.region.aws.neon.tech/database
 USE_POSTGRESQL=true
 
 # Environment
 PYTHONUNBUFFERED=1
 ```
+Этого достаточно для подключения к Neon.
 
-### 4. Подключение Neon базы данных
+### 4. Запуск деплоя
 
-1. **В Railway Dashboard** → "New Service" → "Database"
-2. **Выберите "Neon"**
-3. **Введите connection string** из Neon
-4. **Railway автоматически создаст переменную `DATABASE_URL`**
-
-### 5. Запуск деплоя
-
-1. **Railway автоматически начнет деплой**
-2. **Следите за логами** в реальном времени
-3. **Дождитесь успешного завершения**
+1. **Railway автоматически начнет деплой** после добавления репозитория.
+2. **Следите за логами** в реальном времени во вкладке "Deployments".
+3. **Дождитесь успешного завершения**. Если деплой не начался, нажмите "Deploy" вручную.
 
 ## 🔧 Инициализация базы данных
 

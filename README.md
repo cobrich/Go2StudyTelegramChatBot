@@ -146,7 +146,7 @@ src/
 - **users** - пользователи с прогрессом
 - **admins** - администраторы системы
 
-## �� Развертывание
+## 📄 Развертывание
 
 ### 🚀 Railway + Neon (РЕКОМЕНДУЕТСЯ)
 **Бесплатный деплой с автоматическими обновлениями**
@@ -170,53 +170,9 @@ src/
 - 🆓 Бесплатный тариф ($5/месяц)
 - 🔄 Автоматические обновления из GitHub
 - 📊 Мониторинг в реальном времени
-- 🔗 Интеграция с Neon PostgreSQL
+- 🔗 Простое подключение к Neon PostgreSQL
 
 📖 **Подробное руководство**: [RAILWAY_DEPLOY_GUIDE.md](RAILWAY_DEPLOY_GUIDE.md)
 
 ### Docker
-```bash
-docker-compose up -d
 ```
-
-### VPS/Сервер
-```bash
-# Установка как systemd service
-sudo cp go2study-bot.service /etc/systemd/system/
-sudo systemctl enable go2study-bot
-sudo systemctl start go2study-bot
-```
-
-### Cloud платформы
-- Heroku: используйте `Procfile`
-- Railway/DigitalOcean Apps: автоматическое развертывание
-
-Подробное руководство: [deploy_guide.md](deploy_guide.md)
-
-## 📊 Мониторинг
-
-### Логи
-```bash
-# Просмотр логов
-journalctl -u go2study-bot -f
-
-# Статус сервиса
-systemctl status go2study-bot
-```
-
-### Статистика использования
-Доступна в админ-панели бота: `/admin` → "📊 Статистика"
-
-## 🤝 Поддержка
-
-- 📚 **Документация**: [DOCS.md](DOCS.md)
-- 🚀 **Развертывание**: [deploy_guide.md](deploy_guide.md)
-- 🐛 **Issues**: создавайте issue в репозитории
-
-## 📄 Лицензия
-
-MIT License - используйте свободно для образовательных целей.
-
----
-
-**🎯 Готов к продакшену!** Полностью функциональный бот для изучения математики с современной архитектурой и всеми необходимыми возможностями. 
