@@ -12,10 +12,9 @@ WORKDIR /app
 
 # Копирование файлов зависимостей
 COPY requirements.txt .
-COPY setup.py .
 
-# Установка Python зависимостей
-RUN python setup.py
+# Установка Python зависимостей через requirements.txt (стандартный способ)
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Копирование исходного кода
 COPY src/ ./src/
