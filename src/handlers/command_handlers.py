@@ -746,29 +746,53 @@ class CommandHandlers(BaseHandler):
         # Convert questions data to the format expected by the test system
         questions = []
         for q_data in questions_data:
-            # Формируем список вариантов ответов как в QuestionService
-            options = [q_data.get('answer', '')]  # Сначала правильный ответ
+            # Формируем список вариантов ответов из полей option_a, option_b, option_c, option_d
+            options = []
             
-            # Добавляем неправильные варианты
-            incorrect_options = q_data.get('incorrect_options', '')
-            if incorrect_options:
-                if isinstance(incorrect_options, str):
-                    incorrect_opts = [opt.strip() for opt in incorrect_options.split('\n') if opt.strip()]
-                    options.extend(incorrect_opts)
+            # Добавляем все варианты ответов из БД
+            if q_data.get('option_a'):
+                options.append(q_data['option_a'])
+            if q_data.get('option_b'):
+                options.append(q_data['option_b'])
+            if q_data.get('option_c'):
+                options.append(q_data['option_c'])
+            if q_data.get('option_d'):
+                options.append(q_data['option_d'])
             
-            # Убеждаемся, что есть минимум 2 варианта
+            # Если вариантов недостаточно, добавляем fallback варианты
             if len(options) < 2:
-                default_option = "Вариант" if user_language == 'ru' else "Нұсқа"
-                options.extend([f"{default_option} {i}" for i in range(len(options), 4)])
+                # Пытаемся использовать correct_answer как один из вариантов
+                correct_answer = q_data.get('correct_answer', '')
+                if correct_answer and correct_answer not in ['A', 'B', 'C', 'D']:
+                    # Если correct_answer это текст, а не буква
+                    options = [correct_answer]
+                
+                # Добавляем fallback варианты если всё ещё мало
+                while len(options) < 4:
+                    default_option = "Вариант" if user_language == 'ru' else "Нұсқа"
+                    options.append(f"{default_option} {len(options) + 1}")
+            
+            # Получаем правильный ответ в текстовом виде
+            correct_answer_letter = q_data.get('correct_answer', 'A')
+            if correct_answer_letter == 'A':
+                correct_answer_text = q_data.get('option_a', '')
+            elif correct_answer_letter == 'B':
+                correct_answer_text = q_data.get('option_b', '')
+            elif correct_answer_letter == 'C':
+                correct_answer_text = q_data.get('option_c', '')
+            elif correct_answer_letter == 'D':
+                correct_answer_text = q_data.get('option_d', '')
+            else:
+                correct_answer_text = correct_answer_letter
             
             # Перемешиваем варианты
             random.shuffle(options)
             
             # Format: (question_text, correct_answer, explanation, options_list, source, image_path, question_id)
             question_tuple = (
-                q_data.get('question', ''),  # 0 - question_text
-                q_data.get('answer', ''),    # 1 - correct_answer  
-                q_data.get('explanation', ''),  # 2 - explanation (ИСПРАВЛЕНО!)
+                q_data.get('question_text', ''),  # 0 - question_text
+                correct_answer_text,    # 1 - correct_answer (текст, не буква!)
+                q_data.get('explanation', ''),  # 2 - explanation
                 options,  # 3 - options_list
                 'random_test',  # 4 - source
                 q_data.get('image_path', None),  # 5 - image_path
