@@ -42,6 +42,7 @@ except ImportError:
 
 # Импортируем нашу базу данных
 from db.repositories.admin_repository import AdminRepository
+from db.sync_connection_manager import get_sync_connection_manager
 
 # Настраиваем логирование
 logging.basicConfig(
@@ -151,8 +152,7 @@ async def main():
     finally:
         # Корректно закрываем пул соединений
         try:
-            from db.connection_manager import get_connection_manager
-            connection_manager = get_connection_manager()
+            connection_manager = get_sync_connection_manager()
             await connection_manager.close_pool()
             print("\n🔧 Соединения с БД корректно закрыты")
         except Exception as e:

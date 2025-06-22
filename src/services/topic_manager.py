@@ -1,9 +1,15 @@
+"""
+Topic Manager Service
+
+Manages topics and subtopics for the educational bot.
+"""
+
 import logging
 from typing import List, Dict, Optional
 from difflib import SequenceMatcher
 import os
 import sys
-from src.db import get_database
+from src.db.sync_database_facade import get_sync_database_facade
 from src.services.ai_service import AIService
 
 logger = logging.getLogger(__name__)
@@ -12,7 +18,7 @@ class TopicManager:
     """Сервис для управления темами."""
     
     def __init__(self):
-        self.db = get_database()
+        self.db = get_sync_database_facade()
         self.ai_service = AIService()
         # Кэш для часто используемых данных
         self._topics_cache = None

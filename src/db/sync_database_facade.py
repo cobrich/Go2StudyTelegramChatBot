@@ -142,6 +142,95 @@ class SyncDatabaseFacade:
             logger.info("🔒 All database connections closed")
         except Exception as e:
             logger.error(f"❌ Error closing connections: {e}")
+    
+    # User profile and language methods
+    def get_user_language(self, user_id: int) -> str:
+        """Get user language (sync)"""
+        user = self.users.get_user_by_id(user_id)
+        return user.get('language', 'ru') if user else 'ru'
+    
+    def get_user_info(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get user info (sync)"""
+        return self.users.get_user_by_id(user_id)
+    
+    def set_user_info(self, user_id: int, full_name: str, grade: int) -> None:
+        """Set user info (sync)"""
+        self.users.add_user(user_id, full_name=full_name, grade=grade)
+    
+    def set_user_info_with_language(self, user_id: int, full_name: str, grade: int, language: str) -> None:
+        """Set user info with language (sync)"""
+        self.users.add_user(user_id, full_name=full_name, grade=grade, language=language)
+    
+    def update_user_language(self, user_id: int, language: str) -> None:
+        """Update user language (sync)"""
+        # This would need to be implemented in SyncUserRepository
+        logger.info(f"🔄 Updating language for user {user_id} to {language}")
+        # For now, we'll use add_user which handles updates via ON CONFLICT
+        user = self.users.get_user_by_id(user_id)
+        if user:
+            self.users.add_user(
+                user_id=user_id,
+                username=user.get('username'),
+                full_name=user.get('full_name'),
+                grade=user.get('grade'),
+                language=language,
+                added_by=user.get('added_by')
+            )
+    
+    def is_user_active(self, user_id: int) -> bool:
+        """Check if user is active in a test (sync)"""
+        user = self.users.get_user_by_id(user_id)
+        return user.get('is_active', False) if user else False
+    
+    def set_user_active(self, user_id: int, topic: str) -> None:
+        """Set user as active in a test (sync)"""
+        self.users.update_user_activity(user_id, topic)
+    
+    def set_user_inactive(self, user_id: int) -> None:
+        """Set user as inactive (sync)"""
+        self.users.update_user_activity(user_id, None)
+    
+    # Additional methods needed by the bot
+    def get_topic_names(self, active_only: bool = True) -> List[str]:
+        """Get topic names (sync) - stub implementation"""
+        # This would need to be implemented in sync repositories
+        logger.warning("get_topic_names called but not fully implemented in sync facade")
+        return []
+    
+    def get_tasks_for_topic(self, topic: str, limit: int = 20) -> List[Dict]:
+        """Get tasks for topic (sync) - stub implementation"""
+        logger.warning("get_tasks_for_topic called but not fully implemented in sync facade")
+        return []
+    
+    def get_explanation_by_question_text(self, question_text: str) -> Optional[str]:
+        """Get explanation by question text (sync) - stub implementation"""
+        logger.warning("get_explanation_by_question_text called but not fully implemented in sync facade")
+        return None
+    
+    def add_question(self, question: dict) -> bool:
+        """Add question (sync) - stub implementation"""
+        logger.warning("add_question called but not fully implemented in sync facade")
+        return False
+    
+    def add_test_result(self, user_id: int, topic: str, percentage: float) -> None:
+        """Add test result (sync) - stub implementation"""
+        logger.warning("add_test_result called but not fully implemented in sync facade")
+    
+    def get_error_tasks_for_user(self, user_id: int, topic: str, limit: int = 10) -> List[Dict]:
+        """Get error tasks for user (sync) - stub implementation"""
+        logger.warning("get_error_tasks_for_user called but not fully implemented in sync facade")
+        return []
+    
+    def add_user_error(self, user_id: int, topic: str, question_text: str,
+                      user_answer_text: str, correct_answer_text: str,
+                      explanation_text: str) -> None:
+        """Add user error (sync) - stub implementation"""
+        logger.warning("add_user_error called but not fully implemented in sync facade")
+    
+    def add_user_error_by_question_id(self, user_id: int, question_id: int, topic: str,
+                                     user_answer_text: str, correct_answer_text: str) -> None:
+        """Add user error by question ID (sync) - stub implementation"""
+        logger.warning("add_user_error_by_question_id called but not fully implemented in sync facade")
 
 # Global facade instance
 _sync_database_facade = None

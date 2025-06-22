@@ -1,3 +1,9 @@
+"""
+PDF Question Processor
+
+Processes PDF files containing questions and extracts them into the database.
+"""
+
 import logging
 import os
 import re
@@ -9,7 +15,7 @@ import tempfile
 import json
 import time
 from pathlib import Path
-from src.db import get_database
+from src.db.sync_database_facade import get_sync_database_facade
 from src.services.ai_service import AIService
 import fitz  # PyMuPDF
 from PIL import Image
@@ -26,7 +32,7 @@ class PDFProcessor:
             os.makedirs(output_dir)
         
         # Инициализируем базу данных для получения списка доступных тем
-        self.db = get_database()
+        self.db = get_sync_database_facade()
         
         # Паттерн для поиска заголовков тем
         self.topic_header_pattern = r'Тема:\s*([^(]+)\((\d+)\)'
@@ -800,7 +806,7 @@ def add_questions_to_db(questions: List[Dict], db) -> Dict[str, int]:
             print(f"[AI][{idx}/{total}] Генерирую объяснение для вопроса...")
             try:
                 # Определяем язык темы
-                db_instance = get_database()
+                db_instance = get_sync_database_facade()
                 topic_language = db_instance.get_topic_language(topic)
                 
                 detailed_explanation = ai_service.generate_detailed_explanation(
@@ -903,7 +909,7 @@ def main():
             db_stats = {'saved_count': 0, 'topic_stats': {}}
             if questions:
                 print(f"\n🔄 Добавляю {len(questions)} вопросов в базу данных...")
-                db = get_database()
+                db = get_sync_database_facade()
                 db_stats = add_questions_to_db(questions, db)
                 print(f"✅ Вопросы успешно добавлены в базу данных")
             

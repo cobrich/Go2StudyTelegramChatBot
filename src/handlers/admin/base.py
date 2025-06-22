@@ -1,12 +1,15 @@
 """
-Базовый класс для админ-обработчиков.
-Содержит общую логику и методы для всех админ-панелей.
+Admin Base Handler
+
+Provides base functionality for admin operations.
 """
 
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from src.db import get_database
+from src.db.sync_database_facade import get_sync_database_facade
+from src.utils.translations import get_message
+from src.services.pdf_processor import PDFProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +18,7 @@ class AdminBaseHandler:
     
     def __init__(self):
         # Используем database facade вместо прямого SQLite подключения
-        self.db = get_database()
+        self.db = get_sync_database_facade()
     
     async def safe_answer_callback(self, query) -> None:
         """Безопасно отвечаем на callback query."""

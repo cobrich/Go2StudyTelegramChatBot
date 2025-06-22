@@ -1,39 +1,36 @@
 """
-Database Package - Supabase Architecture
+Database Module
 
-Provides modular database architecture with Supabase PostgreSQL support.
+Provides database connectivity and operations for the educational bot.
 
-⚠️ ВАЖНО: Эта версия поддерживает ТОЛЬКО Supabase PostgreSQL.
-SQLite больше не поддерживается.
+Features:
+- Connection management with automatic retry and pooling
+- Repository pattern for data access
+- Models for database schema
+- Migrations and table initialization
+- Support for both SQLite (development) and PostgreSQL (production)
 
-Для миграции с SQLite:
-1. Запустите: python init_supabase.py
-2. Запустите: python migrate_to_supabase.py
-3. Установите DATABASE_TYPE=supabase в .env
+Main Components:
+- SyncConnectionManager: Handles database connections synchronously
+- SyncBaseRepository: Base class for all repository operations
+- SyncDatabaseFacade: Unified interface for all database operations
+- DatabaseModels: Schema definitions and table creation
 
-Архитектура:
-- ConnectionManager: Управление подключениями к Supabase
-- BaseRepository: Базовый класс для всех репозиториев
-- DatabaseModels: Схемы таблиц PostgreSQL
-- DatabaseFacade: Единый интерфейс для всех операций с БД
-- Repositories: Модульные репозитории по доменам
-
-Использование:
-```python
-from src.db import get_database
-
-db = get_database()
-user_info = db.get_user_info(user_id)
-```
+Usage:
+    from src.db import get_sync_database_facade
+    
+    db = get_sync_database_facade()
+    user = db.get_user_by_id(123)
 """
 
-from .database_facade import get_database, DatabaseFacade
-from .connection_manager import get_connection_manager
+from .sync_database_facade import get_sync_database_facade, SyncDatabaseFacade
+from .sync_connection_manager import get_sync_connection_manager
+
 from .models import DatabaseModels
 
 __all__ = [
-    'get_database',
-    'DatabaseFacade', 
-    'get_connection_manager',
-    'DatabaseModels'
+    'get_sync_database_facade',
+    'SyncDatabaseFacade',
+    'get_sync_connection_manager',
+    'DatabaseModels',
 ] 

@@ -5,7 +5,7 @@
 
 import random
 from typing import List, Dict, Any, Optional
-from src.db import get_database
+from src.db.sync_database_facade import get_sync_database_facade
 import logging
 from src.utils.translations import get_message
 import asyncio
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class RandomTestService:
     def __init__(self):
-        self.db = get_database()
+        self.db = get_sync_database_facade()
         self.ai_service = AIService()
         self.question_service = QuestionService(self.db, self.ai_service)
     

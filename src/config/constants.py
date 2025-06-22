@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from src.db.sync_database_facade import get_sync_database_facade
 
 # Load environment variables
 load_dotenv(override=True)
@@ -69,8 +70,7 @@ def get_active_topics():
     """Получить активные темы из базы данных."""
     try:
         # Используем новую архитектуру базы данных
-        from src.db import get_database
-        db = get_database()
+        db = get_sync_database_facade()
         return db.get_topic_names(active_only=True)
     except Exception:
         # Fallback к статическому списку если база недоступна

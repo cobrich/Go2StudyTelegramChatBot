@@ -1,15 +1,21 @@
+"""
+Question Service
+
+Handles question-related operations and test logic.
+"""
+
 import logging
 import asyncio
 import random
 from typing import List, Dict, Any, Set, Optional, Tuple
-from src.db import get_database
+from src.db.sync_database_facade import get_sync_database_facade
 from src.services.ai_service import AIService
 from src.config.constants import DEFAULT_QUESTIONS_PER_TEST, MAX_OPTION_LENGTH, get_active_topics
 import re
 
 class QuestionService:
     def __init__(self, db=None, ai_service: AIService = None):
-        self.db = db if db else get_database()
+        self.db = db if db else get_sync_database_facade()
         self.ai_service = ai_service
         # Флаг для использования нового метода генерации (по умолчанию True - используем новый метод)
         self.use_v3_generation = True

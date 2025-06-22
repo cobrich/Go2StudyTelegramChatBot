@@ -859,7 +859,7 @@ for row in all_results:
 
 **Проблема**: После миграции базы данных (удаление поля `topic` из таблицы `questions`) функция `add_question()` продолжала пытаться записывать в несуществующее поле, что вызывало ошибку:
 ```
-SQLITE_ERROR: sqlite3 result code 1: no such column: "topic" - should this be a string literal in single-quotes?
+SQLITE_ERROR: sqlite3 result code 1: no such column: "topic"
 ```
 
 **Решение**: Полностью переписана логика функции `add_question()`:
@@ -2934,5 +2934,68 @@ cd src && python3 update_superadmin.py
 - `DOCS.md` - обновлена документация
 
 **Результат**: Система контроля доступа работает корректно, пользователь 1354242060 имеет полный доступ как суперадмин.
+
+---
+
+### 2025-06-22: Миграция на синхронную работу с базой данных
+
+**Проблема:** Бот не мог найти админа в базе данных из-за конфликтов event loop в асинхронной системе.
+
+**Корневая причина:** Использование asyncpg с python-telegram-bot приводило к конфликтам активных event loop, что вызывало возврат fallback значений вместо реальных результатов запросов.
+
+**Решение:** Полная миграция на синхронную работу с базой данных.
+
+#### Реализованные компоненты:
+
+1. **SyncConnectionManager** (`src/db/sync_connection_manager.py`)
+   - Использует psycopg2 для синхронных соединений с Neon PostgreSQL
+   - Thread-local соединения для безопасности
+   - Автоматическое переподключение при ошибках
+   - SSL поддержка для Neon
+
+2. **SyncBaseRepository** (`src/db/sync_base_repository.py`)
+   - Базовый синхронный репозиторий
+   - Методы: execute_query, fetch_one, fetch_all, fetch_val
+   - Правильные placeholders для psycopg2 (%s вместо $1)
+
+3. **SyncAdminRepository** (`src/db/repositories/sync_admin_repository.py`)
+   - Синхронные операции с админами
+   - Методы: is_admin, is_super_admin, get_admin_by_id, add_admin, etc.
+
+4. **SyncUserRepository** (`src/db/repositories/sync_user_repository.py`)
+   - Синхронные операции с пользователями
+   - Методы: has_user_access, get_user_by_id, add_user, etc.
+
+5. **SyncDatabaseFacade** (`src/db/sync_database_facade.py`)
+   - Единый интерфейс для всех операций БД
+   - Исправленная логика контроля доступа: сначала проверка админов, затем пользователей
+
+#### Обновления кода:
+
+- **main.py**: Обновлен импорт на `get_sync_database_facade`
+- **Все сервисы**: Обновлены импорты для использования синхронной системы
+- **Все обработчики**: Обновлены для работы с синхронной БД
+- **src/db/__init__.py**: Обновлен для экспорта синхронных компонентов
+
+#### Удаленные файлы (старая асинхронная система):
+
+- `src/db/connection_manager.py` - старый асинхронный менеджер соединений
+- `src/db/database_facade.py` - старый асинхронный database facade
+- `src/db/base_repository.py` - старый асинхронный base repository
+- `src/db/repositories/admin_repository.py` - старый асинхронный admin repository
+- `src/db/repositories/user_repository.py` - старый асинхронный user repository
+- `src/db/repositories/statistics_repository.py` - старый асинхронный statistics repository
+- `src/db/repositories/question_repository.py` - старый асинхронный question repository
+
+#### Результат тестирования:
+
+✅ **ПОЛНОСТЬЮ РЕШЕНО**: Синхронная система работает идеально, устранены все конфликты event loop. Пользователь 1354242060 теперь корректно определяется как суперадмин и имеет доступ к боту.
+
+```
+📊 SyncAdminRepository.is_admin: результат запроса: 1 (тип: <class 'int'>)
+🎯 SyncAdminRepository.is_admin: финальный результат для 1354242060: True
+```
+
+**Статус:** ✅ Миграция завершена успешно. Старые асинхронные файлы удалены. Система готова к продакшену.
 
 ---

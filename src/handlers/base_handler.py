@@ -1,6 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from src.db import get_database
+from src.db.sync_database_facade import get_sync_database_facade
 from src.services.question_service import QuestionService
 from src.utils.keyboards import get_main_menu_markup
 from src.utils.translations import get_message
@@ -8,7 +8,7 @@ import logging
 
 class BaseHandler:
     def __init__(self):
-        self.db = get_database()
+        self.db = get_sync_database_facade()
         self.question_service = QuestionService()
 
     async def safe_answer_callback(self, query) -> None:

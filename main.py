@@ -12,7 +12,7 @@ from telegram.ext import (
 )
 from telegram.request import HTTPXRequest
 from src.config.constants import TELEGRAM_BOT_TOKEN
-from src.db import get_database
+from src.db.sync_database_facade import get_sync_database_facade
 from src.services.question_service import QuestionService
 from src.services.ai_service import AIService
 from src.handlers.command_handlers import CommandHandlers
@@ -52,7 +52,7 @@ def main() -> None:
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).request(request).get_updates_request(get_updates_request).build()
     
     # Initialize services
-    db = get_database()
+    db = get_sync_database_facade()
     ai_service = AIService()
     question_service = QuestionService(db, ai_service)
     
