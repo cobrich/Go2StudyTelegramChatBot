@@ -17,6 +17,8 @@ from src.handlers.callback_handlers import CallbackHandlers
 from src.handlers.admin import AdminHandlers
 from src.init_app import initialize_app_if_needed
 import sys
+import threading
+import time
 
 # Configure logging
 logging.basicConfig(
@@ -24,6 +26,17 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+def keep_db_alive():
+    from src.db.sync_connection_manager import get_sync_connection_manager
+    conn_manager = get_sync_connection_manager()
+    while True:
+        try:
+            conn_manager.fetch_val("SELECT 1")
+            logger.info("🟢 DB keep-alive ping successful")
+        except Exception as e:
+            logger.warning(f"🔴 DB keep-alive ping failed: {e}")
+        time.sleep(300)  # 5 минут
 
 def main() -> None:
     """Start the bot."""
@@ -528,6 +541,8 @@ def main() -> None:
         
         # Start the Bot
         logger.info("🎯 Starting bot polling...")
+        # Запускаем keep-alive поток для Neon
+        threading.Thread(target=keep_db_alive, daemon=True).start()
         application.run_polling(allowed_updates=Update.ALL_TYPES)
         
     except Exception as e:
