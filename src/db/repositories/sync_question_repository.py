@@ -106,8 +106,8 @@ class SyncQuestionRepository(SyncBaseRepository):
             logger.error(f"❌ Error getting explanation: {e}")
             return None
     
-    def add_question(self, question: dict) -> bool:
-        """Add a new question (sync)"""
+    def add_question(self, question: dict) -> Optional[int]:
+        """Add a new question (sync) and return its ID"""
         logger.info(f"➕ Adding question: {question.get('question', 'Unknown')[:50]}...")
         
         try:
@@ -115,14 +115,14 @@ class SyncQuestionRepository(SyncBaseRepository):
             topic_name = question.get('topic')
             if not topic_name:
                 logger.error("❌ Topic name is required")
-                return False
+                return None
             
             topic_query = "SELECT id FROM subtopics WHERE subtopic_name = %s LIMIT 1"
             topic_result = self.fetch_val(topic_query, (topic_name,))
             
             if not topic_result:
                 logger.error(f"❌ Topic '{topic_name}' not found")
-                return False
+                return None
             
             topic_id = topic_result
             
@@ -162,14 +162,15 @@ class SyncQuestionRepository(SyncBaseRepository):
             # Определяем букву правильного ответа
             correct_answer_letter = ['A', 'B', 'C', 'D'][correct_position]
             
-            # Добавляем вопрос
+            # Добавляем вопрос и получаем его ID
             query = """
                 INSERT INTO questions (topic_id, question_text, option_a, option_b, option_c, option_d,
                                      correct_answer, explanation, incorrect_options, source)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
             """
             
-            self.execute_query(query, (
+            question_id = self.fetch_val(query, (
                 topic_id,
                 question.get('question'),
                 option_a,
@@ -182,12 +183,12 @@ class SyncQuestionRepository(SyncBaseRepository):
                 question.get('source', 'manual')
             ))
             
-            logger.info(f"✅ Question added successfully: {correct_answer_letter}) {all_options[correct_position][:20]}...")
-            return True
+            logger.info(f"✅ Question added successfully with ID {question_id}: {correct_answer_letter}) {all_options[correct_position][:20]}...")
+            return question_id
             
         except Exception as e:
             logger.error(f"❌ Error adding question: {e}")
-            return False
+            return None
     
     def get_all_questions(self) -> List[Dict]:
         """Get all questions (sync)"""
@@ -691,6 +692,25 @@ class SyncQuestionRepository(SyncBaseRepository):
                 
         except Exception as e:
             logger.error(f"❌ Error getting question {question_id}: {e}")
+            return None
+
+    def get_question_id_by_text(self, question_text: str) -> Optional[int]:
+        """Get question ID by text"""
+        logger.info(f"🔍 Getting question ID by text: {question_text[:50]}...")
+        
+        try:
+            query = "SELECT id FROM questions WHERE question_text = %s LIMIT 1"
+            result = self.fetch_val(query, (question_text,))
+            
+            if result:
+                logger.info(f"📊 Found question ID: {result}")
+                return result
+            else:
+                logger.info(f"📊 Question not found by text")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Error getting question ID by text: {e}")
             return None
 
     def get_question_with_topic_by_id(self, question_id: int) -> Optional[Dict[str, Any]]:

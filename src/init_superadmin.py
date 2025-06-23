@@ -93,25 +93,25 @@ def init_superadmin():
                 return False
         else:
             print("Переменные окружения не найдены. Запрашиваем данные интерактивно.")
-            # Получаем данные от пользователя
-            while True:
-                try:
+        # Получаем данные от пользователя
+        while True:
+            try:
                     user_id_input = input("Введите Telegram user_id суперадмина: ")
                     if not user_id_input:
                         print("❌ ID не может быть пустым.")
                         continue
                     user_id = int(user_id_input)
-                    break
-                except ValueError:
-                    print("❌ Введите корректный числовой ID")
-            
-            username = input("Введите username суперадмина (без @, можно оставить пустым): ").strip()
-            if not username:
-                username = f"superadmin_{user_id}"
-            
-            full_name = input("Введите ФИО суперадмина (можно оставить пустым): ").strip()
-            if not full_name:
-                full_name = f"Суперадмин {user_id}"
+                break
+            except ValueError:
+                print("❌ Введите корректный числовой ID")
+        
+        username = input("Введите username суперадмина (без @, можно оставить пустым): ").strip()
+        if not username:
+            username = f"superadmin_{user_id}"
+        
+        full_name = input("Введите ФИО суперадмина (можно оставить пустым): ").strip()
+        if not full_name:
+            full_name = f"Суперадмин {user_id}"
         
         # Создаем суперадмина
         success = db.add_admin(

@@ -319,8 +319,8 @@ class SyncDatabaseFacade:
         """Get explanation by question text (sync)"""
         return self.questions.get_explanation_by_question_text(question_text)
     
-    def add_question(self, question: dict) -> bool:
-        """Add question (sync)"""
+    def add_question(self, question: dict) -> Optional[int]:
+        """Add a new question (sync) and return its ID"""
         return self.questions.add_question(question)
     
     def get_all_questions(self) -> List[Dict]:
@@ -785,11 +785,15 @@ class SyncDatabaseFacade:
         return self.questions.search_questions_for_deletion(search_text, limit)
     
     def get_question_by_id(self, question_id: int) -> Optional[Dict[str, Any]]:
-        """Get question by ID (sync)"""
+        """Get question by ID"""
         return self.questions.get_question_by_id(question_id)
     
+    def get_question_id_by_text(self, question_text: str) -> Optional[int]:
+        """Get question ID by text"""
+        return self.questions.get_question_id_by_text(question_text)
+    
     def get_question_with_topic_by_id(self, question_id: int) -> Optional[Dict[str, Any]]:
-        """Get question with topic info by ID (sync)"""
+        """Get question with topic info by ID"""
         return self.questions.get_question_with_topic_by_id(question_id)
     
     def update_question_explanation(self, question_id: int, explanation: str) -> bool:

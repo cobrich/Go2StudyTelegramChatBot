@@ -369,7 +369,8 @@ class QuestionService:
                             # Сохраняем сгенерированный ИИ вопрос в базу
                             if not self.db.get_explanation_by_question_text(question):
                                 if question and correct_answer and explanation:
-                                    self.db.add_question({
+                                    # Сохраняем вопрос и получаем его ID
+                                    saved_question_id = self.db.add_question({
                                         'topic': topic,
                                         'question': question,
                                         'answer': correct_answer,
@@ -379,6 +380,12 @@ class QuestionService:
                                         'source': 'ai_retake'
                                     })
                                     logging.info(f"[get_or_generate_tasks][RETAKE AI] Saved new AI question to DB: {question}")
+                                else:
+                                    logging.warning(f"[get_or_generate_tasks][RETAKE AI] Skipping question with NULL fields: question={question}, answer={correct_answer}, explanation={explanation}")
+                                    continue
+                            else:
+                                # Если вопрос уже существует, получаем его ID
+                                saved_question_id = self.db.get_question_id_by_text(question)
                             
                             # Формируем варианты ответов
                             options = [correct_answer]
@@ -428,7 +435,8 @@ class QuestionService:
                                 explanation,
                                 options,  # Теперь гарантированно список
                                 'ai_retake',
-                                None
+                                None,  # image_path
+                                saved_question_id  # question_id (ДОБАВЛЕНО!)
                             ))
                             existing_question_texts_to_exclude.add(question)
                             valid_questions += 1
@@ -666,7 +674,8 @@ class QuestionService:
                                 explanation,
                                 options,  # Теперь гарантированно список
                                 'ai',
-                                None
+                                None,  # image_path
+                                saved_question_id  # question_id (ДОБАВЛЕНО!)
                             ))
                             existing_question_texts_to_exclude.add(question)
                             valid_questions += 1

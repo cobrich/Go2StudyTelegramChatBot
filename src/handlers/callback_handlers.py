@@ -271,6 +271,14 @@ class CallbackHandlers(BaseHandler):
             current_topic = self.get_user_data(context).get('current_topic')
             question_id = question[6] if len(question) > 6 and question[6] is not None else None
             
+            # Если question_id отсутствует, пытаемся найти его по тексту вопроса
+            if question_id is None:
+                try:
+                    question_id = self.db.get_question_id_by_text(question[0])
+                    logging.info(f"🔍 Found question_id by text: {question_id}")
+                except Exception as e:
+                    logging.warning(f"Could not find question_id by text: {e}")
+            
             # Краткое логирование без избыточных деталей
             logging.info(f"❌ Wrong answer: user {user_id}, topic: {current_topic}, q_id: {question_id}")
             
@@ -299,6 +307,15 @@ class CallbackHandlers(BaseHandler):
         else:
             # Правильный ответ - просто логируем
             question_id = question[6] if len(question) > 6 and question[6] is not None else None
+            
+            # Если question_id отсутствует, пытаемся найти его по тексту вопроса
+            if question_id is None:
+                try:
+                    question_id = self.db.get_question_id_by_text(question[0])
+                    logging.info(f"🔍 Found question_id by text for correct answer: {question_id}")
+                except Exception as e:
+                    logging.warning(f"Could not find question_id by text for correct answer: {e}")
+            
             logging.info(f"✅ Correct answer: user {user_id}, q_id: {question_id}")
             
             # Уменьшаем счетчик ошибок в фоне
@@ -1018,14 +1035,15 @@ class CallbackHandlers(BaseHandler):
             import random
             random.shuffle(options)
             
-            # Format: (question_text, correct_answer, explanation, options_list, source, image_path)
+            # Format: (question_text, correct_answer, explanation, options_list, source, image_path, question_id)
             question_tuple = (
                 q_data.get('question', ''),  # 0 - question_text
                 q_data.get('answer', ''),    # 1 - correct_answer  
                 q_data.get('explanation', ''),  # 2 - explanation (ИСПРАВЛЕНО!)
                 options,  # 3 - options_list
                 'retry_test',  # 4 - source
-                q_data.get('image_path', None)  # 5 - image_path
+                q_data.get('image_path', None),  # 5 - image_path
+                q_data.get('id')  # 6 - question_id (ДОБАВЛЕНО!)
             )
             questions.append(question_tuple)
         
