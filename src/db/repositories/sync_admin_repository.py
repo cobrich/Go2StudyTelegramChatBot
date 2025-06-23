@@ -18,6 +18,7 @@ class SyncAdminRepository(SyncBaseRepository):
         try:
             query = "SELECT 1 FROM admins WHERE user_id = %s"
             result = self.fetch_val(query, (user_id,))
+            logger.info(f"[DEBUG is_admin] user_id={user_id}, result={result}")
             return result is not None
             
         except Exception as e:

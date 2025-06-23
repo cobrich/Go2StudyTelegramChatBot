@@ -792,6 +792,9 @@ class CallbackHandlers(BaseHandler):
         
         # Получаем всю информацию о пользователе за один раз
         user_info = self.db.get_user_by_id(user_id)  # Один запрос получает всё
+        # Сначала проверяем, является ли пользователь админом
+        is_admin = self.db.is_admin(user_id)
+        logging.info(f"[DEBUG handle_main_menu] user_id={user_id}, is_admin={is_admin}, user_info={user_info}")
         if not user_info:
             user_language = 'ru'  # default
             await query.message.edit_text(
