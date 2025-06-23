@@ -802,6 +802,8 @@ class CallbackHandlers(BaseHandler):
             admin_info = self.db.get_admin_info(user_id)
             logging.info(f"[DEBUG handle_main_menu] admin_info={admin_info}")
             welcome_name = admin_info['full_name'] if admin_info and admin_info.get('full_name') else query.from_user.first_name or "администратор"
+            # Определяем язык для админа (по умолчанию русский)
+            user_language = 'ru'  # Можно добавить поле language в таблицу admins в будущем
             if user_language == 'kk':
                 welcome_text = f"👋 Қош келдіңіз, {welcome_name}!\n\n🔧 Сіз <b>әкімші</b> ретінде кірдіңіз.\n\nӘрекетті таңдаңыз:"
             else:
