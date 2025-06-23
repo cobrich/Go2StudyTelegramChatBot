@@ -792,3 +792,13 @@ python3 -c "from src.services.ai_service import AIService; ..."
 - ✅ Все обработчики теперь имеют доступ к базе данных и сервисам
 
 **Результат:** Кнопки управления темами в админ-панели теперь работают корректно.
+
+### Исправлена ошибка KeyError в topics.py (2024-12-19)
+
+**Проблема:** В `topics.py` возникала ошибка `KeyError: 'name'` при попытке доступа к ключу `'name'` в словаре раздела, хотя метод `get_main_topics_by_language` возвращает данные с ключом `'topic_name'`.
+
+**Исправления:**
+- ✅ Заменены все обращения к `section['name']` на `section['topic_name']` в методах управления темами
+- ✅ Исправлены методы: `add_topic_start`, `select_main_topic_for_new`, `show_section_topics`, `edit_section_topics`, `edit_topic_section_select`, `remove_section_topics`
+
+**Результат:** Устранена ошибка KeyError при работе с разделами в админ-панели.

@@ -70,7 +70,7 @@ class TopicsHandler(AdminBaseHandler):
         if kk_sections:
             for i, section in enumerate(kk_sections):
                 keyboard.append([InlineKeyboardButton(
-                    f"📚 {section['name']} [kz]",
+                    f"📚 {section['topic_name']} [kz]",
                     callback_data=f"select_main_topic_{i}"
                 )])
         
@@ -79,7 +79,7 @@ class TopicsHandler(AdminBaseHandler):
             kk_count = len(kk_sections)
             for i, section in enumerate(ru_sections):
                 keyboard.append([InlineKeyboardButton(
-                    f"📚 {section['name']} [ru]",
+                    f"📚 {section['topic_name']} [ru]",
                     callback_data=f"select_main_topic_{kk_count + i}"
                 )])
         
@@ -148,15 +148,15 @@ class TopicsHandler(AdminBaseHandler):
                 return
             
             selected_topic = main_topics_list[topic_index]
-            context.user_data['selected_main_topic'] = selected_topic['name']
+            context.user_data['selected_main_topic'] = selected_topic['topic_name']
             context.user_data['selected_main_topic_language'] = selected_topic['language']
             context.user_data['admin_action'] = 'add_topic'
             
             # Получаем существующие темы в этом разделе
-            existing_topics = self.db.get_subtopics_by_main_topic(selected_topic['name'])
+            existing_topics = self.db.get_subtopics_by_main_topic(selected_topic['topic_name'])
             
             text = f"➕ <b>Добавление темы в раздел</b>\n\n"
-            text += f"📚 <b>Раздел:</b> {selected_topic['name']}\n"
+            text += f"📚 <b>Раздел:</b> {selected_topic['topic_name']}\n"
             text += f"🌐 <b>Язык:</b> {'Русский' if selected_topic['language'] == 'ru' else 'Казахский'}\n\n"
             
             if existing_topics:
@@ -200,9 +200,9 @@ class TopicsHandler(AdminBaseHandler):
                 return
             
             selected_topic = main_topics_list[topic_index]
-            existing_topics = self.db.get_subtopics_by_main_topic(selected_topic['name'])
+            existing_topics = self.db.get_subtopics_by_main_topic(selected_topic['topic_name'])
             
-            text = f"📋 <b>Все темы в разделе '{selected_topic['name']}'</b>\n\n"
+            text = f"📋 <b>Все темы в разделе '{selected_topic['topic_name']}'</b>\n\n"
             
             if existing_topics:
                 for i, topic_name in enumerate(existing_topics, 1):
@@ -287,9 +287,9 @@ class TopicsHandler(AdminBaseHandler):
             if kk_sections:
                 for i, section in enumerate(kk_sections):
                     # Получаем количество тем в разделе
-                    topics_count = len(self.db.get_subtopics_by_main_topic(section['name']))
+                    topics_count = len(self.db.get_subtopics_by_main_topic(section['topic_name']))
                     keyboard.append([InlineKeyboardButton(
-                        f"📚 {section['name']} [kz] ({topics_count} тем)",
+                        f"📚 {section['topic_name']} [kz] ({topics_count} тем)",
                         callback_data=f"edit_section_topics_{i}"
                     )])
             
@@ -298,9 +298,9 @@ class TopicsHandler(AdminBaseHandler):
                 kk_count = len(kk_sections)
                 for i, section in enumerate(ru_sections):
                     # Получаем количество тем в разделе
-                    topics_count = len(self.db.get_subtopics_by_main_topic(section['name']))
+                    topics_count = len(self.db.get_subtopics_by_main_topic(section['topic_name']))
                     keyboard.append([InlineKeyboardButton(
-                        f"📚 {section['name']} [ru] ({topics_count} тем)",
+                        f"📚 {section['topic_name']} [ru] ({topics_count} тем)",
                         callback_data=f"edit_section_topics_{kk_count + i}"
                     )])
             
@@ -323,7 +323,7 @@ class TopicsHandler(AdminBaseHandler):
                 return
             
             selected_section = sections_list[section_index]
-            section_name = selected_section['name']
+            section_name = selected_section['topic_name']
             section_language = selected_section['language']
             
             # Получаем все темы этого раздела
@@ -483,9 +483,9 @@ class TopicsHandler(AdminBaseHandler):
             if kk_sections:
                 for i, section in enumerate(kk_sections):
                     # Получаем количество тем в разделе
-                    topics_count = len(self.db.get_subtopics_by_main_topic(section['name']))
+                    topics_count = len(self.db.get_subtopics_by_main_topic(section['topic_name']))
                     keyboard.append([InlineKeyboardButton(
-                        f"📚 {section['name']} [kz] ({topics_count} тем)",
+                        f"📚 {section['topic_name']} [kz] ({topics_count} тем)",
                         callback_data=f"edit_topic_section_select_{i}"
                     )])
             
@@ -494,9 +494,9 @@ class TopicsHandler(AdminBaseHandler):
                 kk_count = len(kk_sections)
                 for i, section in enumerate(ru_sections):
                     # Получаем количество тем в разделе
-                    topics_count = len(self.db.get_subtopics_by_main_topic(section['name']))
+                    topics_count = len(self.db.get_subtopics_by_main_topic(section['topic_name']))
                     keyboard.append([InlineKeyboardButton(
-                        f"📚 {section['name']} [ru] ({topics_count} тем)",
+                        f"📚 {section['topic_name']} [ru] ({topics_count} тем)",
                         callback_data=f"edit_topic_section_select_{kk_count + i}"
                     )])
             
@@ -548,7 +548,7 @@ class TopicsHandler(AdminBaseHandler):
                 return
             
             selected_section = sections_list[section_index]
-            section_name = selected_section['name']
+            section_name = selected_section['topic_name']
             
             print(f"[DEBUG] Выбран раздел: {section_name}")
             
@@ -710,9 +710,9 @@ class TopicsHandler(AdminBaseHandler):
             if kk_sections:
                 for i, section in enumerate(kk_sections):
                     # Получаем количество тем в разделе
-                    topics_count = len(self.db.get_subtopics_by_main_topic(section['name']))
+                    topics_count = len(self.db.get_subtopics_by_main_topic(section['topic_name']))
                     keyboard.append([InlineKeyboardButton(
-                        f"📚 {section['name']} [kz] ({topics_count} тем)",
+                        f"📚 {section['topic_name']} [kz] ({topics_count} тем)",
                         callback_data=f"remove_section_topics_{i}"
                     )])
             
@@ -721,9 +721,9 @@ class TopicsHandler(AdminBaseHandler):
                 kk_count = len(kk_sections)
                 for i, section in enumerate(ru_sections):
                     # Получаем количество тем в разделе
-                    topics_count = len(self.db.get_subtopics_by_main_topic(section['name']))
+                    topics_count = len(self.db.get_subtopics_by_main_topic(section['topic_name']))
                     keyboard.append([InlineKeyboardButton(
-                        f"📚 {section['name']} [ru] ({topics_count} тем)",
+                        f"📚 {section['topic_name']} [ru] ({topics_count} тем)",
                         callback_data=f"remove_section_topics_{kk_count + i}"
                     )])
             
@@ -746,7 +746,7 @@ class TopicsHandler(AdminBaseHandler):
                 return
             
             selected_section = sections_list[section_index]
-            section_name = selected_section['name']
+            section_name = selected_section['topic_name']
             section_language = selected_section['language']
             
             # Получаем все темы этого раздела
