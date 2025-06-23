@@ -38,6 +38,14 @@ def main() -> None:
         # Initialize services
         logger.info("📊 Initializing database connection...")
         db = get_database_instance()
+        # Логируем параметры подключения к БД
+        try:
+            from src.db.sync_connection_manager import get_sync_connection_manager
+            conn_manager = get_sync_connection_manager()
+            params = conn_manager._connection_params
+            logger.info(f"🔗 DB connection params: host={params.get('host')}, port={params.get('port')}, db={params.get('database')}, user={params.get('user')}")
+        except Exception as e:
+            logger.warning(f"Не удалось получить параметры подключения к БД: {e}")
         logger.info("✅ Database connection established")
         
         logger.info("🤖 Initializing AI service...")
