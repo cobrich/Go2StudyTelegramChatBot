@@ -790,12 +790,9 @@ class CallbackHandlers(BaseHandler):
         
         user_id = query.from_user.id
         
-        # 🚀 ОПТИМИЗАЦИЯ: Делаем ОДИН запрос вместо четырех
         # Получаем всю информацию о пользователе за один раз
         user_info = self.db.get_user_by_id(user_id)  # Один запрос получает всё
-        
         if not user_info:
-            # Пользователь не найден в БД
             user_language = 'ru'  # default
             await query.message.edit_text(
                 get_message('no_access', user_language, 
@@ -806,34 +803,9 @@ class CallbackHandlers(BaseHandler):
         
         user_language = user_info.get('language', 'ru')
         
-        # Проверяем доступ используя уже полученную информацию
-        if not user_info.get('has_access', False):
-            await query.message.edit_text(
-                get_message('no_access', user_language, 
-                          user_id=user_id, 
-                          username=query.from_user.username or 'не указан')
-            )
-            return
-        
-        self.db.clear_user_test_activity(user_id)  # Очищаем только тему теста
-        self.db.set_user_inactive(user_id)  # Очищаем статус активного теста
-        self.clear_user_data(context)
-        # Очищаем флаг выбора темы
-        context.user_data.pop('in_topic_selection', None)
-        
-        # Проверяем, является ли пользователь админом (один запрос)
+        # Сначала проверяем, является ли пользователь админом
         is_admin = self.db.is_admin(user_id)
-        
-        if not is_admin:
-            # Для обычных пользователей - используем уже полученную информацию
-            welcome_name = user_info.get('full_name') if user_info.get('full_name') else query.from_user.first_name or "пользователь"
-            grade_text = f", {user_info.get('grade')} класс" if user_info.get('grade') else ""
-            if user_language == 'kk':
-                grade_text = f", {user_info.get('grade')} сынып" if user_info.get('grade') else ""
-                welcome_text = get_message('welcome', user_language, name=welcome_name, grade=user_info.get('grade') if user_info.get('grade') else '') + "\n\n" + get_message('bot_description', user_language)
-            else:
-                welcome_text = f"👋 Привет, {welcome_name}{grade_text}!\n\n📚 Я бот для изучения математики. Выбери действие:"
-        else:
+        if is_admin:
             # Для админов - получаем информацию из таблицы admins
             admin_info = self.db.get_admin_info(user_id)
             welcome_name = admin_info['full_name'] if admin_info and admin_info.get('full_name') else query.from_user.first_name or "администратор"
@@ -841,15 +813,32 @@ class CallbackHandlers(BaseHandler):
                 welcome_text = f"👋 Қош келдіңіз, {welcome_name}!\n\n🔧 Сіз <b>әкімші</b> ретінде кірдіңіз.\n\nӘрекетті таңдаңыз:"
             else:
                 welcome_text = f"👋 Добро пожаловать, {welcome_name}!\n\n🔧 Вы вошли как <b>администратор</b>.\n\nВыберите действие:"
+        else:
+            # Только если не админ — проверяем has_access
+            if not user_info.get('has_access', False):
+                await query.message.edit_text(
+                    get_message('no_access', user_language, 
+                              user_id=user_id, 
+                              username=query.from_user.username or 'не указан')
+                )
+                return
+            welcome_name = user_info.get('full_name') if user_info.get('full_name') else query.from_user.first_name or "пользователь"
+            grade_text = f", {user_info.get('grade')} класс" if user_info.get('grade') else ""
+            if user_language == 'kk':
+                grade_text = f", {user_info.get('grade')} сынып" if user_info.get('grade') else ""
+                welcome_text = get_message('welcome', user_language, name=welcome_name, grade=user_info.get('grade') if user_info.get('grade') else '') + "\n\n" + get_message('bot_description', user_language)
+            else:
+                welcome_text = f"👋 Привет, {welcome_name}{grade_text}!\n\n📚 Я бот для изучения математики. Выбери действие:"
         
+        self.db.clear_user_test_activity(user_id)  # Очищаем только тему теста
+        self.db.set_user_inactive(user_id)  # Очищаем статус активного теста
+        self.clear_user_data(context)
+        context.user_data.pop('in_topic_selection', None)
         try:
-            # Удаляем inline-клавиатуру у старого сообщения
             await query.message.edit_reply_markup(reply_markup=None)
         except Exception:
             pass
-        
         try:
-            # Отправляем новое сообщение с приветствием и обычной клавиатурой
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text=welcome_text,
@@ -858,7 +847,6 @@ class CallbackHandlers(BaseHandler):
             )
         except Exception as e:
             logging.error(f"Error sending main menu message: {e}")
-            # Fallback: пытаемся отправить простое сообщение
             try:
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
