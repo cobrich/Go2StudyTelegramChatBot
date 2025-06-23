@@ -42,11 +42,11 @@ class SectionsHandler(AdminBaseHandler):
         await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
     
     async def list_all_sections(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Показать все разделы с языковыми индикаторами."""
+        """Показать список всех разделов."""
         query = update.callback_query
         await self.safe_answer_callback(query)
         
-        # Получаем разделы по языкам
+        # Получаем все разделы
         ru_sections = self.db.get_main_topics_by_language("ru", active_only=False)
         kk_sections = self.db.get_main_topics_by_language("kk", active_only=False)
         
@@ -58,9 +58,9 @@ class SectionsHandler(AdminBaseHandler):
             text += "🇷🇺 <b>Русские разделы:</b>\n"
             for section in ru_sections:
                 # Получаем количество подтем
-                subtopics = self.db.get_subtopics_by_main_topic(section['name'])
+                subtopics = self.db.get_subtopics_by_main_topic(section['topic_name'])
                 status_icon = "✅" if section.get('is_active', True) else "❌"
-                text += f"{status_icon} {section['name']} ({len(subtopics)} тем)\n"
+                text += f"{status_icon} {section['topic_name']} ({len(subtopics)} тем)\n"
             text += "\n"
         
         # Казахские разделы
@@ -68,9 +68,9 @@ class SectionsHandler(AdminBaseHandler):
             text += "🇰🇿 <b>Казахские разделы:</b>\n"
             for section in kk_sections:
                 # Получаем количество подтем
-                subtopics = self.db.get_subtopics_by_main_topic(section['name'])
+                subtopics = self.db.get_subtopics_by_main_topic(section['topic_name'])
                 status_icon = "✅" if section.get('is_active', True) else "❌"
-                text += f"{status_icon} {section['name']} ({len(subtopics)} тем)\n"
+                text += f"{status_icon} {section['topic_name']} ({len(subtopics)} тем)\n"
             text += "\n"
         
         if not ru_sections and not kk_sections:
@@ -170,14 +170,14 @@ class SectionsHandler(AdminBaseHandler):
             for i, section in enumerate(ru_sections):
                 section_id = f"ru_{i}"
                 self.sections_mapping[section_id] = {
-                    'name': section['name'],
+                    'name': section['topic_name'],
                     'language': 'ru',
                     'is_active': section.get('is_active', True)
                 }
                 status_icon = "✅" if section.get('is_active', True) else "❌"
-                text += f"{status_icon} {section['name']}\n"
+                text += f"{status_icon} {section['topic_name']}\n"
                 keyboard.append([InlineKeyboardButton(
-                    f"🇷🇺 {section['name']}", 
+                    f"🇷🇺 {section['topic_name']}", 
                     callback_data=f"edit_section_select_{section_id}"
                 )])
             text += "\n"
@@ -187,14 +187,14 @@ class SectionsHandler(AdminBaseHandler):
             for i, section in enumerate(kk_sections):
                 section_id = f"kk_{i}"
                 self.sections_mapping[section_id] = {
-                    'name': section['name'],
+                    'name': section['topic_name'],
                     'language': 'kk',
                     'is_active': section.get('is_active', True)
                 }
                 status_icon = "✅" if section.get('is_active', True) else "❌"
-                text += f"{status_icon} {section['name']}\n"
+                text += f"{status_icon} {section['topic_name']}\n"
                 keyboard.append([InlineKeyboardButton(
-                    f"🇰🇿 {section['name']}", 
+                    f"��🇿 {section['topic_name']}", 
                     callback_data=f"edit_section_select_{section_id}"
                 )])
         
@@ -297,7 +297,7 @@ class SectionsHandler(AdminBaseHandler):
         if success:
             # Получаем обновленную информацию о разделе
             sections = self.db.get_main_topics_by_language(section_info['language'], active_only=False)
-            updated_section = next((s for s in sections if s['name'] == section_info['name']), None)
+            updated_section = next((s for s in sections if s['topic_name'] == section_info['name']), None)
             
             if updated_section:
                 new_status = updated_section['is_active']
@@ -365,13 +365,13 @@ class SectionsHandler(AdminBaseHandler):
             for i, section in enumerate(ru_sections):
                 section_id = f"ru_{i}"
                 self.sections_mapping[section_id] = {
-                    'name': section['name'],
+                    'name': section['topic_name'],
                     'language': 'ru'
                 }
-                subtopics = self.db.get_subtopics_by_main_topic(section['name'])
-                text += f"• {section['name']} ({len(subtopics)} тем)\n"
+                subtopics = self.db.get_subtopics_by_main_topic(section['topic_name'])
+                text += f"• {section['topic_name']} ({len(subtopics)} тем)\n"
                 keyboard.append([InlineKeyboardButton(
-                    f"🗑️ {section['name']}", 
+                    f"🗑️ {section['topic_name']}", 
                     callback_data=f"delete_section_confirm_{section_id}"
                 )])
             text += "\n"
@@ -381,13 +381,13 @@ class SectionsHandler(AdminBaseHandler):
             for i, section in enumerate(kk_sections):
                 section_id = f"kk_{i}"
                 self.sections_mapping[section_id] = {
-                    'name': section['name'],
+                    'name': section['topic_name'],
                     'language': 'kk'
                 }
-                subtopics = self.db.get_subtopics_by_main_topic(section['name'])
-                text += f"• {section['name']} ({len(subtopics)} тем)\n"
+                subtopics = self.db.get_subtopics_by_main_topic(section['topic_name'])
+                text += f"• {section['topic_name']} ({len(subtopics)} тем)\n"
                 keyboard.append([InlineKeyboardButton(
-                    f"🗑️ {section['name']}", 
+                    f"🗑️ {section['topic_name']}", 
                     callback_data=f"delete_section_confirm_{section_id}"
                 )])
         
@@ -518,7 +518,7 @@ class SectionsHandler(AdminBaseHandler):
         
         # Проверяем, не существует ли уже такой раздел
         existing_sections = self.db.get_main_topics_by_language(language, active_only=False)
-        if any(section['name'].lower() == section_name.lower() for section in existing_sections):
+        if any(section['topic_name'].lower() == section_name.lower() for section in existing_sections):
             text = f"❌ Раздел с названием '{section_name}' уже существует. Выберите другое название."
             keyboard = [
                 [InlineKeyboardButton("🔙 Назад", callback_data="add_section_start")],
@@ -599,7 +599,7 @@ class SectionsHandler(AdminBaseHandler):
         
         # Проверяем, не существует ли уже такой раздел
         existing_sections = self.db.get_main_topics_by_language(section_info['language'], active_only=False)
-        if any(section['name'].lower() == new_name.lower() and section['name'] != section_info['name'] 
+        if any(section['topic_name'].lower() == new_name.lower() and section['topic_name'] != section_info['name'] 
                for section in existing_sections):
             text = f"❌ Раздел с названием '{new_name}' уже существует. Выберите другое название."
             keyboard = [
