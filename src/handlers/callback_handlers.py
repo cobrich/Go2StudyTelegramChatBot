@@ -795,19 +795,8 @@ class CallbackHandlers(BaseHandler):
         # Сначала проверяем, является ли пользователь админом
         is_admin = self.db.is_admin(user_id)
         logging.info(f"[DEBUG handle_main_menu] user_id={user_id}, is_admin={is_admin}, user_info={user_info}")
-        if not user_info:
-            user_language = 'ru'  # default
-            await query.message.edit_text(
-                get_message('no_access', user_language, 
-                          user_id=user_id, 
-                          username=query.from_user.username or 'не указан')
-            )
-            return
-        
-        user_language = user_info.get('language', 'ru')
         
         # Сначала проверяем, является ли пользователь админом
-        is_admin = self.db.is_admin(user_id)
         if is_admin:
             # Для админов - получаем информацию из таблицы admins
             admin_info = self.db.get_admin_info(user_id)
@@ -818,6 +807,18 @@ class CallbackHandlers(BaseHandler):
             else:
                 welcome_text = f"👋 Добро пожаловать, {welcome_name}!\n\n🔧 Вы вошли как <b>администратор</b>.\n\nВыберите действие:"
         else:
+            # Только для обычных пользователей проверяем user_info
+            if not user_info:
+                user_language = 'ru'  # default
+                await query.message.edit_text(
+                    get_message('no_access', user_language, 
+                              user_id=user_id, 
+                              username=query.from_user.username or 'не указан')
+                )
+                return
+            
+            user_language = user_info.get('language', 'ru')
+            
             # Только если не админ — проверяем has_access
             if not user_info.get('has_access', False):
                 await query.message.edit_text(
