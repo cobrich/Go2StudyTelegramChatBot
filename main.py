@@ -36,7 +36,7 @@ def keep_db_alive():
             logger.info("🟢 DB keep-alive ping successful")
         except Exception as e:
             logger.warning(f"🔴 DB keep-alive ping failed: {e}")
-        time.sleep(300)  # 5 минут
+        time.sleep(120)  # 2 минут
 
 def main() -> None:
     """Start the bot."""

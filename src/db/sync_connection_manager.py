@@ -42,13 +42,13 @@ class SyncConnectionManager:
             'user': parsed.username,
             'password': parsed.password,
             'sslmode': 'require',  # Neon требует SSL
-            'connect_timeout': 8,  # Уменьшено с 10 до 8 секунд
+            'connect_timeout': 10,  # Увеличено до 10 секунд
             'application_name': 'go2study_bot_sync',
-            # Оптимизация производительности
-            'keepalives_idle': 600,
-            'keepalives_interval': 30,
-            'keepalives_count': 3,
-            'tcp_user_timeout': 1000,
+            # Более агрессивные настройки keepalive для Neon
+            'keepalives_idle': 60,  # Уменьшено с 600 до 60 секунд
+            'keepalives_interval': 10,  # Уменьшено с 30 до 10 секунд
+            'keepalives_count': 5,  # Увеличено с 3 до 5
+            'tcp_user_timeout': 2000,  # Увеличено до 2 секунд
         }
     
     def _get_connection(self):
@@ -60,6 +60,13 @@ class SyncConnectionManager:
                 logger.debug("Created new database connection for current thread")
             except Exception as e:
                 logger.error(f"Failed to create database connection: {e}")
+                # Принудительно очищаем соединение при ошибке
+                if hasattr(self._local, 'connection'):
+                    try:
+                        self._local.connection.close()
+                    except:
+                        pass
+                    self._local.connection = None
                 raise
         
         return self._local.connection
@@ -73,7 +80,7 @@ class SyncConnectionManager:
             yield conn
         except Exception as e:
             logger.error(f"Database connection error: {e}")
-            # Пытаемся переподключиться
+            # Принудительно закрываем соединение при любой ошибке
             if hasattr(self._local, 'connection'):
                 try:
                     self._local.connection.close()
