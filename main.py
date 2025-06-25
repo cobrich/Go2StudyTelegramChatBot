@@ -517,6 +517,10 @@ def main() -> None:
             pattern="^remove_topic$"
         ))
         application.add_handler(CallbackQueryHandler(
+            admin_handlers.remove_topic_start,
+            pattern="^remove_topic_start$"
+        ))
+        application.add_handler(CallbackQueryHandler(
             admin_handlers.remove_section_topics,
             pattern="^remove_section_topics_"
         ))
