@@ -88,19 +88,83 @@ class SyncQuestionRepository(SyncBaseRepository):
             return []
     
     def get_explanation_by_question_text(self, question_text: str) -> Optional[str]:
-        """Get explanation by question text (sync)"""
+        """Get explanation by question text (sync) with fuzzy matching for better deduplication"""
         logger.info(f"🔍 Getting explanation for question: {question_text[:50]}...")
         
         try:
+            # Сначала пробуем точное совпадение
             query = "SELECT explanation FROM questions WHERE question_text = %s LIMIT 1"
             result = self.fetch_val(query, (question_text,))
             
             if result:
-                logger.info(f"📊 Found explanation for question")
+                logger.info(f"📊 Found exact match explanation for question")
                 return result
-            else:
-                logger.info(f"📊 No explanation found for question")
-                return None
+            
+            # Если точного совпадения нет, пробуем нечеткое сравнение
+            # Ищем вопросы с похожим содержанием (схожие числа и структура)
+            fuzzy_query = """
+                SELECT explanation, question_text, 
+                       SIMILARITY(question_text, %s) as similarity
+                FROM questions 
+                WHERE SIMILARITY(question_text, %s) > 0.8
+                ORDER BY similarity DESC
+                LIMIT 1
+            """
+            
+            try:
+                fuzzy_result = self.fetch_one(fuzzy_query, (question_text, question_text))
+                if fuzzy_result and fuzzy_result['similarity'] > 0.8:
+                    logger.info(f"📊 Found fuzzy match explanation (similarity: {fuzzy_result['similarity']:.2f})")
+                    logger.info(f"📊 Original: {fuzzy_result['question_text'][:50]}...")
+                    logger.info(f"📊 New: {question_text[:50]}...")
+                    return fuzzy_result['explanation']
+            except Exception as e:
+                # Если SIMILARITY не поддерживается, используем простой ILIKE
+                logger.debug(f"SIMILARITY not supported, trying ILIKE: {e}")
+                
+                # Простое нечеткое сравнение через ILIKE
+                simple_fuzzy_query = """
+                    SELECT explanation, question_text
+                    FROM questions 
+                    WHERE question_text ILIKE %s
+                    LIMIT 1
+                """
+                
+                # Создаем паттерн для поиска похожих вопросов
+                # Извлекаем ключевые числа и слова
+                import re
+                numbers = re.findall(r'\d+', question_text)
+                key_words = re.findall(r'\b(сок|сахар|процент|литр|грамм|смешать|концентрация)\b', question_text, re.IGNORECASE)
+                
+                if numbers and key_words:
+                    # Создаем паттерн с ключевыми элементами
+                    pattern_parts = []
+                    for num in numbers[:3]:  # Берем первые 3 числа
+                        pattern_parts.append(f"%{num}%")
+                    for word in key_words[:3]:  # Берем первые 3 ключевых слова
+                        pattern_parts.append(f"%{word}%")
+                    
+                    if pattern_parts:
+                        pattern = " AND ".join(pattern_parts)
+                        simple_fuzzy_query = f"""
+                            SELECT explanation, question_text
+                            FROM questions 
+                            WHERE {pattern}
+                            LIMIT 1
+                        """
+                        
+                        try:
+                            simple_result = self.fetch_one(simple_fuzzy_query)
+                            if simple_result:
+                                logger.info(f"📊 Found simple fuzzy match explanation")
+                                logger.info(f"📊 Original: {simple_result['question_text'][:50]}...")
+                                logger.info(f"📊 New: {question_text[:50]}...")
+                                return simple_result['explanation']
+                        except Exception as simple_e:
+                            logger.debug(f"Simple fuzzy matching failed: {simple_e}")
+            
+            logger.info(f"📊 No explanation found for question (exact or fuzzy)")
+            return None
                 
         except Exception as e:
             logger.error(f"❌ Error getting explanation: {e}")
