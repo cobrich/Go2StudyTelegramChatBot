@@ -367,6 +367,7 @@ class QuestionService:
                         # Более мягкая валидация для пересдачи - важно дать достаточно вопросов
                         if question not in existing_question_texts_to_exclude:
                             # Сохраняем сгенерированный ИИ вопрос в базу
+                            saved_question_id = None
                             if not self.db.get_explanation_by_question_text(question):
                                 if question and correct_answer and explanation:
                                     # Сохраняем вопрос и получаем его ID
@@ -436,7 +437,7 @@ class QuestionService:
                                 options,  # Теперь гарантированно список
                                 'ai_retake',
                                 None,  # image_path
-                                saved_question_id  # question_id (ДОБАВЛЕНО!)
+                                saved_question_id if saved_question_id is not None else None  # question_id (ДОБАВЛЕНО!)
                             ))
                             existing_question_texts_to_exclude.add(question)
                             valid_questions += 1
@@ -610,9 +611,11 @@ class QuestionService:
                         
                         if question not in existing_question_texts_to_exclude:
                             # Сохраняем сгенерированный ИИ вопрос в базу
+                            saved_question_id = None
                             if not self.db.get_explanation_by_question_text(question):
                                 if question and correct_answer and explanation:
-                                    self.db.add_question({
+                                    # Сохраняем вопрос и получаем его ID
+                                    saved_question_id = self.db.add_question({
                                         'topic': topic,
                                         'question': question,
                                         'answer': correct_answer,
@@ -625,6 +628,9 @@ class QuestionService:
                                 else:
                                     logging.warning(f"[get_or_generate_tasks][AI generation] Skipping question with NULL fields: question={question}, answer={correct_answer}, explanation={explanation}")
                                     continue
+                            else:
+                                # Если вопрос уже существует, получаем его ID
+                                saved_question_id = self.db.get_question_id_by_text(question)
                             
                             # Формируем варианты ответов
                             options = [correct_answer]
@@ -675,7 +681,7 @@ class QuestionService:
                                 options,  # Теперь гарантированно список
                                 'ai',
                                 None,  # image_path
-                                saved_question_id  # question_id (ДОБАВЛЕНО!)
+                                saved_question_id if saved_question_id is not None else None  # question_id (ДОБАВЛЕНО!)
                             ))
                             existing_question_texts_to_exclude.add(question)
                             valid_questions += 1

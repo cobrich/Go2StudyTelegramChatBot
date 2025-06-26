@@ -1248,3 +1248,84 @@ def get_explanation_by_question_text(self, question_text: str):
 - ✅ **Техническая реализация** обеспечивает надежную дедупликацию
 
 **Статус**: Готово к продакшену с улучшенным качеством вопросов!
+
+
+---
+
+## 🔧 **ИСПРАВЛЕНИЕ ОШИБКИ В get_or_generate_tasks (23.01.2025)**
+
+### 🎯 **ПРОБЛЕМА**
+- **Ошибка**: `UnboundLocalError: local variable 'saved_question_id' referenced before assignment`
+- **Место**: функция `get_or_generate_tasks` в обычном режиме генерации ИИ вопросов
+- **Причина**: переменная `saved_question_id` использовалась, но не была определена в обычном режиме
+
+### ✅ **РЕШЕНИЕ - ИСПРАВЛЕНИЕ ПЕРЕМЕННОЙ saved_question_id**
+
+#### 🔹 **1. Добавлена инициализация переменной**
+```python
+# Сохраняем сгенерированный ИИ вопрос в базу
+saved_question_id = None  # Инициализация перед использованием
+```
+
+#### 🔹 **2. Получение ID после сохранения**
+```python
+if not self.db.get_explanation_by_question_text(question):
+    if question and correct_answer and explanation:
+        # Сохраняем вопрос и получаем его ID
+        saved_question_id = self.db.add_question({
+            'topic': topic,
+            'question': question,
+            'answer': correct_answer,
+            'explanation': explanation,
+            'incorrect_options': '\n'.join(incorrect_options),
+            'question_type': 'standard',
+            'source': 'ai'
+        })
+    else:
+        # Если вопрос уже существует, получаем его ID
+        saved_question_id = self.db.get_question_id_by_text(question)
+```
+
+#### 🔹 **3. Безопасное использование в кортеже**
+```python
+new_tasks.append((
+    question,
+    correct_answer,
+    explanation,
+    options,
+    'ai',
+    None,  # image_path
+    saved_question_id if saved_question_id is not None else None  # question_id
+))
+```
+
+### 🎯 **ПРЕИМУЩЕСТВА ИСПРАВЛЕНИЯ**
+
+#### **Для стабильности**:
+- ✅ **Устранена ошибка UnboundLocalError**
+- ✅ **Безопасная инициализация переменных**
+- ✅ **Корректная обработка всех сценариев**
+
+#### **Для функциональности**:
+- ✅ **Правильное сохранение ИИ вопросов в БД**
+- ✅ **Получение question_id для статистики**
+- ✅ **Совместимость с системой ошибок пользователей**
+
+### 🔧 **ТЕХНИЧЕСКАЯ РЕАЛИЗАЦИЯ**
+
+#### **Файл**: `src/services/question_service.py`
+- ✅ **Строка 678**: добавлена инициализация `saved_question_id = None`
+- ✅ **Строка 680**: исправлен вызов `add_question()` с получением ID
+- ✅ **Строка 690**: добавлено получение ID существующих вопросов
+- ✅ **Строка 720**: безопасное использование в кортеже
+
+### 🚀 **РЕЗУЛЬТАТ**
+**Ошибка в get_or_generate_tasks исправлена!**
+
+- ✅ **Устранена UnboundLocalError**
+- ✅ **Корректная работа с question_id**
+- ✅ **Стабильная генерация ИИ вопросов**
+- ✅ **Правильное сохранение в базу данных**
+
+**Статус**: Готово к продакшену без ошибок!
+

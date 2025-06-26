@@ -101,67 +101,39 @@ class SyncQuestionRepository(SyncBaseRepository):
                 return result
             
             # Если точного совпадения нет, пробуем нечеткое сравнение
-            # Ищем вопросы с похожим содержанием (схожие числа и структура)
-            fuzzy_query = """
-                SELECT explanation, question_text, 
-                       SIMILARITY(question_text, %s) as similarity
-                FROM questions 
-                WHERE SIMILARITY(question_text, %s) > 0.8
-                ORDER BY similarity DESC
-                LIMIT 1
-            """
+            # Ищем вопросы с похожим содержанием
+            # Извлекаем числа и ключевые слова из вопроса
+            import re
+            numbers = re.findall(r'\d+', question_text)
+            key_words = re.findall(r'\b(сок|сахар|процент|литр|кг|грамм|метр|час|день|рубль|копейка|магазин|фермер|участок|земля|помидор|картофель|копилка|деньги)\b', question_text.lower())
             
-            try:
-                fuzzy_result = self.fetch_one(fuzzy_query, (question_text, question_text))
-                if fuzzy_result and fuzzy_result['similarity'] > 0.8:
-                    logger.info(f"📊 Found fuzzy match explanation (similarity: {fuzzy_result['similarity']:.2f})")
-                    logger.info(f"📊 Original: {fuzzy_result['question_text'][:50]}...")
-                    logger.info(f"📊 New: {question_text[:50]}...")
-                    return fuzzy_result['explanation']
-            except Exception as e:
-                # Если SIMILARITY не поддерживается, используем простой ILIKE
-                logger.debug(f"SIMILARITY not supported, trying ILIKE: {e}")
+            if numbers or key_words:
+                # Строим простой поиск по ключевым элементам
+                search_conditions = []
+                params = []
                 
-                # Простое нечеткое сравнение через ILIKE
-                simple_fuzzy_query = """
-                    SELECT explanation, question_text
-                    FROM questions 
-                    WHERE question_text ILIKE %s
-                    LIMIT 1
-                """
+                # Добавляем поиск по числам (первые 3 числа)
+                for num in numbers[:3]:
+                    search_conditions.append("question_text LIKE %s")
+                    params.append(f"%{num}%")
                 
-                # Создаем паттерн для поиска похожих вопросов
-                # Извлекаем ключевые числа и слова
-                import re
-                numbers = re.findall(r'\d+', question_text)
-                key_words = re.findall(r'\b(сок|сахар|процент|литр|грамм|смешать|концентрация)\b', question_text, re.IGNORECASE)
+                # Добавляем поиск по ключевым словам (первые 3 слова)
+                for word in key_words[:3]:
+                    search_conditions.append("question_text LIKE %s")
+                    params.append(f"%{word}%")
                 
-                if numbers and key_words:
-                    # Создаем паттерн с ключевыми элементами
-                    pattern_parts = []
-                    for num in numbers[:3]:  # Берем первые 3 числа
-                        pattern_parts.append(f"%{num}%")
-                    for word in key_words[:3]:  # Берем первые 3 ключевых слова
-                        pattern_parts.append(f"%{word}%")
+                if search_conditions:
+                    # Ищем вопросы с похожими элементами
+                    query = f"""
+                        SELECT explanation FROM questions 
+                        WHERE {' OR '.join(search_conditions)}
+                        LIMIT 1
+                    """
+                    result = self.fetch_val(query, tuple(params))
                     
-                    if pattern_parts:
-                        pattern = " AND ".join(pattern_parts)
-                        simple_fuzzy_query = f"""
-                            SELECT explanation, question_text
-                            FROM questions 
-                            WHERE {pattern}
-                            LIMIT 1
-                        """
-                        
-                        try:
-                            simple_result = self.fetch_one(simple_fuzzy_query)
-                            if simple_result:
-                                logger.info(f"📊 Found simple fuzzy match explanation")
-                                logger.info(f"📊 Original: {simple_result['question_text'][:50]}...")
-                                logger.info(f"📊 New: {question_text[:50]}...")
-                                return simple_result['explanation']
-                        except Exception as simple_e:
-                            logger.debug(f"Simple fuzzy matching failed: {simple_e}")
+                    if result:
+                        logger.info(f"📊 Found fuzzy match explanation for question")
+                        return result
             
             logger.info(f"📊 No explanation found for question (exact or fuzzy)")
             return None
