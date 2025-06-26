@@ -19,6 +19,7 @@ from src.init_app import initialize_app_if_needed
 import sys
 import threading
 import time
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -30,13 +31,28 @@ logger = logging.getLogger(__name__)
 def keep_db_alive():
     from src.db.sync_connection_manager import get_sync_connection_manager
     conn_manager = get_sync_connection_manager()
+    
+    def is_night_time():
+        """Проверяет, наступило ли ночное время (2:00-6:00) для экономии Compute Time"""
+        current_hour = datetime.now().hour
+        return 2 <= current_hour < 6
+    
     while True:
         try:
+            # Проверяем ночное время
+            if is_night_time():
+                logger.info("🌙 Night time detected (2:00-6:00), skipping DB ping to save Compute Time")
+                time.sleep(3600)  # Спим 1 час в ночное время
+                continue
+            
             conn_manager.fetch_val("SELECT 1")
             logger.info("🟢 DB keep-alive ping successful")
         except Exception as e:
             logger.warning(f"🔴 DB keep-alive ping failed: {e}")
-        time.sleep(120)  # 2 минут
+        
+        # Основной интервал: 15 минут днем, 1 час ночью
+        sleep_time = 3600 if is_night_time() else 900
+        time.sleep(sleep_time)
 
 def main() -> None:
     """Start the bot."""
