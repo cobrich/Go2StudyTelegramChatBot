@@ -1,58 +1,38 @@
+import os
 import logging
-from telegram import Update
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
-    filters
-)
-from telegram.request import HTTPXRequest
-from src.config.constants import TELEGRAM_BOT_TOKEN
-from src.services.database import get_database_instance
-from src.services.question_service import QuestionService
-from src.services.ai_service import AIService
-from src.handlers.command_handlers import CommandHandlers
-from src.handlers.callback_handlers import CallbackHandlers
-from src.handlers.admin import AdminHandlers
-from src.init_app import initialize_app_if_needed
 import sys
 import threading
 import time
 from datetime import datetime
+from telegram import Update
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.request import HTTPXRequest
+
+# Project imports
+from src.handlers.command_handlers import CommandHandlers
+from src.handlers.callback_handlers import CallbackHandlers
+from src.handlers.admin import AdminHandlers
+from src.services.database import get_database_instance
+from src.services.ai_service import AIService
+from src.services.question_service import QuestionService
+from src.config.constants import TELEGRAM_BOT_TOKEN
+from src.init_app import initialize_app_if_needed
 
 # Configure logging
 logging.basicConfig(
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
 )
-logger = logging.getLogger(__name__)
 
-def keep_db_alive():
-    from src.db.sync_connection_manager import get_sync_connection_manager
-    conn_manager = get_sync_connection_manager()
-    
-    def is_night_time():
-        """Проверяет, наступило ли ночное время (2:00-6:00) для экономии Compute Time"""
-        current_hour = datetime.now().hour
-        return 2 <= current_hour < 6
-    
-    while True:
-        try:
-            # Проверяем ночное время
-            if is_night_time():
-                logger.info("🌙 Night time detected (2:00-6:00), skipping DB ping to save Compute Time")
-                time.sleep(3600)  # Спим 1 час в ночное время
-                continue
-            
-            conn_manager.fetch_val("SELECT 1")
-            logger.info("🟢 DB keep-alive ping successful")
-        except Exception as e:
-            logger.warning(f"🔴 DB keep-alive ping failed: {e}")
-        
-        # Основной интервал: 15 минут днем, 1 час ночью
-        sleep_time = 3600 if is_night_time() else 900
-        time.sleep(sleep_time)
+# Set specific loggers to WARNING to reduce noise
+logging.getLogger('httpx').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
+
+logger = logging.getLogger(__name__)
 
 def main() -> None:
     """Start the bot."""
@@ -561,8 +541,6 @@ def main() -> None:
     
         # Start the Bot
         logger.info("🎯 Starting bot polling...")
-        # Запускаем keep-alive поток для Neon
-        threading.Thread(target=keep_db_alive, daemon=True).start()
         application.run_polling(allowed_updates=Update.ALL_TYPES)
         
     except Exception as e:

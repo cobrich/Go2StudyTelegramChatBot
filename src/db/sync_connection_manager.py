@@ -1,7 +1,7 @@
 """
-Synchronous Connection Manager for Neon PostgreSQL Database Operations
+Synchronous Connection Manager for Supabase PostgreSQL Database Operations
 
-Provides unified interface for Neon PostgreSQL connections using psycopg2.
+Provides unified interface for Supabase PostgreSQL connections using psycopg2.
 """
 
 import os
@@ -16,19 +16,19 @@ from urllib.parse import urlparse
 logger = logging.getLogger(__name__)
 
 class SyncConnectionManager:
-    """Manages Neon PostgreSQL database connections synchronously"""
+    """Manages Supabase PostgreSQL database connections synchronously"""
     
     def __init__(self):
         self._connection_params = self._get_connection_params()
         self._local = threading.local()
-        logger.info("Initialized SyncConnectionManager for Neon PostgreSQL")
+        logger.info("Initialized SyncConnectionManager for Supabase PostgreSQL")
     
     def _get_connection_params(self) -> Dict[str, Any]:
-        """Get Neon PostgreSQL connection parameters from environment variables"""
+        """Get Supabase PostgreSQL connection parameters from environment variables"""
         database_url = os.getenv('DATABASE_URL') or os.getenv('SUPABASE_DATABASE_URL')
         if not database_url:
             raise ValueError(
-                "Neon PostgreSQL connection string not found. "
+                "Supabase PostgreSQL connection string not found. "
                 "Please set DATABASE_URL or SUPABASE_DATABASE_URL environment variable."
             )
         
@@ -41,14 +41,14 @@ class SyncConnectionManager:
             'database': parsed.path[1:],  # убираем ведущий слэш
             'user': parsed.username,
             'password': parsed.password,
-            'sslmode': 'require',  # Neon требует SSL
+            'sslmode': 'require',  # Supabase требует SSL
             'connect_timeout': 10,  # Увеличено до 10 секунд
             'application_name': 'go2study_bot_sync',
-            # Более агрессивные настройки keepalive для Neon
-            'keepalives_idle': 60,  # Уменьшено с 600 до 60 секунд
-            'keepalives_interval': 10,  # Уменьшено с 30 до 10 секунд
-            'keepalives_count': 5,  # Увеличено с 3 до 5
-            'tcp_user_timeout': 2000,  # Увеличено до 2 секунд
+            # Настройки keepalive для Supabase (менее агрессивные чем для Neon)
+            'keepalives_idle': 300,  # 5 минут (Supabase более стабилен)
+            'keepalives_interval': 30,  # 30 секунд
+            'keepalives_count': 3,  # 3 попытки
+            'tcp_user_timeout': 5000,  # 5 секунд
         }
     
     def _get_connection(self):
