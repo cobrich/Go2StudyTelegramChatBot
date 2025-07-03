@@ -82,52 +82,56 @@ class DatabaseMigrator:
             return [row[0] for row in cursor.fetchall()]
     
     def create_table_structure(self):
-        """Создание структуры таблиц в целевой базе"""
+        """Создание структуры таблиц в целевой базе (упрощенный метод)"""
         logger.info("🏗️ Creating table structure in target database...")
         
-        # Получаем SQL схему из исходной базы
-        with self.source_conn.cursor() as cursor:
-            cursor.execute("""
-                SELECT 
-                    'CREATE TABLE ' || tablename || ' (' ||
-                    string_agg(column_definition, ', ') || ');'
-                FROM (
-                    SELECT 
-                        t.tablename,
-                        a.attname || ' ' || 
-                        format_type(a.atttypid, a.atttypmod) ||
-                        CASE 
-                            WHEN a.attnotnull THEN ' NOT NULL'
-                            ELSE ''
-                        END ||
-                        CASE 
-                            WHEN a.atthasdef THEN ' DEFAULT ' || d.adsrc
-                            ELSE ''
-                        END as column_definition
-                    FROM pg_tables t
-                    JOIN pg_class c ON c.relname = t.tablename
-                    JOIN pg_attribute a ON a.attrelid = c.oid
-                    LEFT JOIN pg_attrdef d ON d.adrelid = c.oid AND d.adnum = a.attnum
-                    WHERE t.schemaname = 'public'
-                    AND a.attnum > 0
-                    AND NOT a.attisdropped
-                    ORDER BY t.tablename, a.attnum
-                ) subq
-                GROUP BY tablename
-                ORDER BY tablename
-            """)
-            
-            create_statements = cursor.fetchall()
-            
-        # Выполняем создание таблиц в целевой базе
-        with self.target_conn.cursor() as cursor:
-            for statement in create_statements:
-                try:
-                    cursor.execute(statement[0])
-                    logger.info(f"✅ Created table structure")
-                except Exception as e:
-                    logger.warning(f"⚠️ Table creation warning: {e}")
+        source_tables = self.get_all_tables(self.source_conn)
         
+        with self.target_conn.cursor() as target_cursor:
+            # Сначала удаляем таблицы, если они существуют, для чистого старта
+            for table in reversed(source_tables): # Обратный порядок для зависимостей
+                try:
+                    target_cursor.execute(f"DROP TABLE IF EXISTS {table} CASCADE;")
+                    logger.info(f"Dropped table {table} if it existed.")
+                except Exception as e:
+                    logger.warning(f"Could not drop table {table}: {e}")
+            self.target_conn.commit()
+
+            # Создаем таблицы
+            for table_name in source_tables:
+                with self.source_conn.cursor() as source_cursor:
+                    # Используем pg_dump для получения чистого CREATE TABLE стейтмента
+                    # Это более надежно, чем ручная сборка
+                    # Для этого нужен pg_dump в системном PATH
+                    # Как альтернативу, делаем ручную сборку, но проще
+                    source_cursor.execute(f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table_name}' ORDER BY ordinal_position;")
+                    columns = source_cursor.fetchall()
+                    
+                    if not columns:
+                        continue
+
+                    column_defs = []
+                    for col_name, col_type in columns:
+                        # Упрощаем типы данных, чтобы избежать проблем совместимости
+                        if "character varying" in col_type:
+                            col_type = "TEXT"
+                        if "timestamp" in col_type:
+                            col_type = "TIMESTAMP WITH TIME ZONE"
+                        if col_name == "id":
+                            col_type = "SERIAL PRIMARY KEY" # Используем SERIAL для автоинкремента
+                        
+                        column_defs.append(f"{col_name} {col_type}")
+
+                    create_sql = f"CREATE TABLE {table_name} ({', '.join(column_defs)});"
+                    
+                    try:
+                        target_cursor.execute(create_sql)
+                        logger.info(f"✅ Created table: {table_name}")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to create table {table_name}: {e}")
+                        self.target_conn.rollback()
+                        raise
+
         self.target_conn.commit()
         logger.info("✅ Table structure created successfully")
     

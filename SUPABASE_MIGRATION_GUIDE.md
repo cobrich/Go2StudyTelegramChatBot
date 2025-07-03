@@ -6,7 +6,7 @@
 
 #### 🔗 **1. ПОДКЛЮЧЕНИЕ К БАЗЕ ДАННЫХ**
 - **Было (Neon)**: `postgresql://user:pass@ep-xxx.region.aws.neon.tech/database`
-- **Станет (Supabase)**: `postgres://postgres.project:[PASSWORD]@aws-0-region.pooler.supabase.com:5432/postgres`
+- **Станет (Supabase)**: `postgresql://postgres.kfygutwpyfhyvotajrru:[YOUR-PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres` (Transaction Pooler)
 
 #### 🛡️ **2. SSL И БЕЗОПАСНОСТЬ**
 - **Neon**: требует SSL, агрессивные keepalive настройки
@@ -19,6 +19,15 @@
 #### 💰 **4. СТОИМОСТЬ**
 - **Neon**: ограничения на Compute Time (200 часов/месяц на бесплатном тарифе)
 - **Supabase**: без ограничений на активное время (2 паузы/день, но без лимита времени)
+
+#### 🔄 **5. CONNECTION POOLING**
+- **Transaction Pooler** (порт 6543): ✅ **РЕКОМЕНДУЕТСЯ для Telegram ботов**
+  - Идеален для stateless приложений
+  - Краткие соединения для каждого запроса
+  - Лучшая производительность для наших задач
+- **Session Pooler** (порт 5432): ❌ НЕ рекомендуется
+  - Для длительных соединений
+  - Не поддерживает PREPARE statements
 
 ---
 
@@ -38,7 +47,9 @@
 ```bash
 # Добавляем в .env файл:
 NEON_DATABASE_URL=postgresql://user:pass@ep-xxx.region.aws.neon.tech/database  # старая база
-SUPABASE_DATABASE_URL=postgres://postgres.project:[PASSWORD]@aws-0-region.pooler.supabase.com:5432/postgres  # новая база
+
+# 🎯 ИСПОЛЬЗУЕМ TRANSACTION POOLER (порт 6543):
+SUPABASE_DATABASE_URL=postgres://[WORD]@project-ref.pooler.supabase.com:6543/postgres  # новая база
 ```
 
 ### **ШАГ 2: Миграция данных**
@@ -82,8 +93,8 @@ python migrate_to_supabase.py
 
 #### 3.1 Обновление .env файла
 ```bash
-# Меняем DATABASE_URL на Supabase
-DATABASE_URL=postgres://postgres.project:[PASSWORD]@aws-0-region.pooler.supabase.com:5432/postgres
+# 🎯 ВАЖНО: Используем Transaction Pooler (порт 6543)
+DATABASE_URL=postgres://[WORD]@project-ref.pooler.supabase.com:6543/postgres
 USE_POSTGRESQL=true
 
 # Убираем старые переменные Neon (после успешной миграции)
@@ -93,7 +104,8 @@ USE_POSTGRESQL=true
 #### 3.2 Обновление Railway переменных
 ```bash
 # В Railway Dashboard → Variables:
-DATABASE_URL=postgres://postgres.project:[PASSWORD]@aws-0-region.pooler.supabase.com:5432/postgres
+# 🎯 ОБЯЗАТЕЛЬНО Transaction Pooler:
+DATABASE_URL=postgres://[WORD]@project-ref.pooler.supabase.com:6543/postgres
 ```
 
 ### **ШАГ 4: Тестирование**

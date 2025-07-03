@@ -29,7 +29,8 @@ class SyncConnectionManager:
         if not database_url:
             raise ValueError(
                 "Supabase PostgreSQL connection string not found. "
-                "Please set DATABASE_URL or SUPABASE_DATABASE_URL environment variable."
+                "Please set DATABASE_URL or SUPABASE_DATABASE_URL environment variable.\n"
+                "Recommended format: postgres://[WORD]@project-ref.pooler.supabase.com:6543/postgres (Transaction Pooler)"
             )
         
         # Парсим URL
@@ -37,15 +38,15 @@ class SyncConnectionManager:
         
         return {
             'host': parsed.hostname,
-            'port': parsed.port or 5432,
+            'port': parsed.port or 6543,  # Transaction Pooler port (default 6543)
             'database': parsed.path[1:],  # убираем ведущий слэш
             'user': parsed.username,
             'password': parsed.password,
             'sslmode': 'require',  # Supabase требует SSL
             'connect_timeout': 10,  # Увеличено до 10 секунд
             'application_name': 'go2study_bot_sync',
-            # Настройки keepalive для Supabase (менее агрессивные чем для Neon)
-            'keepalives_idle': 300,  # 5 минут (Supabase более стабилен)
+            # Настройки keepalive для Supabase Transaction Pooler
+            'keepalives_idle': 300,  # 5 минут (Transaction Pooler более эффективен)
             'keepalives_interval': 30,  # 30 секунд
             'keepalives_count': 3,  # 3 попытки
             'tcp_user_timeout': 5000,  # 5 секунд
