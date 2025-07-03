@@ -29,7 +29,7 @@ class SyncDatabaseFacade:
         self._cache = {}
         self._cache_ttl = 300  # 5 минут
         
-        logger.info("SyncDatabaseFacade initialized for Neon PostgreSQL")
+        logger.info("SyncDatabaseFacade initialized")
     
     def _get_cache_key(self, operation: str, *args) -> str:
         """Генерирует ключ кеша"""
