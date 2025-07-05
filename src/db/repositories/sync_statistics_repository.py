@@ -183,13 +183,13 @@ class SyncStatisticsRepository(SyncBaseRepository):
             return False
     
     def get_error_tasks_for_user(self, user_id: int, topic: str, limit: int = 10) -> List[Dict]:
-        """Get error tasks for user (sync) - ONLY for students"""
+        """Get error tasks for user (sync) - Now works for ALL users, including admins"""
         logger.info(f"🔍 Getting error tasks for user {user_id}, topic: {topic}")
         
-        # ✅ ПРОВЕРКА: Админы не имеют студенческих ошибок
-        if self._is_admin(user_id):
-            logger.info(f"🔒 Admin {user_id} - no student error tasks")
-            return []
+        # 🗑️ УДАЛЕНА ПРОВЕРКА is_admin: Теперь админы тоже могут видеть свои ошибки для пересдачи
+        # if self._is_admin(user_id):
+        #     logger.info(f"🔒 Admin {user_id} - no student error tasks")
+        #     return []
         
         try:
             query = """
@@ -243,13 +243,13 @@ class SyncStatisticsRepository(SyncBaseRepository):
             return []
     
     def get_error_topics(self, user_id: int) -> List[Tuple[str, int]]:
-        """Get error topics for user (sync) - ONLY for students"""
+        """Get error topics for user (sync) - Now works for ALL users, including admins"""
         logger.info(f"📊 Getting error topics for user: {user_id}")
         
-        # ✅ ПРОВЕРКА: Админы не имеют студенческих ошибок
-        if self._is_admin(user_id):
-            logger.info(f"🔒 Admin {user_id} - no student error topics")
-            return []
+        # 🗑️ УДАЛЕНА ПРОВЕРКА is_admin: Теперь админы тоже могут видеть свои проблемные темы
+        # if self._is_admin(user_id):
+        #     logger.info(f"🔒 Admin {user_id} - no student error topics")
+        #     return []
         
         try:
             query = """
