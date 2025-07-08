@@ -12,8 +12,8 @@ from src.services.random_test_service import RandomTestService
 from src.utils.message_manager import MessageManager
 
 class CommandHandlers(BaseHandler):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, db, question_service):
+        super().__init__(db, question_service)
         self.message_manager = MessageManager(self.db)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

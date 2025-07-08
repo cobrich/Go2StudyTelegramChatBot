@@ -9,13 +9,8 @@ from src.services.topic_manager import TopicManager
 from src.handlers.base_handler import BaseHandler
 
 class CallbackHandlers(BaseHandler):
-    def __init__(self, db=None, question_service=None):
-        super().__init__()
-        # Переопределяем db и question_service если переданы
-        if db:
-            self.db = db
-        if question_service:
-            self.question_service = question_service
+    def __init__(self, db, question_service):
+        super().__init__(db, question_service)
 
     async def _delete_previous_bot_message(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Удаляет предыдущее сообщение бота, если оно сохранено в контексте."""
