@@ -602,12 +602,14 @@ class QuestionService:
                         # Проверяем валидность вопроса
                         is_valid, error_msg = self._validate_ai_question(question, correct_answer, explanation, topic)
                         if not is_valid:
-                            # Мягкая валидация - принимаем сомнительные вопросы если их не хватает
-                            if valid_questions < min_ai_questions or attempt_batch >= max_batches - 1:
-                                logging.warning(f"[get_or_generate_tasks][AI generation] Soft validation: accepting questionable AI question due to shortage: {error_msg}. Question: {question[:100]}...")
-                            else:
-                                logging.warning(f"[get_or_generate_tasks][AI generation] Skipping invalid AI question: {error_msg}. Question: {question[:100]}...")
-                                continue
+                            # # Мягкая валидация - принимаем сомнительные вопросы если их не хватает
+                            # if valid_questions < min_ai_questions or attempt_batch >= max_batches - 1:
+                            #     logging.warning(f"[get_or_generate_tasks][AI generation] Soft validation: accepting questionable AI question due to shortage: {error_msg}. Question: {question[:100]}...")
+                            # else:
+                            #     logging.warning(f"[get_or_generate_tasks][AI generation] Skipping invalid AI question: {error_msg}. Question: {question[:100]}...")
+                            #     continue
+                            logging.warning(f"[get_or_generate_tasks][AI generation] Skipping invalid AI question: {error_msg}. Question: {question[:100]}...")
+                            continue
                         
                         if question not in existing_question_texts_to_exclude:
                             # Сохраняем сгенерированный ИИ вопрос в базу

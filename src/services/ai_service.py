@@ -349,6 +349,24 @@ class AIService:
         
         # Дополнительная очистка объяснения от лишних символов
         if explanation:
+            # Очистка от мета-комментариев ИИ
+            lines = explanation.split('\\n')
+            cleaned_lines = []
+            meta_patterns_to_remove = [
+                r"^\s*1-КЕЗЕҢ:", r"^\s*2-КЕЗЕҢ:", r"^\s*3-КЕЗЕҢ:", r"^\s*4-КЕЗЕҢ:",
+                r"^\s*КЕЛІСІЛДІ!", r"^\s*ЖАРАЙДЫ,", r"^\s*ӘЛБЕТТЕ!", r"^\s*ӘРИНЕ,",
+                r"^\s*ТҮСІНІКТІ!", r"^\s*ЖАҚСЫ,", r"^\s*МІНЕ,",
+                r"^\s*СІЗДІҢ НҰСҚАУЛАРЫҢЫЗДЫ",
+                r"^\s*\\*\\*Негізгі математикалық ұғымдар",
+                r"^\s*\\* Сұрақ", r"^\s*\\* Дұрыс жауап",
+                r"^\s*\\* Қате жауаптар", r"^\s*\\* Түсіндірме"
+            ]
+            combined_pattern = re.compile('|'.join(meta_patterns_to_remove), re.IGNORECASE)
+            for line in lines:
+                if not combined_pattern.search(line) and not line.strip().startswith('*'):
+                    cleaned_lines.append(line)
+            explanation = '\\n'.join(cleaned_lines).strip()
+
             # Убираем лишние пробелы и переносы в начале/конце
             explanation = explanation.strip()
             # Убираем возможные артефакты парсинга
