@@ -7,9 +7,9 @@ from src.utils.translations import get_message
 import logging
 
 class BaseHandler:
-    def __init__(self):
-        self.db = get_sync_database_facade()
-        self.question_service = QuestionService()
+    def __init__(self, db, question_service):
+        self.db = db
+        self.question_service = question_service
 
     async def safe_answer_callback(self, query) -> None:
         """Safely answer callback query, ignoring expired queries."""
