@@ -631,8 +631,9 @@ class QuestionService:
                                     logging.warning(f"[get_or_generate_tasks][AI generation] Skipping question with NULL fields: question={question}, answer={correct_answer}, explanation={explanation}")
                                     continue
                             else:
-                                # Если вопрос уже существует, получаем его ID
-                                saved_question_id = self.db.get_question_id_by_text(question)
+                                # Если вопрос уже существует, это дубликат. Пропускаем его.
+                                logging.warning(f"[get_or_generate_tasks][AI generation] Skipping duplicate AI question (fuzzy match): {question[:100]}...")
+                                continue
                             
                             # Формируем варианты ответов
                             options = [correct_answer]
