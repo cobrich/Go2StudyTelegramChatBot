@@ -48,7 +48,7 @@ class QuestionService:
         if len(question) < 20 or len(question) > 1000:
             return False, f"Неправильная длина вопроса: {len(question)} символов"
         
-        if len(explanation) < 10 or len(explanation) > 2000:
+        if len(explanation) < 10 or len(explanation) > 5000:
             return False, f"Неправильная длина объяснения: {len(explanation)} символов"
         
         # НОВАЯ ПРОВЕРКА: Соответствие ответа теме
@@ -85,7 +85,7 @@ class QuestionService:
         
         # Проверка на слишком много предложений (возможно несколько вопросов)
         sentence_count = len([s for s in explanation.split('.') if s.strip()])
-        if sentence_count > 10:
+        if sentence_count > 30:
             return False, f"Слишком длинное объяснение: {sentence_count} предложений"
         
         return True, ""
@@ -323,7 +323,7 @@ class QuestionService:
                     tasks.append((
                         task['question'],
                         task['answer'],
-                        task['explanation'],
+                        self.ai_service._clean_explanation_text(task['explanation']),
                         options,  # Теперь гарантированно список
                         'db_error',
                         task['image_path'] if 'image_path' in task else None,
@@ -481,7 +481,7 @@ class QuestionService:
                     tasks.append((
                         task['question'],
                         task['answer'],
-                        task['explanation'],
+                        self.ai_service._clean_explanation_text(task['explanation']),
                         options,  # Теперь гарантированно список
                         'db',
                         task['image_path'] if 'image_path' in task else None,
@@ -540,7 +540,7 @@ class QuestionService:
                         tasks.append((
                             task['question'],
                             task['answer'],
-                            task['explanation'],
+                            self.ai_service._clean_explanation_text(task['explanation']),
                             options,  # Теперь гарантированно список
                             task.get('source', 'db'),
                             task['image_path'] if 'image_path' in task else None,

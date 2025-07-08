@@ -12,8 +12,9 @@ from src.services.random_test_service import RandomTestService
 from src.utils.message_manager import MessageManager
 
 class CommandHandlers(BaseHandler):
-    def __init__(self, db, question_service):
+    def __init__(self, db, question_service, ai_service):
         super().__init__(db, question_service)
+        self.ai_service = ai_service
         self.message_manager = MessageManager(self.db)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -520,11 +521,8 @@ class CommandHandlers(BaseHandler):
                 
                 # Импортируем админ-хендлеры
                 from src.handlers.admin import AdminBaseHandler
-                from src.services.question_service import QuestionService
-                from src.services.ai_service import AIService
                 
-                ai_service = AIService()
-                admin_handlers = AdminBaseHandler()
+                admin_handlers = AdminBaseHandler(self.db, self.question_service, self.ai_service)
                 await admin_handlers.admin_panel(update, context)
             else:
                 no_admin_text = "❌ У вас нет прав администратора." if user_language == 'ru' else "❌ Сізде әкімші құқығы жоқ."

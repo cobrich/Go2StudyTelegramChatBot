@@ -67,7 +67,7 @@ def main() -> None:
     
         # Initialize handlers
         logger.info("🎮 Initializing handlers...")
-        command_handlers = CommandHandlers(db, question_service)
+        command_handlers = CommandHandlers(db, question_service, ai_service)
         callback_handlers = CallbackHandlers(db, question_service)
         admin_handlers = AdminHandlers(db, question_service, ai_service)
         logger.info("✅ All handlers initialized")

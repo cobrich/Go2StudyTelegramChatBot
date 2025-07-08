@@ -290,8 +290,9 @@ class ImprovedAIService:
                         incorrect_options.append(cleaned)
             
             e_match = re.search(explanation_pattern, response_text, re.DOTALL | re.IGNORECASE)
-            explanation = e_match.group(1).strip() if e_match else None
-            
+            explanation_raw = e_match.group(1).strip() if e_match else None
+            explanation = self._clean_explanation_text(explanation_raw)
+
             # Validate response
             if not (question and correct_answer and explanation and len(incorrect_options) >= 1):
                 return None, None, None, None
@@ -314,6 +315,26 @@ class ImprovedAIService:
         text = re.sub(r'\s+', ' ', text)
         # Remove leading and trailing spaces
         return text.strip()
+
+    def _clean_explanation_text(self, text: str) -> str:
+        """Removes AI's meta-commentary and self-evaluation from explanations."""
+        if not text:
+            return ""
+
+        # Удаляем любые строки, начинающиеся с "ЭТАП", "ШАГ", "КЕЗЕҢ", "ҚАДАМ" и т.д., а также маркеры списка
+        lines = text.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            # Используем re.IGNORECASE для регистронезависимости
+            if not re.match(r'^\s*(\*|\-|•|ЭТАП|ШАГ|КЕЗЕҢ|ҚАДАМ|САМОПРОВЕРКА|ТЕКСЕРУ|ПРОВЕРКА|МІНДЕТ|ЗАДАЧА|Помни|Есте сақтаңыз|ФОРМАТ|FORMAT)\s*[:\d]*', line.strip(), re.IGNORECASE):
+                cleaned_lines.append(line)
+        
+        cleaned_text = '\n'.join(cleaned_lines)
+
+        # Удаляем оставшиеся маркеры, которые могли быть в середине
+        final_text = re.sub(r'\*?\*(ЭТАП|ШАГ|КЕЗЕҢ|ҚАДАМ|САМОПРОВЕРКА|ТЕКСЕРУ|ПРОВЕРКА|МІНДЕТ|ЗАДАЧА|Помни|Есте сақтаңыз)[^\\n]*', '', cleaned_text, flags=re.IGNORECASE)
+        
+        return final_text.strip()
 
     def generate_detailed_explanation(self, question: str, correct_answer: str, topic: str, language: str = 'ru') -> str:
         """

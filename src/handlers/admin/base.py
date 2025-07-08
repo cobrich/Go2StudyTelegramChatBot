@@ -121,7 +121,7 @@ class AdminBaseHandler:
                       'edit_question_id', 'edit_question_explanation', 'delete_single_question_search',
                       'edit_question_text', 'edit_question_correct', 'edit_question_options']:
             from .questions import QuestionsHandler
-            questions_handler = QuestionsHandler()
+            questions_handler = QuestionsHandler(self.db, self.question_service, self.ai_service)
             
             if action == 'search_questions':
                 await questions_handler.handle_search_questions(update, context, text)
@@ -160,7 +160,7 @@ class AdminBaseHandler:
         if action in ['add_student_by_id', 'student_by_id_fullname', 'student_by_id_grade',
                       'edit_student_name', 'edit_student_grade']:
             from .students import StudentsHandler
-            students_handler = StudentsHandler()
+            students_handler = StudentsHandler(self.db, self.question_service, self.ai_service)
             
             if action == 'add_student_by_id':
                 await students_handler.handle_add_student_by_id(update, context, text)
@@ -178,7 +178,7 @@ class AdminBaseHandler:
         # Обработка для разделов
         if action in ['add_section_name', 'edit_section_name']:
             from .sections import SectionsHandler
-            sections_handler = SectionsHandler()
+            sections_handler = SectionsHandler(self.db, self.question_service, self.ai_service)
             
             if action == 'add_section_name':
                 await sections_handler.handle_section_name(update, context)
@@ -190,7 +190,7 @@ class AdminBaseHandler:
         # Обработка для тем
         if action in ['add_topic', 'add_topic_name', 'edit_topic_name']:
             from .topics import TopicsHandler
-            topics_handler = TopicsHandler()
+            topics_handler = TopicsHandler(self.db, self.question_service, self.ai_service)
             
             if action in ['add_topic', 'add_topic_name']:
                 await topics_handler.handle_add_topic(update, context, text)
@@ -202,7 +202,7 @@ class AdminBaseHandler:
         # Обработка для админов
         if action in ['add_admin', 'add_admin_username', 'add_admin_fullname']:
             from .admins import AdminsHandler
-            admins_handler = AdminsHandler()
+            admins_handler = AdminsHandler(self.db, self.question_service, self.ai_service)
             
             if action == 'add_admin':
                 await admins_handler.handle_add_admin(update, context, text)
@@ -225,5 +225,5 @@ class AdminBaseHandler:
         # Проверяем, ожидается ли PDF файл
         if context.user_data.get('admin_action') == 'upload_pdf':
             from .questions import QuestionsHandler
-            questions_handler = QuestionsHandler()
+            questions_handler = QuestionsHandler(self.db, self.question_service, self.ai_service)
             await questions_handler.process_pdf_file(update, context) 
