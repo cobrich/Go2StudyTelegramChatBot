@@ -9,15 +9,12 @@ from src.utils.keyboards import get_main_menu_markup, build_topic_selection_keyb
 from src.utils.translations import get_message, get_language_change_warning
 from src.config.constants import HELP_TEXT, TOPICS
 from src.services.random_test_service import RandomTestService
+from src.utils.message_manager import MessageManager
 
 class CommandHandlers(BaseHandler):
-    def __init__(self, db=None, question_service=None):
+    def __init__(self):
         super().__init__()
-        # Переопределяем db и question_service если переданы
-        if db:
-            self.db = db
-        if question_service:
-            self.question_service = question_service
+        self.message_manager = MessageManager(self.db)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command."""
@@ -656,31 +653,26 @@ class CommandHandlers(BaseHandler):
         results = self.db.get_user_test_results(user_id)
         
         if not results:
-            await update.message.reply_text(
-                get_message('no_test_results', user_language),
-                reply_markup=get_main_menu_markup(user_id)
-            )
-            return
-        
-        # Format results
-        progress_text = get_message('progress_title', user_language)
-        
-        for result in results[-10:]:  # Show last 10 results
-            topic = result['topic']
-            percentage = result['percentage']
-            completed_at = result['completed_at']
-            # Форматируем дату для отображения
-            if completed_at:
+            progress_text = get_message('no_test_results', user_language)
+        else:
+            # Format results
+            progress_text = get_message('progress_title', user_language)
+            for result in results[-10:]:  # Show last 10 results
+                topic = result['topic']
+                percentage = result['percentage']
+                completed_at = result['completed_at']
+                # Форматируем дату для отображения
                 if hasattr(completed_at, 'strftime'):
                     date_str = completed_at.strftime('%d.%m.%Y')
                 else:
                     date_str = str(completed_at)[:10]  # Берем первые 10 символов (дата)
-            else:
-                date_str = "Неизвестно"
-            progress_text += f"📝 {topic}: {percentage:.1f}% ({date_str})\n"
+                progress_text += f"📝 {topic}: {percentage:.1f}% ({date_str})\n"
         
-        await update.message.reply_text(
-            progress_text,
+        await self.message_manager.send_managed_message(
+            update=update,
+            context=context,
+            text=progress_text,
+            message_type="progress_summary",
             reply_markup=get_main_menu_markup(user_id)
         )
 
@@ -689,9 +681,12 @@ class CommandHandlers(BaseHandler):
         user_id = update.effective_user.id
         user_language = self.db.get_user_language(user_id)
         
-        await update.message.reply_text(
-            get_message('help_text', user_language),
+        await self.message_manager.send_managed_message(
+            update=update,
+            context=context,
+            text=get_message('help_text', user_language),
             reply_markup=get_main_menu_markup(user_id),
+            message_type="help_message",
             parse_mode='Markdown'
         )
 
