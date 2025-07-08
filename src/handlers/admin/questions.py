@@ -39,6 +39,9 @@ import logging
 class QuestionsHandler(AdminBaseHandler):
     """Обработчик для управления вопросами."""
 
+    def __init__(self, db, question_service, ai_service):
+        super().__init__(db, question_service, ai_service)
+
     async def questions_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Меню управления вопросами."""
         query = update.callback_query
@@ -447,8 +450,7 @@ class QuestionsHandler(AdminBaseHandler):
             import os
             import asyncio
             from src.services.pdf_processor import PDFProcessor
-            from src.services.ai_service import AIService
-            
+
             # Скачиваем файл
             file = await context.bot.get_file(update.message.document.file_id)
             
@@ -460,8 +462,8 @@ class QuestionsHandler(AdminBaseHandler):
             # Обрабатываем PDF
             await processing_msg.edit_text("⏳ Извлекаю вопросы из PDF...")
             
-            # Запускаем обработку в отдельном потоке
-            pdf_processor = PDFProcessor()
+            # Запускаем обработку в отдельном потоке, передавая зависимости
+            pdf_processor = PDFProcessor(db=self.db, ai_service=self.ai_service)
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, pdf_processor.process_pdf_file, temp_path)
             
@@ -494,9 +496,6 @@ class QuestionsHandler(AdminBaseHandler):
                 return
             
             await processing_msg.edit_text(f"⏳ Найдено {len(questions)} вопросов. Генерирую объяснения с помощью ИИ...")
-            
-            # Инициализируем AI сервис для генерации объяснений
-            ai_service = AIService()
             
             # Сохраняем вопросы в базу данных
             saved_count = 0
@@ -552,7 +551,7 @@ class QuestionsHandler(AdminBaseHandler):
                     # Определяем язык темы
                     topic_language = self.db.get_topic_language(topic)
                     
-                    explanation = ai_service.generate_detailed_explanation(question, correct_answer_text, topic, topic_language)
+                    explanation = self.ai_service.generate_detailed_explanation(question, correct_answer_text, topic, topic_language)
                     logging.info(f"[AI] Объяснение сгенерировано для вопроса {idx} на языке {topic_language}: {explanation[:100]}...")
                 except Exception as e:
                     logging.error(f"[AI] Ошибка генерации объяснения для вопроса {idx}: {e}")
@@ -833,13 +832,10 @@ class QuestionsHandler(AdminBaseHandler):
             # Генерируем объяснение с помощью ИИ
             await query.edit_message_text("🤖 Генерирую объяснение с помощью ИИ...")
             
-            from src.services.ai_service import AIService
-            ai_service = AIService()
-            
             # Определяем язык темы
             topic_language = self.db.get_topic_language(topic)
             
-            explanation = ai_service.generate_detailed_explanation(question, answer, topic, topic_language)
+            explanation = self.ai_service.generate_detailed_explanation(question, answer, topic, topic_language)
             
             # Обновляем объяснение в базе данных
             success = self.db.update_question_explanation(question_id, explanation)
@@ -987,14 +983,11 @@ class QuestionsHandler(AdminBaseHandler):
         
         # Инициализируем AI сервис для генерации объяснения
         try:
-            from src.services.ai_service import AIService
-            ai_service = AIService()
-            
             # Определяем язык темы
             topic_language = self.db.get_topic_language(topic)
             
             # Генерируем объяснение
-            explanation = ai_service.generate_detailed_explanation(
+            explanation = self.ai_service.generate_detailed_explanation(
                 question_text, 
                 correct_answer, 
                 topic,

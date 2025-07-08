@@ -12,6 +12,9 @@ import logging
 class AdminsHandler(AdminBaseHandler):
     """Обработчик для управления админами."""
 
+    def __init__(self, db, question_service, ai_service):
+        super().__init__(db, question_service, ai_service)
+
     async def admins_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Меню управления админами (только для суперадмина)."""
         query = update.callback_query

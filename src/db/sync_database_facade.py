@@ -12,6 +12,7 @@ from .repositories.sync_user_repository import SyncUserRepository
 from .repositories.sync_question_repository import SyncQuestionRepository
 from .repositories.sync_statistics_repository import SyncStatisticsRepository
 from .repositories.sync_topic_repository import SyncTopicRepository
+from .repositories.sync_managed_message_repository import SyncManagedMessageRepository
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class SyncDatabaseFacade:
         self.questions = SyncQuestionRepository()
         self.statistics = SyncStatisticsRepository()
         self.topics = SyncTopicRepository()
+        self.managed_messages = SyncManagedMessageRepository()
         
         # Кеширование для улучшения производительности
         self._cache = {}
@@ -829,8 +831,27 @@ class SyncDatabaseFacade:
         return self.questions.update_question_in_database(question_id, field, value)
     
     def update_question_options(self, question_id: int, options_list: List[str]) -> bool:
-        """Update question options (sync)"""
+        """Update question options by ID (sync)"""
         return self.questions.update_question_options(question_id, options_list)
+
+    # Managed Message operations
+    def get_managed_message(self, user_id: int, message_type: str) -> dict | None:
+        """
+        Получает информацию об управляемом сообщении.
+        """
+        return self.managed_messages.get(user_id, message_type)
+
+    def upsert_managed_message(self, user_id: int, chat_id: int, message_id: int, message_type: str):
+        """
+        Создает или обновляет запись об управляемом сообщении.
+        """
+        data = {
+            "user_id": user_id,
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "message_type": message_type,
+        }
+        self.managed_messages.upsert(data)
 
 def get_sync_database_facade() -> SyncDatabaseFacade:
     """

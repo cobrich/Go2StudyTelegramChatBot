@@ -12,8 +12,8 @@ import logging
 class SectionsHandler(AdminBaseHandler):
     """Обработчик для управления разделами."""
     
-    def __init__(self):
-        super().__init__()
+    def __init__(self, db, question_service, ai_service):
+        super().__init__(db, question_service, ai_service)
         self.sections_mapping = {}  # Для хранения mapping разделов
     
     async def sections_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -194,7 +194,7 @@ class SectionsHandler(AdminBaseHandler):
                 status_icon = "✅" if section.get('is_active', True) else "❌"
                 text += f"{status_icon} {section['topic_name']}\n"
                 keyboard.append([InlineKeyboardButton(
-                    f"��🇿 {section['topic_name']}", 
+                    f"🇰🇿 {section['topic_name']}", 
                     callback_data=f"edit_section_select_{section_id}"
                 )])
         

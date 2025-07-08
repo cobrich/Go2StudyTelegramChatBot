@@ -6,14 +6,148 @@ Defines database schema for Supabase PostgreSQL database.
 
 import logging
 from typing import Dict, List
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, UniqueConstraint
+from datetime import datetime
+from sqlalchemy import (
+    create_engine, MetaData, Table, Text, Boolean, ForeignKey
+)
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 logger = logging.getLogger(__name__)
 
+Base = declarative_base()
+
+class Admin(Base):
+    __tablename__ = 'admins'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, unique=True, nullable=False)
+    username = Column(String)
+    full_name = Column(String)
+    is_super_admin = Column(Boolean, default=False)
+    added_at = Column(DateTime, default=datetime.utcnow)
+    added_by = Column(BigInteger)
+
+class AllowedUser(Base):
+    __tablename__ = 'allowed_users'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, unique=True, nullable=False, index=True)
+    username = Column(String, index=True)
+    full_name = Column(String)
+    has_access = Column(Boolean, default=False)
+    added_by = Column(BigInteger, nullable=True)
+    grade = Column(Integer)
+    language = Column(String(2), default='ru')
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class MainTopic(Base):
+    __tablename__ = 'main_topics'
+    id = Column(Integer, primary_key=True)
+    topic_name = Column(String, nullable=False)
+    emoji = Column(String, nullable=True)
+    language = Column(String(2), nullable=False)
+    is_active = Column(Boolean, default=True)
+    subtopics = relationship("SubTopic", back_populates="main_topic")
+
+    __table_args__ = (UniqueConstraint('topic_name', 'language', name='_topic_language_uc'),)
+
+class SubTopic(Base):
+    __tablename__ = 'subtopics'
+    id = Column(Integer, primary_key=True)
+    main_topic_id = Column(Integer, ForeignKey('main_topics.id'), nullable=False)
+    subtopic_name = Column(String, nullable=False)
+    language = Column(String(2), nullable=False)
+    is_active = Column(Boolean, default=True)
+    questions = relationship("Question", back_populates="topic")
+    main_topic = relationship("MainTopic", back_populates="subtopics")
+
+    __table_args__ = (UniqueConstraint('subtopic_name', 'language', name='_subtopic_language_uc'),)
+
+class Question(Base):
+    __tablename__ = 'questions'
+    id = Column(Integer, primary_key=True)
+    topic_id = Column(Integer, ForeignKey('subtopics.id'))
+    question_text = Column(Text, nullable=False)
+    correct_answer = Column(Text, nullable=False)
+    explanation = Column(Text)
+    incorrect_options = Column(Text)
+    question_type = Column(String, default='standard')
+    source = Column(String, default='manual')
+    topic = relationship("SubTopic", back_populates="questions")
+
+class UserError(Base):
+    __tablename__ = 'user_errors'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, nullable=False)
+    question_id = Column(Integer, ForeignKey('questions.id'), nullable=False)
+    topic_id = Column(Integer, ForeignKey('subtopics.id'), nullable=False)
+    answered_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint('user_id', 'question_id', name='_user_question_uc'),)
+
+class UserProgress(Base):
+    __tablename__ = 'user_progress'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, nullable=False)
+    topic_id = Column(Integer, ForeignKey('subtopics.id'), nullable=False)
+    correct_answers = Column(Integer, default=0)
+    total_answers = Column(Integer, default=0)
+    last_answered_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint('user_id', 'topic_id', name='_user_topic_progress_uc'),)
+
+class UserTestResult(Base):
+    __tablename__ = 'user_test_results'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, nullable=False)
+    topic = Column(String, nullable=False)
+    score = Column(Integer, nullable=False)
+    total_questions = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class ManagedMessage(Base):
+    __tablename__ = 'managed_messages'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, nullable=False, index=True)
+    chat_id = Column(BigInteger, nullable=False)
+    message_id = Column(BigInteger, nullable=False)
+    message_type = Column(String(50), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'message_type', name='_user_message_type_uc'),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ManagedMessage(id={self.id}, user_id={self.user_id}, "
+            f"message_id={self.message_id}, message_type='{self.message_type}')>"
+        )
+
+class DatabaseSchema:
+    def __init__(self, engine):
+        self.engine = engine
+        self.metadata = Base.metadata
+
+    def create_all(self):
+        logger.info("Creating all tables based on Base metadata...")
+        self.metadata.create_all(self.engine)
+        logger.info("✅ All tables created successfully.")
+
 class DatabaseModels:
-    """Supabase PostgreSQL database schema definitions"""
-    
     def __init__(self):
-        pass
+        # This class is a placeholder for models if needed elsewhere,
+        # but primarily we use the Base declarative models directly.
+        self.Admin = Admin
+        self.AllowedUser = AllowedUser
+        self.MainTopic = MainTopic
+        self.SubTopic = SubTopic
+        self.Question = Question
+        self.UserError = UserError
+        self.UserProgress = UserProgress
+        self.UserTestResult = UserTestResult
+        self.ManagedMessage = ManagedMessage
     
     def get_table_definitions(self) -> Dict[str, str]:
         """Get all table definitions for Supabase PostgreSQL"""
@@ -113,6 +247,29 @@ class DatabaseModels:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(user_id, question_id)
                 )
+            ''',
+            
+            'user_test_results': '''
+                CREATE TABLE IF NOT EXISTS user_test_results (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES allowed_users(user_id),
+                    topic_id INTEGER NOT NULL REFERENCES subtopics(id),
+                    score INTEGER NOT NULL,
+                    total_questions INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''',
+            
+            'managed_messages': '''
+                CREATE TABLE IF NOT EXISTS managed_messages (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES allowed_users(user_id),
+                    chat_id BIGINT NOT NULL,
+                    message_id BIGINT NOT NULL,
+                    message_type TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT _user_message_type_uc UNIQUE (user_id, message_type)
+                )
             '''
         }
     
@@ -136,4 +293,6 @@ class DatabaseModels:
             'CREATE INDEX IF NOT EXISTS idx_active_main_topics ON main_topics(is_active, language)',
             'CREATE INDEX IF NOT EXISTS idx_allowed_users_grade ON allowed_users(grade)',
             'CREATE INDEX IF NOT EXISTS idx_allowed_users_language ON allowed_users(language)',
+            'CREATE INDEX IF NOT EXISTS idx_managed_messages_user_id ON managed_messages(user_id)',
+            'CREATE INDEX IF NOT EXISTS idx_managed_messages_message_type ON managed_messages(message_type)'
         ] 

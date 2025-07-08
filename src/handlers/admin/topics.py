@@ -12,6 +12,9 @@ import logging
 class TopicsHandler(AdminBaseHandler):
     """Обработчик для управления темами."""
 
+    def __init__(self, db, question_service, ai_service):
+        super().__init__(db, question_service, ai_service)
+
     async def topics_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Меню управления темами."""
         query = update.callback_query

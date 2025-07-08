@@ -10,15 +10,19 @@ from telegram.ext import ContextTypes
 from src.db.sync_database_facade import get_sync_database_facade
 from src.utils.translations import get_message
 from src.services.pdf_processor import PDFProcessor
+from src.utils.message_manager import MessageManager
 
 logger = logging.getLogger(__name__)
 
 class AdminBaseHandler:
     """Базовый класс для всех админ-обработчиков."""
     
-    def __init__(self):
+    def __init__(self, db, question_service, ai_service):
         # Используем database facade вместо прямого SQLite подключения
-        self.db = get_sync_database_facade()
+        self.db = db
+        self.question_service = question_service
+        self.ai_service = ai_service
+        self.message_manager = MessageManager(self.db)
     
     async def safe_answer_callback(self, query) -> None:
         """Безопасно отвечаем на callback query."""
@@ -37,13 +41,6 @@ class AdminBaseHandler:
             else:
                 await update.callback_query.answer("❌ У вас нет прав администратора.")
             return
-        
-        # Удаляем предыдущие сообщения для чистого интерфейса
-        if update.message:
-            try:
-                await update.message.delete()
-            except Exception:
-                pass
         
         query = update.callback_query
         if query:
@@ -90,23 +87,32 @@ class AdminBaseHandler:
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        if update.message:
-            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode='HTML')
-        else:
-            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode='HTML')
+        await self.message_manager.send_managed_message(
+            update=update,
+            context=context,
+            text=text,
+            reply_markup=reply_markup,
+            message_type="admin_panel"
+        )
 
     async def handle_admin_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
         """Обработка текстовых сообщений в админ-режиме."""
         user_id = update.effective_user.id
-        
+        text = update.message.text.strip()
+
         if not self.db.is_admin(user_id):
             return False
+
+        # Обработка входа в админ-панель по текстовой кнопке
+        if text in ['Панель администратора', 'Әкімші панелі']:
+            await self.admin_panel(update, context)
+            return True
         
         action = context.user_data.get('admin_action')
         if not action:
             return False
             
-        text = update.message.text.strip()
+        # text = update.message.text.strip() # Already defined
         
         # Делегируем обработку в соответствующие модули
         if action in ['search_questions', 'add_question_text', 'add_question_option_a', 

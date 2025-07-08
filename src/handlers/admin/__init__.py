@@ -14,25 +14,19 @@ from .admins import AdminsHandler
 class AdminHandlers:
     """Unified admin handlers class that combines all admin functionality."""
     
-    def __init__(self, db, question_service):
+    def __init__(self, db, question_service, ai_service):
         self.db = db
         self.question_service = question_service
+        self.ai_service = ai_service
         
-        # Initialize all admin handlers with db and question_service
-        self.base = AdminBaseHandler()
-        self.questions = QuestionsHandler()
-        self.students = StudentsHandler()
-        self.topics = TopicsHandler()
-        self.sections = SectionsHandler()
-        self.stats = StatsHandler()
-        self.admins = AdminsHandler()
-        
-        # Передаем db и question_service во все обработчики
-        for handler in [self.base, self.questions, self.students, self.topics, self.sections, self.stats, self.admins]:
-            if hasattr(handler, 'db'):
-                handler.db = db
-            if hasattr(handler, 'question_service'):
-                handler.question_service = question_service
+        # Initialize all admin handlers with all necessary services
+        self.base = AdminBaseHandler(db, question_service, ai_service)
+        self.questions = QuestionsHandler(db, question_service, ai_service)
+        self.students = StudentsHandler(db, question_service, ai_service)
+        self.topics = TopicsHandler(db, question_service, ai_service)
+        self.sections = SectionsHandler(db, question_service, ai_service)
+        self.stats = StatsHandler(db, question_service, ai_service)
+        self.admins = AdminsHandler(db, question_service, ai_service)
     
     # Delegate methods to appropriate handlers
     def admin_panel(self, update, context):
@@ -288,18 +282,10 @@ class AdminHandlers:
     def show_user_history(self, update, context):
         return self.stats.show_user_history(update, context)
 
-# Функция для создания обработчиков
+
 def create_admin_handlers():
-    """Создает экземпляры всех админ-обработчиков."""
-    return {
-        'base': AdminBaseHandler(),
-        'questions': QuestionsHandler(), 
-        'students': StudentsHandler(),
-        'topics': TopicsHandler(),
-        'sections': SectionsHandler(),
-        'stats': StatsHandler(),
-        'admins': AdminsHandler()
-    }
+    # Placeholder for a potential factory function
+    return AdminHandlers()
 
 __all__ = [
     'AdminBaseHandler',

@@ -12,6 +12,9 @@ import logging
 class StudentsHandler(AdminBaseHandler):
     """Обработчик для управления учениками."""
 
+    def __init__(self, db, question_service, ai_service):
+        super().__init__(db, question_service, ai_service)
+
     async def students_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Меню управления учениками."""
         query = update.callback_query

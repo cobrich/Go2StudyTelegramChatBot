@@ -13,7 +13,7 @@ from src.handlers.command_handlers import CommandHandlers
 from src.handlers.callback_handlers import CallbackHandlers
 from src.handlers.admin import AdminHandlers
 from src.services.database import get_database_instance
-from src.services.ai_service import AIService
+from src.services.ai_service_improved import ImprovedAIService
 from src.services.question_service import QuestionService
 from src.config.constants import TELEGRAM_BOT_TOKEN
 from src.init_app import initialize_app_if_needed
@@ -58,7 +58,7 @@ def main() -> None:
         logger.info("✅ Database connection established")
         
         logger.info("🤖 Initializing AI service...")
-        ai_service = AIService()
+        ai_service = ImprovedAIService()
         logger.info("✅ AI service initialized")
         
         logger.info("❓ Initializing question service...")
@@ -69,7 +69,7 @@ def main() -> None:
         logger.info("🎮 Initializing handlers...")
         command_handlers = CommandHandlers(db, question_service)
         callback_handlers = CallbackHandlers(db, question_service)
-        admin_handlers = AdminHandlers(db, question_service)
+        admin_handlers = AdminHandlers(db, question_service, ai_service)
         logger.info("✅ All handlers initialized")
     
         # Create custom request with increased timeouts

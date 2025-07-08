@@ -16,7 +16,7 @@ import json
 import time
 from pathlib import Path
 from src.db.sync_database_facade import get_sync_database_facade
-from src.services.ai_service import AIService
+from src.services.ai_service_improved import ImprovedAIService
 import fitz  # PyMuPDF
 from PIL import Image
 
@@ -26,13 +26,14 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 class PDFProcessor:
-    def __init__(self, output_dir: str = "question_images"):
+    def __init__(self, db, ai_service, output_dir: str = "question_images"):
         self.output_dir = output_dir
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         
-        # Инициализируем базу данных для получения списка доступных тем
-        self.db = get_sync_database_facade()
+        # Инициализируем сервисы извне
+        self.db = db
+        self.ai_service = ai_service
         
         # Паттерн для поиска заголовков тем
         self.topic_header_pattern = r'Тема:\s*([^(]+)\((\d+)\)'
@@ -763,7 +764,7 @@ class PDFProcessor:
         
         return questions, topic_stats
 
-def add_questions_to_db(questions: List[Dict], db) -> Dict[str, int]:
+def add_questions_to_db(questions: List[Dict], db, ai_service) -> Dict[str, int]:
     """
     Добавление вопросов в базу данных с генерацией подробных объяснений.
     Возвращает статистику добавления.
@@ -771,9 +772,6 @@ def add_questions_to_db(questions: List[Dict], db) -> Dict[str, int]:
     total = len(questions)
     print(f"[LOG] Начинаю добавление {total} вопросов в базу...")
     saved_count = 0
-    
-    # Инициализируем AI сервис для генерации объяснений
-    ai_service = AIService()
     
     # Статистика по темам
     topic_stats = {}
@@ -806,8 +804,7 @@ def add_questions_to_db(questions: List[Dict], db) -> Dict[str, int]:
             print(f"[AI][{idx}/{total}] Генерирую объяснение для вопроса...")
             try:
                 # Определяем язык темы
-                db_instance = get_sync_database_facade()
-                topic_language = db_instance.get_topic_language(topic)
+                topic_language = db.get_topic_language(topic)
                 
                 detailed_explanation = ai_service.generate_detailed_explanation(
                     question_text, 
@@ -881,7 +878,10 @@ def print_processing_report(pdf_file: str, questions: List[Dict], topic_stats: D
 
 def main():
     """Основная функция для обработки PDF файлов."""
-    processor = PDFProcessor()
+    # Инициализируем сервисы один раз
+    db = get_sync_database_facade()
+    ai_service = ImprovedAIService()
+    processor = PDFProcessor(db=db, ai_service=ai_service)
     
     # Список PDF файлов для обработки
     pdf_files = [
@@ -909,8 +909,7 @@ def main():
             db_stats = {'saved_count': 0, 'topic_stats': {}}
             if questions:
                 print(f"\n🔄 Добавляю {len(questions)} вопросов в базу данных...")
-                db = get_sync_database_facade()
-                db_stats = add_questions_to_db(questions, db)
+                db_stats = add_questions_to_db(questions, db, ai_service)
                 print(f"✅ Вопросы успешно добавлены в базу данных")
             
             # Печатаем детальный отчет

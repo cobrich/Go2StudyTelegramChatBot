@@ -13,6 +13,9 @@ from datetime import datetime, timedelta
 class StatsHandler(AdminBaseHandler):
     """Обработчик для статистики."""
 
+    def __init__(self, db, question_service, ai_service):
+        super().__init__(db, question_service, ai_service)
+
     async def show_stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать общую статистику системы."""
         query = update.callback_query
