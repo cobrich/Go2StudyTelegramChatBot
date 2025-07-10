@@ -127,7 +127,9 @@ class ImprovedAIService:
             data = {parts[i]: parts[i+1].strip() for i in range(0, len(parts), 2)}
 
             question = data.get('QUESTION')
-            correct_answer = self._clean_option_text(data.get('CORRECT_ANSWER'))
+            # Очищаем ответ от распространенных ошибок форматирования AI
+            correct_answer_raw = data.get('CORRECT_ANSWER', '')
+            correct_answer = self._clean_option_text(re.sub(r'^\s*[\*\-•]\s*', '', correct_answer_raw).strip())
 
             # .splitlines() правильно обрабатывает разные типы переносов строк (\n, \r\n)
             incorrect_options_raw = data.get('INCORRECT_OPTIONS', '').splitlines()
