@@ -321,6 +321,10 @@ class SyncDatabaseFacade:
         """Get explanation by question text (sync)"""
         return self.questions.get_explanation_by_question_text(question_text)
     
+    def question_exists_exact(self, question_text: str) -> bool:
+        """Checks if a question with the exact same text already exists."""
+        return self.questions.question_exists_exact(question_text)
+
     def add_question(self, question: dict) -> Optional[int]:
         """Add a new question (sync) and return its ID"""
         return self.questions.add_question(question)
