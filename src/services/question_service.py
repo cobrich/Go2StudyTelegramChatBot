@@ -285,6 +285,20 @@ class QuestionService:
         main_topic, language = self._get_main_topic_for_subtopic(topic)
         logging.info(f"[get_or_generate_tasks] main_topic for '{topic}': {main_topic}, language: {language}")
         
+        # Ограничиваем количество одновременных запросов к API, чтобы избежать ошибки 429 (rate limit)
+        semaphore = asyncio.Semaphore(5)
+        loop = asyncio.get_running_loop()
+        
+        # Внутренняя функция для генерации с семафором
+        async def _semaphored_generate():
+            async with semaphore:
+                # Вставляем небольшую задержку ПЕРЕД каждым вызовом API,
+                # чтобы распределить запросы во времени и избежать превышения лимита.
+                await asyncio.sleep(1)
+                
+                # Теперь вызываем асинхронную генерацию
+                return await self.ai_service.generate_task_v3(topic, main_topic, language)
+
         if is_retake:
             # ЛОГИКА ПЕРЕСДАЧИ: только ошибки + ИИ вопросы для достижения нужного количества
             logging.info(f"[get_or_generate_tasks] RETAKE MODE for topic '{topic}' with {needed} questions needed")
@@ -341,13 +355,11 @@ class QuestionService:
                 
                 # Генерируем ИИ вопросы с контекстом "пересдача" для более похожих вопросов
                 new_tasks = []
-                loop = asyncio.get_running_loop()
                 
                 # Увеличиваем количество попыток для лучшего качества в пересдаче
                 max_attempts = ai_questions_needed * 3
                 generation_tasks = [
-                    loop.run_in_executor(None, self._generate_ai_task, topic, main_topic, language)
-                    for _ in range(max_attempts)
+                    _semaphored_generate() for _ in range(max_attempts)
                 ]
                 results = await asyncio.gather(*generation_tasks, return_exceptions=True)
                 
@@ -564,7 +576,6 @@ class QuestionService:
             logging.info(f"[get_or_generate_tasks] Current tasks: {len(tasks)}, AI questions needed: {ai_questions_needed}, will generate: {ai_questions_to_generate}")
             
             new_tasks = []
-            loop = asyncio.get_running_loop()
             
             # ИСПРАВЛЕНИЕ: Убираем ограничения и генерируем до достижения нужного количества
             valid_questions = 0
@@ -579,8 +590,7 @@ class QuestionService:
                 logging.info(f"[get_or_generate_tasks] AI generation batch {attempt_batch}: need {remaining_needed} more questions, generating {batch_size} attempts")
                 
                 generation_tasks = [
-                    loop.run_in_executor(None, self._generate_ai_task, topic, main_topic, language)
-                    for _ in range(batch_size)
+                    _semaphored_generate() for _ in range(batch_size)
                 ]
                 results = await asyncio.gather(*generation_tasks, return_exceptions=True)
                 

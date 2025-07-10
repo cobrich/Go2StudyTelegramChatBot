@@ -50,6 +50,9 @@
     -   Исправлена неработающая кнопка "Удалить админа" путем добавления недостающих обработчиков в `main.py`.
 -   **Добавлена возможность создания суперадмина**: Реализован SQL-запрос для ручного добавления суперадминистратора в базу данных.
 -   **Удалена старая ветка**: Очищена история Git путем удаления неактуальной ветки `feature/supabase-migration`.
+- **Commit 6 (Date):** Fixed API rate-limiting issue during batch question generation by adding a one-second delay between concurrent requests. This prevents the system from exceeding the API's requests-per-minute quota when creating multiple questions for a new topic.
+- **Commit 5 (Date):** Solved a critical bug where the question generation process would fail due to API rate limiting (429 errors). Implemented a robust retry mechanism with exponential backoff in the AI service. This prevents system failure when the request limit is exceeded by intelligently re-spacing the API calls.
+- **Commit 4 (Date):** Fixed a bug where the test generation system would create tests with fewer questions than intended. The root cause was the use of non-unique "ghost" questions. The fix ensures that duplicate questions are correctly identified and skipped during generation. Also added a `language` parameter to the `get_question_by_id` function.
 
 ### Июнь 2024
 -   **Успешный деплой на Railway**: Проект был успешно развернут на платформе Railway с использованием PostgreSQL в качестве базы данных.
