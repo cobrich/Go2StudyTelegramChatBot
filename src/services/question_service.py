@@ -272,13 +272,23 @@ class QuestionService:
         existing_question_texts_to_exclude: Optional[Set[str]] = None,
         is_retake: bool = False
     ) -> List[tuple]:
-        """Get tasks for test: сначала ошибки пользователя, потом обычные вопросы, потом ИИ.
-        
-        Логика для разных типов тестов:
-        - Обычный тест: 8 вопросов из БД + 2 ИИ вопроса
-        - Пересдача обычного теста: неправильно отвеченные вопросы + похожие ИИ вопросы до 10
-        - Рандомный тест: все 10 вопросов из БД (используется RandomTestService)
         """
+        Основная логика для получения или генерации задач для теста.
+        Эта функция является сердцем системы адаптивного обучения.
+        """
+        # Define a semaphore to limit concurrent AI calls to 2. This prevents API rate limiting per minute.
+        semaphore = asyncio.Semaphore(2)
+
+        async def _semaphored_generate():
+            """Wraps the sync AI call in a semaphore-controlled async task."""
+            async with semaphore:
+                # Run the synchronous _generate_ai_task in a separate thread
+                # to avoid blocking the event loop, especially because of `time.sleep`
+                # inside the AI service's retry mechanism.
+                return await asyncio.to_thread(
+                    self._generate_ai_task, topic, main_topic, language
+                )
+
         logging.info(f"[get_or_generate_tasks] user_id={user_id}, topic={topic}, needed={needed}, is_retake={is_retake}, force_ai={force_ai}")
         if existing_question_texts_to_exclude is None:
             existing_question_texts_to_exclude = set()
@@ -287,27 +297,6 @@ class QuestionService:
         # Получаем главную тему для контекста AI генерации
         main_topic, language = self._get_main_topic_for_subtopic(topic)
         logging.info(f"[get_or_generate_tasks] main_topic for '{topic}': {main_topic}, language: {language}")
-        
-        # Ограничиваем количество одновременных запросов к API, чтобы избежать ошибки 429 (rate limit)
-        semaphore = asyncio.Semaphore(5)
-        loop = asyncio.get_running_loop()
-        
-        # Внутренняя функция для генерации с семафором
-        async def _semaphored_generate():
-            async with semaphore:
-                # Вставляем небольшую задержку ПЕРЕД каждым вызовом API,
-                # чтобы распределить запросы во времени и избежать превышения лимита.
-                await asyncio.sleep(1)
-                
-                # Запускаем СИНХРОННУЮ функцию в отдельном потоке, чтобы не блокировать asyncio.
-                # Это исправляет ошибку "object tuple can't be used in 'await' expression".
-                return await loop.run_in_executor(
-                    None,
-                    self.ai_service.generate_task,
-                    topic,
-                    main_topic,
-                    language
-                )
 
         if is_retake:
             # ЛОГИКА ПЕРЕСДАЧИ: только ошибки + ИИ вопросы для достижения нужного количества
@@ -590,12 +579,12 @@ class QuestionService:
             # ИСПРАВЛЕНИЕ: Убираем ограничения и генерируем до достижения нужного количества
             valid_questions = 0
             attempt_batch = 1
-            max_batches = 5  # Уменьшаем количество батчей
+            max_batches = 3  # Be more conservative to save daily quota
             
             while valid_questions < ai_questions_to_generate and attempt_batch <= max_batches:
-                # Генерируем батч вопросов - ОПТИМИЗАЦИЯ: уменьшаем избыточность
+                # To conserve the daily API quota, we now generate exactly the number of questions needed, not more.
                 remaining_needed = ai_questions_to_generate - valid_questions
-                batch_size = min(remaining_needed * 2, 15)  # Уменьшаем с *3 до *2 и с 20 до 15
+                batch_size = remaining_needed
                 
                 logging.info(f"[get_or_generate_tasks] AI generation batch {attempt_batch}: need {remaining_needed} more questions, generating {batch_size} attempts")
                 
