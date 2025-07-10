@@ -270,8 +270,9 @@ class QuestionService:
                         
                         # Убеждаемся, что options - это список строк
                         options = [str(opt) for opt in options if opt and str(opt).strip()]
-                        if len(options) < 2:  # Добавляем фиктивные варианты если их мало
-                            options.extend([f"Вариант {i}" for i in range(len(options), 4)])
+                        if len(options) < 4:
+                            logging.warning(f"Skipping DB error task due to insufficient options ({len(options)} found). Question: {task['question'][:50]}...")
+                            continue
                     
                     # Перемешиваем варианты
                     random.shuffle(options)
@@ -361,10 +362,16 @@ class QuestionService:
                             options = unique_options
 
                             # ГАРАНТИРУЕМ 4 ВАРИАНТА: добавляем фиктивные если нужно
-                            while len(options) < 4:
-                                fake_option = f"Вариант {len(options)}"
-                                if fake_option not in options:
-                                    options.append(fake_option)
+                            # Этот блок больше не нужен, так как AI теперь обязан выдавать 3 неверных варианта
+                            # while len(options) < 4:
+                            #     supplemental_options = self.generate_universal_options(correct_answer, topic)
+                            #     new_opt_added = False
+                            #     for opt in supplemental_options:
+                            #         if opt not in options and len(options) < 4:
+                            #             options.append(opt)
+                            #             new_opt_added = True
+                            #     if not new_opt_added:
+                            #         break  # Выходим, если не смогли добавить новые уникальные варианты
 
                             # Ограничиваем до 4 вариантов максимум
                             options = options[:4]
@@ -426,9 +433,24 @@ class QuestionService:
                     
                     # Убеждаемся, что options - это список строк
                     options = [str(opt) for opt in options if opt and str(opt).strip()]
-                    if len(options) < 2:  # Добавляем фиктивные варианты если их мало
-                        options.extend([f"Вариант {i}" for i in range(len(options), 4)])
+                    if len(options) < 4:
+                        logging.warning(f"Skipping DB task due to insufficient options ({len(options)} found). Question: {task['question'][:50]}...")
+                        continue
                     
+                    # КРИТИЧЕСКИ ВАЖНО: Гарантируем наличие правильного ответа в вариантах
+                    if task['answer'] not in options:
+                        options.append(task['answer'])
+                    
+                    # Если вариантов мало, добавляем фиктивные
+                    # if len(options) < 4:
+                    #     supplemental_options = self.generate_universal_options(task['answer'], topic)
+                    #     for opt in supplemental_options:
+                    #         if opt not in options and len(options) < 4:
+                    #             options.append(opt)
+                    
+                    # Удаляем дубликаты, сохраняя порядок
+                    options = list(dict.fromkeys(options))
+                
                     # Перемешиваем варианты
                     random.shuffle(options)
                     tasks.append((
@@ -436,7 +458,7 @@ class QuestionService:
                         task['answer'],
                         task['explanation'],
                         options,  # Теперь гарантированно список
-                        'db',
+                        task.get('source', 'db'),
                         task['image_path'] if 'image_path' in task else None,
                         task.get('id')  # Добавляем question_id
                     ))
@@ -477,13 +499,20 @@ class QuestionService:
                         # Убеждаемся, что options - это список строк
                         options = [str(opt) for opt in options if opt and str(opt).strip()]
                         
+                        if len(options) < 4:
+                            logging.warning(f"Skipping DB task due to insufficient options ({len(options)} found). Question: {task['question'][:50]}...")
+                            continue
+                        
                         # КРИТИЧЕСКИ ВАЖНО: Гарантируем наличие правильного ответа в вариантах
                         if task['answer'] not in options:
                             options.append(task['answer'])
                         
                         # Если вариантов мало, добавляем фиктивные
-                        if len(options) < 4:
-                            options.extend([f"Вариант {i}" for i in range(len(options), 4)])
+                        # if len(options) < 4:
+                        #     supplemental_options = self.generate_universal_options(task['answer'], topic)
+                        #     for opt in supplemental_options:
+                        #         if opt not in options and len(options) < 4:
+                        #             options.append(opt)
                         
                         # Удаляем дубликаты, сохраняя порядок
                         options = list(dict.fromkeys(options))
@@ -621,13 +650,6 @@ class QuestionService:
                                     seen.add(opt)
                             options = unique_options
 
-                            # ГАРАНТИРУЕМ 4 ВАРИАНТА: используем умный генератор, если AI дал мало вариантов
-                            if len(options) < 4:
-                                supplemental_options = self.generate_universal_options(correct_answer, topic)
-                                for opt in supplemental_options:
-                                    if opt not in options and len(options) < 4:
-                                        options.append(opt)
-
                             # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ФОРМИРОВАНИЯ ВАРИАНТОВ
                             if len(options) < 4:
                                 logging.warning(f"⚠️ [AI ВОПРОС] Не удалось сгенерировать 4 варианта для: {question[:50]}...")
@@ -720,78 +742,4 @@ class QuestionService:
         # ✅ ПРИНУДИТЕЛЬНОЕ ОГРАНИЧЕНИЕ: Всегда возвращаем ровно needed (10) вопросов
         final_result = tasks[:needed]
         logging.info(f"[get_or_generate_tasks] ✅ FINAL LIMIT: Returning exactly {len(final_result)} questions (needed: {needed})")
-        return final_result
-
-    def generate_universal_options(self, correct_answer: str, topic: str) -> List[str]:
-        """
-        Генерирует более качественные неправильные варианты ответов.
-        Стратегия:
-        1. Попробовать найти другие ответы из той же темы в базе данных.
-        2. Если не удалось, использовать числовые вариации (если ответ - число).
-        3. В крайнем случае использовать общие фразы-заглушки.
-        """
-        distractors = set()
-
-        # 1. Поиск похожих ответов в базе данных
-        try:
-            similar_options = self.db.get_similar_incorrect_options(topic, limit=10)
-            for option in similar_options:
-                # Проверяем, что вариант не является правильным ответом и еще не добавлен
-                if option and option.strip() and option.strip() != correct_answer:
-                    distractors.add(option.strip())
-                if len(distractors) >= 3:
-                    break
-        except Exception as e:
-            logging.warning(f"[generate_universal_options] Could not fetch similar options from DB: {e}")
-
-        # 2. Если в базе ничего нет или мало, генерируем числовые варианты
-        if len(distractors) < 3:
-            num_match = re.match(r"^(-?\d+([.,]\d+)?)\s*(.*)$", correct_answer.strip())
-            if num_match:
-                try:
-                    num_val_str = num_match.group(1)
-                    unit = num_match.group(3).strip()
-                    num_val = float(num_val_str.replace(',', '.'))
-                    is_int = num_val == int(num_val)
-
-                    # Генерируем несколько вариантов, чтобы потом выбрать лучшие
-                    possible_numeric_options = set()
-                    for _ in range(10):
-                        if num_val != 0:
-                            # Более простое и надежное изменение
-                            delta = max(1, abs(num_val) * random.uniform(0.1, 0.3)) if is_int else abs(num_val) * random.uniform(0.1, 0.3)
-                            new_val = num_val + delta * random.choice([-2, -1, 1, 2])
-                        else:
-                            new_val = random.choice([-1, 1, 10, -10])
-
-                        if is_int:
-                            new_val = int(round(new_val))
-                        else:
-                            new_val = round(new_val, 2)
-                        
-                        if new_val != num_val:
-                            option_str = f"{new_val} {unit}".strip() if unit else str(new_val)
-                            possible_numeric_options.add(option_str)
-                    
-                    # Добавляем сгенерированные числовые варианты в основной список
-                    for option in possible_numeric_options:
-                        if len(distractors) < 3:
-                            distractors.add(option)
-                        else:
-                            break
-                except ValueError:
-                    pass # Не удалось обработать как число
-        
-        # 3. Если вариантов все еще не хватает, добавляем универсальные заглушки
-        if len(distractors) < 3:
-            generic_options = [
-                "Нет правильного ответа",
-                "Невозможно определить",
-                "Все ответы неверны"
-            ]
-            random.shuffle(generic_options)
-            for option in generic_options:
-                if len(distractors) < 3:
-                    distractors.add(option)
-        
-        return list(distractors) 
+        return final_result 

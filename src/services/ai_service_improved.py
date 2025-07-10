@@ -163,8 +163,8 @@ class ImprovedAIService:
             if not explanation:
                 logging.warning(f"Structured response parsing failed: 'EXPLANATION' is missing or empty after cleaning. Original: '{data.get('EXPLANATION', '')}'. Response: {response_text}")
                 return None, None, None, None
-            if len(incorrect_options) < 1:
-                logging.warning(f"Structured response parsing failed: 'INCORRECT_OPTIONS' resulted in an empty list after cleaning. Original: '{data.get('INCORRECT_OPTIONS', '')}'. Response: {response_text}")
+            if len(incorrect_options) < 3:
+                logging.warning(f"Structured response parsing failed: AI returned less than 3 incorrect options. Got: {len(incorrect_options)}. Original: '{data.get('INCORRECT_OPTIONS', '')}'. Response: {response_text}")
                 return None, None, None, None
 
             if len(correct_answer) > MAX_OPTION_LENGTH:
@@ -195,7 +195,7 @@ class ImprovedAIService:
         # Remove words like "ANSWER", "CORRECT", "INCORRECT", etc. in Russian and Kazakh
         # ИСПРАВЛЕНО: Удалены неоднозначные слова, которые могут быть валидными вариантами.
         # "Невозможно определить" и подобные фразы теперь НЕ удаляются.
-        cleaned_text = re.sub(r'(ОТВЕТ|ПРАВИЛЬНЫЙ|НЕПРАВИЛЬНЫЙ|ВЕРНО|НЕВЕРНО|ДРУГОЙ ВАРИАНТ|ПРАВИЛЬНЫЙ ВАРИАНТ|ВЕРНЫЙ ОТВЕТ|НЕВЕРНЫЙ ОТВЕТ|ЖАУАП|ДҰРЫС|ҚАТЕ|ДҰРЫС ЖАУАП|ҚАТЕ ЖАУАП|\\s*\\(.*?\\))', '', cleaned_text, flags=re.IGNORECASE)
+        cleaned_text = re.sub(r'(ОТВЕТ|ПРАВИЛЬНЫЙ|НЕПРАВИЛЬНЫЙ|ВЕРНО|НЕВЕРНО|ДРУГОЙ ВАРИАНТ|ПРАВИЛЬНЫЙ ВАРИАНТ|ВЕРНЫЙ ОТВЕТ|НЕВЕРНЫЙ ОТВЕТ|ЖАУАП|ДҰРЫС|ҚАТЕ|ДҰРЫС ЖАУАП|ҚАТЕ ЖАУАП|\\s*\\(.*?\\)|невозможно определить|нет правильного ответа)', '', cleaned_text, flags=re.IGNORECASE)
         
         # Remove multiple spaces and strip
         cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
