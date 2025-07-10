@@ -61,6 +61,7 @@ class ImprovedAIService:
     *   **Гуманитарлық тақырыптар үшін** (тарих, әдебиет): жай ғана күнді немесе есімді жаттауды емес, талдауды немесе білімді қолдануды талап ететін сұрақ болуы керек.
     *   Астыртын сұрақтар мен екіұшты жұмбақтардан **аулақ болыңыз**.
 3.  **Жауаптың қатаң форматы:** Жауапты дәл осы форматта, маркерлерді қолдана отырып беріңіз. Ешқандай артық мәтін немесе сәлемдесу қоспаңыз.
+4.  **Шығармашылық:** Әр сұрақта бірдей кейіпкерлерді (мысалы, Петя, Вася, Коля) немесе сценарийлерді қайталамаңыз. Әртүрлі және қызықты тапсырмалар жасаңыз.
 
 [TOPIC]
 {topic}
@@ -72,6 +73,7 @@ class ImprovedAIService:
 <1-ші қате нұсқа>
 <2-ші қате нұсқа>
 <3-ші қате нұсқа>
+**ЕСКЕРТПЕ: Дәл 3 (үш) қате нұсқа болуы керек, әрқайсысы жаңа жолда.**
 [EXPLANATION]
 <Дұрыс жауаптың неге дұрыс екендігі туралы толық, қадамдық түсіндірме>
 """
@@ -92,6 +94,7 @@ class ImprovedAIService:
     *   Для **гуманитарных тем** (история, литература): это должен быть вопрос, требующий анализа или применения знаний, а не простого запоминания даты или имени.
     *   **Избегай** вопросов с подвохом и неоднозначных загадок.
 3.  **Строгий формат ответа:** Предоставь ответ точно в таком формате, используя маркеры. Не добавляй никакого лишнего текста или приветствий.
+4.  **Креативность:** Не повторяй одних и тех же персонажей (например, Петя, Вася, Коля) или сценарии в каждом вопросе. Создавай разнообразные и интересные задачи.
 
 [TOPIC]
 {topic}
@@ -103,6 +106,7 @@ class ImprovedAIService:
 <Неправильный вариант 1>
 <Неправильный вариант 2>
 <Неправильный вариант 3>
+**ВАЖНО: Должно быть ровно 3 (три) неправильных варианта, каждый на новой строке.**
 [EXPLANATION]
 <Подробное и пошаговое объяснение, почему правильный ответ является верным>
 """
@@ -139,8 +143,18 @@ class ImprovedAIService:
 
             explanation = self._clean_explanation_text(data.get('EXPLANATION'))
 
-            if not (question and correct_answer and explanation and len(incorrect_options) >= 1):
-                logging.warning(f"Structured response parsing failed. Missing essential data. Parsed data: {data}")
+            # Улучшенная проверка и логирование
+            if not question:
+                logging.warning(f"Structured response parsing failed: 'QUESTION' is missing or empty. Response: {response_text}")
+                return None, None, None, None
+            if not correct_answer:
+                logging.warning(f"Structured response parsing failed: 'CORRECT_ANSWER' is missing or empty after cleaning. Original: '{data.get('CORRECT_ANSWER', '')}'. Response: {response_text}")
+                return None, None, None, None
+            if not explanation:
+                logging.warning(f"Structured response parsing failed: 'EXPLANATION' is missing or empty after cleaning. Original: '{data.get('EXPLANATION', '')}'. Response: {response_text}")
+                return None, None, None, None
+            if len(incorrect_options) < 1:
+                logging.warning(f"Structured response parsing failed: 'INCORRECT_OPTIONS' resulted in an empty list after cleaning. Original: '{data.get('INCORRECT_OPTIONS', '')}'. Response: {response_text}")
                 return None, None, None, None
 
             if len(correct_answer) > MAX_OPTION_LENGTH:

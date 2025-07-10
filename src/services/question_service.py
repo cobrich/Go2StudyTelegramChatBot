@@ -515,26 +515,27 @@ class QuestionService:
             
             new_tasks = []
             
-            # ИСПРАВЛЕНИЕ: Убираем ограничения и генерируем до достижения нужного количества
+            # ГАРАНТИРОВАННАЯ ГЕНЕРАЦИЯ: Цикл работает, пока не будет сгенерировано нужное количество вопросов.
             valid_questions = 0
-            attempt_batch = 1
-            max_batches = 5 # Restore to 5 for better chances
-            
-            while valid_questions < ai_questions_to_generate and attempt_batch <= max_batches:
-                # To speed up, generate more attempts than needed as some will be invalid.
+            total_attempts = 0
+            max_total_attempts = ai_questions_to_generate * 8 # Защита от бесконечного цикла (8 попыток на 1 вопрос)
+
+            while valid_questions < ai_questions_to_generate and total_attempts < max_total_attempts:
+                # Агрессивная генерация: запрашиваем больше, чем нужно, чтобы компенсировать отбраковку.
                 remaining_needed = ai_questions_to_generate - valid_questions
-                batch_size = int(remaining_needed * 1.5)
+                batch_size = remaining_needed + 5 # Запрашиваем на 5 больше, чтобы иметь запас
                 
-                logging.info(f"[get_or_generate_tasks] AI generation batch {attempt_batch}: need {remaining_needed} more questions, generating {batch_size} attempts")
+                logging.info(f"[get_or_generate_tasks] AI generation loop: need {remaining_needed}, generating batch of {batch_size}. Total attempts: {total_attempts}/{max_total_attempts}")
                 
                 generation_tasks = [
                     _semaphored_generate() for _ in range(batch_size)
                 ]
+                total_attempts += batch_size
                 results = await asyncio.gather(*generation_tasks, return_exceptions=True)
                 
                 batch_valid_count = 0
                 for result in results:
-                    # Прерываем если уже набрали нужное количество
+                    # Прерываем если уже набрали нужное количество в этом батче
                     if valid_questions >= ai_questions_to_generate:
                         break
                         
@@ -617,18 +618,16 @@ class QuestionService:
                                     seen.add(opt)
                             options = unique_options
 
-                            # ГАРАНТИРУЕМ 4 ВАРИАНТА: добавляем фиктивные если нужно
-                            while len(options) < 4:
-                                fake_option = f"Вариант {len(options)}"
-                                if fake_option not in options:
-                                    options.append(fake_option)
+                            # ГАРАНТИРУЕМ 4 ВАРИАНТА: используем умный генератор, если AI дал мало вариантов
+                            if len(options) < 4:
+                                supplemental_options = self.generate_universal_options(correct_answer, topic)
+                                for opt in supplemental_options:
+                                    if opt not in options and len(options) < 4:
+                                        options.append(opt)
 
-                            # Ограничиваем до 4 вариантов максимум
-                            options = options[:4]
-
-                            # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ФОРМИРОВАНИЯ ВАРИАНТОВ (только если меньше 4 вариантов)
-                            if len(options) != 4:
-                                logging.warning(f"⚠️ [AI ВОПРОС] Неправильное количество вариантов для: {question[:50]}...")
+                            # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ФОРМИРОВАНИЯ ВАРИАНТОВ
+                            if len(options) < 4:
+                                logging.warning(f"⚠️ [AI ВОПРОС] Не удалось сгенерировать 4 варианта для: {question[:50]}...")
                                 logging.warning(f"  ✅ Правильный ответ: '{correct_answer}' (тип: {type(correct_answer)})")
                                 logging.warning(f"  ❌ Неправильные варианты: {incorrect_options}")
                                 logging.warning(f"  📋 Финальные варианты: {options} (количество: {len(options)})")
@@ -658,11 +657,10 @@ class QuestionService:
                     else:
                         logging.warning(f"[get_or_generate_tasks][AI generation] Skipping empty or invalid result: {result}")
                 
-                logging.info(f"[get_or_generate_tasks] Batch {attempt_batch} completed: got {batch_valid_count} valid questions, total: {valid_questions}/{ai_questions_to_generate}")
-                attempt_batch += 1
-            
+                logging.info(f"[get_or_generate_tasks] Batch completed: got {batch_valid_count} valid questions, total progress: {valid_questions}/{ai_questions_to_generate}")
+
             if valid_questions < ai_questions_to_generate:
-                logging.warning(f"[get_or_generate_tasks] Could only generate {valid_questions} AI questions out of {ai_questions_to_generate} needed after {max_batches} batches")
+                logging.warning(f"[get_or_generate_tasks] Could only generate {valid_questions} AI questions out of {ai_questions_to_generate} needed after max attempts ({max_total_attempts})")
             else:
                 logging.info(f"[get_or_generate_tasks] Successfully generated {valid_questions} AI questions")
             
@@ -721,113 +719,76 @@ class QuestionService:
         logging.info(f"[get_or_generate_tasks] ✅ FINAL LIMIT: Returning exactly {len(final_result)} questions (needed: {needed})")
         return final_result
 
-    @staticmethod
-    def generate_universal_options(correct_answer_str: str) -> List[str]:
-        """Generate universal options for a given correct answer."""
-        correct_answer_str = str(correct_answer_str).strip()
-        options = set()
-        
-        if len(correct_answer_str) <= MAX_OPTION_LENGTH:
-            options.add(correct_answer_str)
+    def generate_universal_options(self, correct_answer: str, topic: str) -> List[str]:
+        """
+        Генерирует более качественные неправильные варианты ответов.
+        Стратегия:
+        1. Попробовать найти другие ответы из той же темы в базе данных.
+        2. Если не удалось, использовать числовые вариации (если ответ - число).
+        3. В крайнем случае использовать общие фразы-заглушки.
+        """
+        distractors = set()
 
-        num_match = re.match(r"^(-?\d+([.,]\d+)?)\s*(.*)$", correct_answer_str.strip())
-        generated_numeric_options = False
+        # 1. Поиск похожих ответов в базе данных
+        try:
+            similar_options = self.db.get_similar_incorrect_options(topic, limit=10)
+            for option in similar_options:
+                # Проверяем, что вариант не является правильным ответом и еще не добавлен
+                if option and option.strip() and option.strip() != correct_answer:
+                    distractors.add(option.strip())
+                if len(distractors) >= 3:
+                    break
+        except Exception as e:
+            logging.warning(f"[generate_universal_options] Could not fetch similar options from DB: {e}")
 
-        if num_match:
-            num_val_str = num_match.group(1)
-            unit = num_match.group(3).strip()
-            try:
-                num_val = float(num_val_str.replace(',', '.'))
-                is_int_val = num_val == int(num_val)
-                if is_int_val:
-                    num_val = int(num_val)
-                possible_distractors = set()
-                
-                for i in range(15):
-                    if len(options) + len(possible_distractors) >= 4 and i > 5:
-                        break
-                    op_choice = random.choice([-1, 1, -2, 2, 3, 4])
-                    if op_choice == 1:
-                        delta_abs = max(1, abs(num_val) * random.uniform(0.1, 0.5))
-                        dist_candidate_val = num_val + delta_abs * (1 + random.random())
-                    elif op_choice == -1:
-                        delta_abs = max(1, abs(num_val) * random.uniform(0.1, 0.5))
-                        dist_candidate_val = num_val - delta_abs * (1 + random.random())
-                    elif op_choice == 2 and num_val != 0:
-                        factor = random.choice([0.5, 1.5, 2, 0.75, 1.25, 1.75])
-                        dist_candidate_val = num_val * factor
-                    elif op_choice == -2 and num_val != 0:
-                        factor = random.choice([2, 3, 4, 1.5])
-                        dist_candidate_val = num_val / factor
-                    elif op_choice == 3:
-                        dist_candidate_val = num_val * (1 + random.uniform(0.1, 0.3))
-                    else:
-                        dist_candidate_val = num_val * (1 - random.uniform(0.1, 0.3))
-                    
-                    if is_int_val:
-                        dist_candidate_val = round(dist_candidate_val)
-                    else:
-                        dist_candidate_val = round(dist_candidate_val, 2)
-                    
-                    if num_val > 0 and dist_candidate_val <= 0:
-                        if num_val > 1 and is_int_val:
-                            dist_candidate_val = max(1, round(num_val * random.uniform(0.1, 0.5)))
-                        elif not is_int_val and num_val > 0.01:
-                            dist_candidate_val = round(max(0.01, num_val * random.uniform(0.1, 0.5)), 2)
+        # 2. Если в базе ничего нет или мало, генерируем числовые варианты
+        if len(distractors) < 3:
+            num_match = re.match(r"^(-?\d+([.,]\d+)?)\s*(.*)$", correct_answer.strip())
+            if num_match:
+                try:
+                    num_val_str = num_match.group(1)
+                    unit = num_match.group(3).strip()
+                    num_val = float(num_val_str.replace(',', '.'))
+                    is_int = num_val == int(num_val)
+
+                    # Генерируем несколько вариантов, чтобы потом выбрать лучшие
+                    possible_numeric_options = set()
+                    for _ in range(10):
+                        if num_val != 0:
+                            # Более простое и надежное изменение
+                            delta = max(1, abs(num_val) * random.uniform(0.1, 0.3)) if is_int else abs(num_val) * random.uniform(0.1, 0.3)
+                            new_val = num_val + delta * random.choice([-2, -1, 1, 2])
                         else:
-                            dist_candidate_val = abs(dist_candidate_val) + (1 if is_int_val else 0.01)
-                    
-                    if unit:
-                        option_str = f"{dist_candidate_val} {unit}".strip()
-                    else:
-                        option_str = str(dist_candidate_val)
-                    
-                    if option_str != correct_answer_str and len(option_str) <= MAX_OPTION_LENGTH:
-                        possible_distractors.add(option_str)
-                
-                for distractor in list(possible_distractors):
-                    if len(options) < 4:
-                        options.add(distractor)
-                    else:
-                        break
-                
-                if len(options) > 1:
-                    generated_numeric_options = True
-                    
-            except ValueError:
-                pass
+                            new_val = random.choice([-1, 1, 10, -10])
 
-        if not generated_numeric_options or len(options) < 4:
-            if len(correct_answer_str) > 0:
-                base_options = set()
-                for _ in range(10):
-                    if len(base_options) >= 3:
-                        break
-                    if random.random() < 0.5:
-                        words = correct_answer_str.split()
-                        if len(words) > 1:
-                            random.shuffle(words)
-                            modified = ' '.join(words)
-                            if modified != correct_answer_str and len(modified) <= MAX_OPTION_LENGTH:
-                                base_options.add(modified)
-                    else:
-                        if len(correct_answer_str) > 3:
-                            pos = random.randint(0, len(correct_answer_str) - 1)
-                            modified = correct_answer_str[:pos] + correct_answer_str[pos + 1:]
-                            if modified != correct_answer_str and len(modified) <= MAX_OPTION_LENGTH:
-                                base_options.add(modified)
-                
-                for option in base_options:
-                    if len(options) < 4:
-                        options.add(option)
-
-        final_options_list = list(options)
-        if len(final_options_list) < 2:
-            return []
+                        if is_int:
+                            new_val = int(round(new_val))
+                        else:
+                            new_val = round(new_val, 2)
+                        
+                        if new_val != num_val:
+                            option_str = f"{new_val} {unit}".strip() if unit else str(new_val)
+                            possible_numeric_options.add(option_str)
+                    
+                    # Добавляем сгенерированные числовые варианты в основной список
+                    for option in possible_numeric_options:
+                        if len(distractors) < 3:
+                            distractors.add(option)
+                        else:
+                            break
+                except ValueError:
+                    pass # Не удалось обработать как число
         
-        if correct_answer_str not in final_options_list and len(correct_answer_str) <= MAX_OPTION_LENGTH:
-            if len(final_options_list) < 4:
-                final_options_list.append(correct_answer_str)
+        # 3. Если вариантов все еще не хватает, добавляем универсальные заглушки
+        if len(distractors) < 3:
+            generic_options = [
+                "Нет правильного ответа",
+                "Невозможно определить",
+                "Все ответы неверны"
+            ]
+            random.shuffle(generic_options)
+            for option in generic_options:
+                if len(distractors) < 3:
+                    distractors.add(option)
         
-        random.shuffle(final_options_list)
-        return final_options_list[:4] 
+        return list(distractors) 
