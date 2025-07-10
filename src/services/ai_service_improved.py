@@ -128,8 +128,7 @@ class ImprovedAIService:
 
             question = data.get('QUESTION')
             # Очищаем ответ от распространенных ошибок форматирования AI
-            correct_answer_raw = data.get('CORRECT_ANSWER', '')
-            correct_answer = self._clean_option_text(re.sub(r'^\s*[\*\-•]\s*', '', correct_answer_raw).strip())
+            correct_answer = self._clean_option_text(data.get('CORRECT_ANSWER', ''))
 
             # .splitlines() правильно обрабатывает разные типы переносов строк (\n, \r\n)
             incorrect_options_raw = data.get('INCORRECT_OPTIONS', '').splitlines()
@@ -154,13 +153,25 @@ class ImprovedAIService:
 
     @staticmethod
     def _clean_option_text(text: str) -> str:
-        """Clean option text by removing unnecessary words and extra spaces."""
+        """Clean option text by removing unnecessary words, symbols, and extra spaces."""
+        if not text:
+            return ""
+        
+        # Replace newlines with spaces to handle multi-line answers from AI
+        cleaned_text = text.replace('\n', ' ')
+
+        # Remove leading list markers like *, -, •
+        cleaned_text = re.sub(r'^\s*[\*\-•]\s*', '', cleaned_text)
+        # Replace any other asterisks with a space, for cases like "A * B * C"
+        cleaned_text = cleaned_text.replace('*', ' ')
+        
         # Remove words like "ANSWER", "CORRECT", "INCORRECT", etc. in Russian and Kazakh
-        text = re.sub(r'(ОТВЕТ|ПРАВИЛЬНЫЙ|НЕПРАВИЛЬНЫЙ|ВЕРНО|НЕВЕРНО|НЕВОЗМОЖНО ОПРЕДЕЛИТЬ|НЕВОЗМОЖНО СКАЗАТЬ|НЕ МОГУ ОПРЕДЕЛИТЬ|НЕ МОГУ СКАЗАТЬ|НЕ УВЕРЕН|НЕ ЗНАЮ|ЗАТРУДНЯЮСЬ ОТВЕТИТЬ|СЛОЖНО СКАЗАТЬ|НУЖНО ПОДУМАТЬ|ПРОВЕРЮ ЕЩЕ РАЗ|ДРУГОЙ ВАРИАНТ|ЭТО НЕВЕРНО|НЕПРАВИЛЬНЫЙ ВАРИАНТ|ПРАВИЛЬНЫЙ ВАРИАНТ|ВЕРНЫЙ ОТВЕТ|НЕВЕРНЫЙ ОТВЕТ|ЖАУАП|ДҰРЫС|ҚАТЕ|ДҰРЫС ЖАУАП|ҚАТЕ ЖАУАП|АНЫҚТАУ МҮМКІН ЕМЕС|АЙТА АЛМАЙМЫН|БІЛМЕЙМІН|СЕНІМДІ ЕМЕСПІН|\\s*\\(.*?\\))', '', text, flags=re.IGNORECASE)
-        # Remove multiple spaces
-        text = re.sub(r'\s+', ' ', text)
-        # Remove leading and trailing spaces
-        return text.strip()
+        cleaned_text = re.sub(r'(ОТВЕТ|ПРАВИЛЬНЫЙ|НЕПРАВИЛЬНЫЙ|ВЕРНО|НЕВЕРНО|НЕВОЗМОЖНО ОПРЕДЕЛИТЬ|НЕВОЗМОЖНО СКАЗАТЬ|НЕ МОГУ ОПРЕДЕЛИТЬ|НЕ МОГУ СКАЗАТЬ|НЕ УВЕРЕН|НЕ ЗНАЮ|ЗАТРУДНЯЮСЬ ОТВЕТИТЬ|СЛОЖНО СКАЗАТЬ|НУЖНО ПОДУМАТЬ|ПРОВЕРЮ ЕЩЕ РАЗ|ДРУГОЙ ВАРИАНТ|ЭТО НЕВЕРНО|НЕПРАВИЛЬНЫЙ ВАРИАНТ|ПРАВИЛЬНЫЙ ВАРИАНТ|ВЕРНЫЙ ОТВЕТ|НЕВЕРНЫЙ ОТВЕТ|ЖАУАП|ДҰРЫС|ҚАТЕ|ДҰРЫС ЖАУАП|ҚАТЕ ЖАУАП|АНЫҚТАУ МҮМКІН ЕМЕС|АЙТА АЛМАЙМЫН|БІЛМЕЙМІН|СЕНІМДІ ЕМЕСПІН|\\s*\\(.*?\\))', '', cleaned_text, flags=re.IGNORECASE)
+        
+        # Remove multiple spaces and strip
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+        
+        return cleaned_text
 
     def _clean_explanation_text(self, text: str) -> str:
         """Removes AI's meta-commentary and self-evaluation from explanations."""
