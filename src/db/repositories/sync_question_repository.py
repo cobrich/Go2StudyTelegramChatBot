@@ -125,6 +125,27 @@ class SyncQuestionRepository(SyncBaseRepository):
             logger.error(f"❌ Error getting explanation: {e}")
             return None
     
+    def question_exists_exact(self, question_text: str) -> bool:
+        """
+        Checks if a question with the exact same text already exists.
+        Used for strict duplicate checking, e.g., during PDF import.
+        """
+        logger.info(f"🔍 Checking exact existence for question: {question_text[:50]}...")
+        try:
+            query = "SELECT 1 FROM questions WHERE question_text = %s LIMIT 1"
+            result = self.fetch_val(query, (question_text,))
+            
+            if result:
+                logger.info("📊 Exact match found.")
+                return True
+            
+            logger.info("📊 No exact match found.")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Error checking exact question existence: {e}")
+            # В случае ошибки, лучше считать, что вопроса нет, чтобы не потерять данные
+            return False
+
     def add_question(self, question: dict) -> Optional[int]:
         """Add a new question (sync) and return its ID"""
         logger.info(f"➕ Adding question: {question.get('question', 'Unknown')[:50]}...")
