@@ -303,7 +303,7 @@ class QuestionService:
                 # Это исправляет ошибку "object tuple can't be used in 'await' expression".
                 return await loop.run_in_executor(
                     None,
-                    self.ai_service.generate_task_v3,
+                    self.ai_service.generate_task,
                     topic,
                     main_topic,
                     language
