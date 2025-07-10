@@ -643,7 +643,7 @@ class CommandHandlers(BaseHandler):
         await self._save_bot_message_id(context, new_message, update.effective_chat.id)
 
     async def handle_progress(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle progress request from main menu."""
+        """Handle 'My progress' button."""
         user_id = update.effective_user.id
         user_language = self.db.get_user_language(user_id)
         

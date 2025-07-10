@@ -100,41 +100,24 @@ class SyncQuestionRepository(SyncBaseRepository):
                 logger.info(f"📊 Found exact match explanation for question")
                 return result
             
-            # Если точного совпадения нет, пробуем нечеткое сравнение
-            # Ищем вопросы с похожим содержанием
-            # Извлекаем числа и ключевые слова из вопроса
-            import re
-            numbers = re.findall(r'\d+', question_text)
-            key_words = re.findall(r'\b(сок|сахар|процент|литр|кг|грамм|метр|час|день|рубль|копейка|магазин|фермер|участок|земля|помидор|картофель|копилка|деньги)\b', question_text.lower())
-            
-            if numbers or key_words:
-                # Строим простой поиск по ключевым элементам
-                search_conditions = []
-                params = []
-                
-                # Добавляем поиск по числам (первые 3 числа)
-                for num in numbers[:3]:
-                    search_conditions.append("question_text LIKE %s")
-                    params.append(f"%{num}%")
-                
-                # Добавляем поиск по ключевым словам (первые 3 слова)
-                for word in key_words[:3]:
-                    search_conditions.append("question_text LIKE %s")
-                    params.append(f"%{word}%")
-                
-                if search_conditions:
-                    # Ищем вопросы с похожими элементами
-                    query = f"""
-                        SELECT explanation FROM questions 
-                        WHERE {' OR '.join(search_conditions)}
-                        LIMIT 1
-                    """
-                    result = self.fetch_val(query, tuple(params))
-                    
-                    if result:
-                        logger.info(f"📊 Found fuzzy match explanation for question")
-                        return result
-            
+            # Если точного совпадения нет, используем pg_trgm для "умного" нечеткого поиска
+            try:
+                fuzzy_query = """
+                    SELECT explanation FROM questions
+                    WHERE similarity(question_text, %s) > 0.6
+                    ORDER BY similarity(question_text, %s) DESC
+                    LIMIT 1
+                """
+                fuzzy_result = self.fetch_val(fuzzy_query, (question_text, question_text))
+
+                if fuzzy_result:
+                    logger.info("📊 Found fuzzy match explanation with similarity > 0.6")
+                    return fuzzy_result
+            except Exception as e:
+                # Логируем ошибку, если, например, расширение pg_trgm не установлено,
+                # и продолжаем выполнение, чтобы не сломать приложение.
+                logger.warning(f"⚠️ Could not perform fuzzy search with similarity: {e}")
+
             logger.info(f"📊 No explanation found for question (exact or fuzzy)")
             return None
                 
