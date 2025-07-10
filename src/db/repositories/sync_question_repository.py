@@ -104,8 +104,8 @@ class SyncQuestionRepository(SyncBaseRepository):
             try:
                 fuzzy_query = """
                     SELECT explanation FROM questions
-                    WHERE similarity(question_text, %s) > 0.6
-                    ORDER BY similarity(question_text, %s) DESC
+                    WHERE public.similarity(question_text, %s) > 0.6
+                    ORDER BY public.similarity(question_text, %s) DESC
                     LIMIT 1
                 """
                 fuzzy_result = self.fetch_val(fuzzy_query, (question_text, question_text))
