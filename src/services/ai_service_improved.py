@@ -3,24 +3,45 @@ import google.generativeai as genai
 from typing import Optional, Tuple, List
 import re
 from src.config.constants import GEMINI_API_KEY, GEMINI_MODEL, MAX_OPTION_LENGTH
+import time
+from google.api_core import exceptions
 
 class ImprovedAIService:
     def __init__(self):
         genai.configure(api_key=GEMINI_API_KEY)
         self.model = genai.GenerativeModel(GEMINI_MODEL)
 
-    def generate_task(self, topic: str, main_topic: Optional[str] = None, language: str = 'ru') -> Tuple[Optional[str], Optional[str], Optional[List[str]], Optional[str]]:
+    def generate_task(self, topic: str, main_topic: Optional[str] = None, language: str = 'ru', max_retries: int = 3) -> Tuple[Optional[str], Optional[str], Optional[List[str]], Optional[str]]:
         """
         Генерирует задачу, используя универсальный и строго структурированный промпт
         для максимальной надежности парсинга.
+        Включает механизм повторных попыток при ошибках лимита API.
         """
         prompt = self._get_universal_prompt(topic, main_topic, language)
-        try:
-            response_text = self.model.generate_content(prompt).text
-            return self._parse_structured_response(response_text)
-        except Exception as err:
-            logging.error(f"Error generating structured AI task: {err}")
-            return None, None, None, None
+        
+        retries = 0
+        while retries < max_retries:
+            try:
+                response_text = self.model.generate_content(prompt).text
+                return self._parse_structured_response(response_text)
+            
+            except exceptions.ResourceExhausted as err:
+                retries += 1
+                # Экспоненциальная задержка: 2, 4, 8 секунд.
+                wait_time = (2 ** retries)
+                logging.warning(
+                    f"Rate limit exceeded. Retrying in {wait_time} seconds... "
+                    f"(Attempt {retries}/{max_retries})"
+                )
+                time.sleep(wait_time)
+
+            except Exception as err:
+                # При других ошибках (не связанных с лимитом) не повторяем запрос
+                logging.error(f"Error generating structured AI task (non-retryable): {err}")
+                return None, None, None, None
+
+        logging.error(f"Failed to generate task after {max_retries} retries due to persistent rate limiting.")
+        return None, None, None, None
 
     def _get_universal_prompt(self, topic: str, main_topic: Optional[str] = None, language: str = 'ru') -> str:
         if language == 'kk':
