@@ -82,9 +82,9 @@ class QuestionService:
             if indicator in explanation_lower:
                 return False, f"Обнаружена мета-информация: '{indicator}'"
         
-        # Проверка соответствия ответа и объяснения
-        if not self._validate_answer_explanation_consistency(correct_answer, explanation):
-            return False, "Ответ не соответствует объяснению"
+        # # Проверка соответствия ответа и объяснения (ОТКЛЮЧЕНО)
+        # if not self._validate_answer_explanation_consistency(correct_answer, explanation):
+        #     return False, "Ответ не соответствует объяснению"
         
         # Проверка на слишком много предложений (возможно несколько вопросов)
         sentence_count = len([s for s in explanation.split('.') if s.strip()])
@@ -159,67 +159,6 @@ class QuestionService:
                 return False
         
         return True
-
-    def _validate_answer_explanation_consistency(self, answer: str, explanation: str) -> bool:
-        """
-        Проверяет соответствие между ответом и объяснением.
-        
-        Returns:
-            bool: True если ответ соответствует объяснению
-        """
-        import re
-        
-        # Извлекаем числовые значения из ответа
-        answer_numbers = re.findall(r'-?\d+(?:[.,]\d+)?', answer)
-        if not answer_numbers:
-            return True  # Если в ответе нет чисел, пропускаем проверку
-        
-        # Берем первое число из ответа как основное
-        try:
-            main_answer_num = float(answer_numbers[0].replace(',', '.'))
-        except ValueError:
-            return True  # Если не можем преобразовать, пропускаем
-        
-        # Ищем вычисления в объяснении
-        calculation_patterns = [
-            r'=\s*(-?\d+(?:[.,]\d+)?)',  # = 24, = 26.5
-            r'равно\s*(-?\d+(?:[.,]\d+)?)',  # равно 24
-            r'составляет\s*(-?\d+(?:[.,]\d+)?)',  # составляет 24
-            r'получается\s*(-?\d+(?:[.,]\d+)?)',  # получается 24
-            r'итого\s*(-?\d+(?:[.,]\d+)?)',  # итого 24
-            r'ответ:?\s*(-?\d+(?:[.,]\d+)?)',  # ответ: 24
-        ]
-        
-        explanation_numbers = []
-        for pattern in calculation_patterns:
-            matches = re.findall(pattern, explanation, re.IGNORECASE)
-            for match in matches:
-                try:
-                    num = float(match.replace(',', '.'))
-                    explanation_numbers.append(num)
-                except ValueError:
-                    continue
-        
-        if not explanation_numbers:
-            return True  # Если в объяснении нет явных вычислений, пропускаем
-        
-        # Проверяем, есть ли в объяснении число, соответствующее ответу
-        tolerance = 0.01  # Допустимая погрешность
-        for exp_num in explanation_numbers:
-            if abs(main_answer_num - exp_num) <= tolerance:
-                return True
-        
-        # Если основное число не найдено, проверяем все числа из ответа
-        for ans_num_str in answer_numbers:
-            try:
-                ans_num = float(ans_num_str.replace(',', '.'))
-                for exp_num in explanation_numbers:
-                    if abs(ans_num - exp_num) <= tolerance:
-                        return True
-            except ValueError:
-                continue
-        
-        return False  # Ответ не соответствует объяснению
 
     def cleanup_invalid_ai_questions(self) -> int:
         """
