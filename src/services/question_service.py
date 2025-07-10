@@ -30,12 +30,12 @@ class QuestionService:
         self.db = db if db else get_sync_database_facade()
         self.ai_service = ai_service
 
-    def _generate_ai_task(self, topic: str, main_topic: str = None, language: str = 'ru'):
+    def _generate_ai_task(self, topic: str, task_type: str, main_topic: str = None, language: str = 'ru'):
         """
         Генерирует AI задачу, используя унифицированный структурированный метод.
         """
-        logging.info(f"[_generate_ai_task] Using structured generation for topic: {topic}")
-        return self.ai_service.generate_task(topic, main_topic, language)
+        logging.info(f"[_generate_ai_task] Using structured generation for topic: '{topic}' with task_type: '{task_type}'")
+        return self.ai_service.generate_task(topic, task_type, main_topic, language)
 
     def _validate_ai_question(self, question: str, correct_answer: str, explanation: str, topic: str) -> Tuple[bool, str]:
         """
@@ -217,15 +217,18 @@ class QuestionService:
         """
         # On a paid plan, we can be more aggressive. Increase concurrency to 10.
         semaphore = asyncio.Semaphore(10)
+        
+        # Определяем возможные типы задач для генерации
+        task_types = ["жизненная ситуация", "числовая прямая", "сравнение выражений", "уравнение", "логическая цепочка"]
 
-        async def _semaphored_generate():
+        async def _semaphored_generate(task_type: str):
             """Wraps the sync AI call in a semaphore-controlled async task."""
             async with semaphore:
                 # Run the synchronous _generate_ai_task in a separate thread
                 # to avoid blocking the event loop, especially because of `time.sleep`
                 # inside the AI service's retry mechanism.
                 return await asyncio.to_thread(
-                    self._generate_ai_task, topic, main_topic, language
+                    self._generate_ai_task, topic, task_type, main_topic, language
                 )
 
         logging.info(f"[get_or_generate_tasks] user_id={user_id}, topic={topic}, needed={needed}, is_retake={is_retake}, force_ai={force_ai}")
@@ -297,7 +300,7 @@ class QuestionService:
                 # Увеличиваем количество попыток для лучшего качества в пересдаче
                 max_attempts = ai_questions_needed * 3
                 generation_tasks = [
-                    _semaphored_generate() for _ in range(max_attempts)
+                    _semaphored_generate(random.choice(task_types)) for _ in range(max_attempts)
                 ]
                 results = await asyncio.gather(*generation_tasks, return_exceptions=True)
                 
@@ -528,7 +531,7 @@ class QuestionService:
                 logging.info(f"[get_or_generate_tasks] AI generation loop: need {remaining_needed}, generating batch of {batch_size}. Total attempts: {total_attempts}/{max_total_attempts}")
                 
                 generation_tasks = [
-                    _semaphored_generate() for _ in range(batch_size)
+                    _semaphored_generate(random.choice(task_types)) for _ in range(batch_size)
                 ]
                 total_attempts += batch_size
                 results = await asyncio.gather(*generation_tasks, return_exceptions=True)
