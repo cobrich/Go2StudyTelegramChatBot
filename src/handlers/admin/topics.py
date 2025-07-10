@@ -346,7 +346,7 @@ class TopicsHandler(AdminBaseHandler):
                 keyboard = []
                 for topic in section_topics:
                     status = "✅" if topic['is_active'] else "❌"
-                    button_text = f"{status} {topic['name']} ({topic['question_count']} вопр.)"
+                    button_text = f"{status} {topic['subtopic_name']} ({topic['question_count']} вопр.)"
                     keyboard.append([InlineKeyboardButton(
                         button_text,
                         callback_data=f"edit_topic_select_{topic['id']}"
@@ -378,7 +378,7 @@ class TopicsHandler(AdminBaseHandler):
             status_emoji = "✅" if topic['is_active'] else "❌"
             
             text = f"✏️ <b>Редактирование темы</b>\n\n"
-            text += f"<b>Название:</b> {topic['name']}\n"
+            text += f"<b>Название:</b> {topic['subtopic_name']}\n"
             text += f"<b>Раздел:</b> {topic.get('main_topic', 'Без раздела')}\n"
             text += f"<b>Статус:</b> {status_emoji} {status}\n"
             text += f"<b>Вопросов:</b> {topic['question_count']}\n\n"
@@ -416,7 +416,7 @@ class TopicsHandler(AdminBaseHandler):
             context.user_data['edit_topic_id'] = topic_id
             
             text = f"📝 <b>Изменение названия темы</b>\n\n"
-            text += f"Текущее название: <b>{topic['name']}</b>\n\n"
+            text += f"Текущее название: <b>{topic['subtopic_name']}</b>\n\n"
             text += "Введите новое название темы:"
             
             keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data=f"edit_topic_select_{topic_id}")]]
@@ -476,7 +476,7 @@ class TopicsHandler(AdminBaseHandler):
             print(f"[DEBUG] Сохранены данные в context: topic_id={topic_id}, sections_count={len(all_sections)}")
             
             text = f"📚 <b>Изменение раздела темы</b>\n\n"
-            text += f"Тема: <b>{topic['name']}</b>\n"
+            text += f"Тема: <b>{topic['subtopic_name']}</b>\n"
             text += f"Текущий раздел: <i>{topic.get('main_topic', 'Без раздела')}</i>\n\n"
             text += "Выберите новый раздел:"
             
@@ -624,7 +624,7 @@ class TopicsHandler(AdminBaseHandler):
                     status_action = "❌ Деактивировать" if updated_topic['is_active'] else "✅ Активировать"
                     
                     text = f"✏️ <b>Редактирование темы</b>\n\n"
-                    text += f"📝 <b>Название:</b> {updated_topic['name']}\n"
+                    text += f"📝 <b>Название:</b> {updated_topic['subtopic_name']}\n"
                     text += f"📚 <b>Раздел:</b> {updated_topic.get('main_topic', 'Не указан')}\n"
                     text += f"📊 <b>Статус:</b> {status}\n"
                     text += f"❓ <b>Вопросов:</b> {updated_topic.get('question_count', 0)}\n\n"
@@ -769,7 +769,7 @@ class TopicsHandler(AdminBaseHandler):
                 keyboard = []
                 for topic in section_topics:
                     status = "✅" if topic['is_active'] else "❌"
-                    button_text = f"{status} {topic['name']} ({topic['question_count']} вопр.)"
+                    button_text = f"{status} {topic['subtopic_name']} ({topic['question_count']} вопр.)"
                     keyboard.append([InlineKeyboardButton(
                         button_text,
                         callback_data=f"remove_topic_confirm_{topic['id']}"
@@ -798,7 +798,7 @@ class TopicsHandler(AdminBaseHandler):
                 return
             
             text = f"🗑️ <b>Подтверждение удаления темы</b>\n\n"
-            text += f"<b>Тема:</b> {topic['name']}\n"
+            text += f"<b>Тема:</b> {topic['subtopic_name']}\n"
             text += f"<b>Раздел:</b> {topic.get('main_topic', 'Без раздела')}\n"
             text += f"<b>Вопросов:</b> {topic['question_count']}\n\n"
             text += "⚠️ <b>ВНИМАНИЕ!</b> Это действие необратимо!\n\n"
@@ -833,7 +833,7 @@ class TopicsHandler(AdminBaseHandler):
                 await query.edit_message_text("❌ Тема не найдена.")
                 return
             
-            topic_name = topic['name']
+            topic_name = topic['subtopic_name']
             question_count = topic['question_count']
             
             # Удаляем тему и все связанные данные
