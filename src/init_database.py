@@ -40,7 +40,7 @@ def init_database():
         logger.info("Проверка подключения к базе данных...")
         with engine.connect() as connection:
             logger.info("✅ Подключение к базе данных успешно установлено.")
-
+        
         # Создаем все таблицы
         schema = DatabaseSchema(engine)
         logger.info("🏗️ Создание таблиц на основе метаданных моделей...")
@@ -49,7 +49,7 @@ def init_database():
         logger.info("🎉 ИНИЦИАЛИЗАЦИЯ СХЕМЫ ЗАВЕРШЕНА УСПЕШНО!")
         logger.info("✅ Все таблицы, включая 'managed_messages', должны быть созданы.")
         return True
-
+        
     except Exception as e:
         logger.error(f"❌ Произошла критическая ошибка при инициализации базы данных: {e}", exc_info=True)
         return False

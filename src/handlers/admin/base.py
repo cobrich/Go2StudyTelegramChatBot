@@ -99,7 +99,7 @@ class AdminBaseHandler:
         """Обработка текстовых сообщений в админ-режиме."""
         user_id = update.effective_user.id
         text = update.message.text.strip()
-
+        
         if not self.db.is_admin(user_id):
             return False
 

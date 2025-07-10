@@ -29,22 +29,13 @@ class QuestionService:
     def __init__(self, db=None, ai_service: ImprovedAIService = None):
         self.db = db if db else get_sync_database_facade()
         self.ai_service = ai_service
-        # Флаг для использования нового метода генерации (по умолчанию True - используем новый метод)
-        self.use_v3_generation = True
-
-    def enable_v3_generation(self, enable: bool = True):
-        """Включает/выключает использование нового метода генерации v3"""
-        self.use_v3_generation = enable
-        logging.info(f"AI generation method changed to: {'v3 (Meta-prompt)' if enable else 'original'}")
 
     def _generate_ai_task(self, topic: str, main_topic: str = None, language: str = 'ru'):
-        """Генерирует AI задачу используя выбранный метод"""
-        if self.use_v3_generation:
-            logging.info(f"[_generate_ai_task] Using v3 method for topic: {topic}")
-            return self.ai_service.generate_task_v3(topic, main_topic, language)
-        else:
-            logging.info(f"[_generate_ai_task] Using original method for topic: {topic}")
-            return self.ai_service.generate_task(topic, main_topic, language)
+        """
+        Генерирует AI задачу, используя унифицированный структурированный метод.
+        """
+        logging.info(f"[_generate_ai_task] Using structured generation for topic: {topic}")
+        return self.ai_service.generate_task(topic, main_topic, language)
 
     def _validate_ai_question(self, question: str, correct_answer: str, explanation: str, topic: str) -> Tuple[bool, str]:
         """
