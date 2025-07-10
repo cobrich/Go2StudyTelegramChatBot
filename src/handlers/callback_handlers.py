@@ -636,8 +636,10 @@ class CallbackHandlers(BaseHandler):
         # Устанавливаем флаг выбора темы
         context.user_data['in_topic_selection'] = True
         try:
-            # Удаляем inline-клавиатуру у старого сообщения
-            await query.message.edit_reply_markup(reply_markup=None)
+            # # Удаляем inline-клавиатуру у старого сообщения
+            # await query.message.edit_reply_markup(reply_markup=None)
+            # Полностью удаляем старое сообщение, чтобы избежать "зависших" вопросов
+            await query.message.delete()
         except Exception:
             pass
         try:
