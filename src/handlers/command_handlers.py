@@ -174,6 +174,34 @@ class CommandHandlers(BaseHandler):
             reply_markup=get_main_menu_markup(user_id)
         )
     
+    async def clear_cache(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Очищает кеш для конкретного пользователя (только для админов)."""
+        user_id = update.effective_user.id
+        user_language = self.db.get_user_language(user_id)
+
+        # Проверяем, является ли пользователь админом
+        if not self.db.is_admin(user_id):
+            await update.message.reply_text("❌ Эта команда доступна только для администраторов.")
+            return
+
+        try:
+            # Получаем ID пользователя из аргументов команды
+            target_user_id = int(context.args[0])
+            
+            # Очищаем кеш для целевого пользователя
+            self.db.clear_user_cache(target_user_id)
+            
+            await update.message.reply_text(f"✅ Кеш для пользователя с ID {target_user_id} был успешно очищен.")
+            
+        except (IndexError, ValueError):
+            await update.message.reply_text(
+                "⚠️ Неправильное использование команды.\n"
+                "Пример: `/clear_cache 123456789`"
+            )
+        except Exception as e:
+            logging.error(f"Ошибка при очистке кеша для пользователя: {e}")
+            await update.message.reply_text("❌ Произошла ошибка при выполнении команды.")
+
     async def get_my_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Показать user_id пользователя (временная команда для настройки админа)."""
         user_id = update.effective_user.id

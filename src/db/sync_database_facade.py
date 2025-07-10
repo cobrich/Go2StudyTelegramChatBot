@@ -62,6 +62,11 @@ class SyncDatabaseFacade:
         for key in keys_to_remove:
             del self._cache[key]
     
+    def clear_user_cache(self, user_id: int) -> None:
+        """Принудительно очищает кеш для конкретного пользователя."""
+        self._clear_cache_for_user(user_id)
+        logging.info(f"Кеш для пользователя {user_id} был принудительно очищен.")
+
     def _clear_all_cache(self) -> None:
         """Очищает весь кеш"""
         self._cache.clear()
@@ -206,15 +211,24 @@ class SyncDatabaseFacade:
     def add_user(self, user_id: int, username: str = None, full_name: str = None,
                  grade: int = None, language: str = 'ru', added_by: int = None) -> bool:
         """Add new user (sync)"""
-        return self.users.add_user(user_id, username, full_name, grade, language, added_by)
+        result = self.users.add_user(user_id, username, full_name, grade, language, added_by)
+        if result:
+            self._clear_cache_for_user(user_id)
+        return result
     
     def remove_user_access(self, user_id: int) -> bool:
         """Remove user access (sync)"""
-        return self.users.remove_user_access(user_id)
+        result = self.users.remove_user_access(user_id)
+        if result:
+            self._clear_cache_for_user(user_id)
+        return result
     
     def restore_user_access(self, user_id: int) -> bool:
         """Restore user access (sync)"""
-        return self.users.restore_user_access(user_id)
+        result = self.users.restore_user_access(user_id)
+        if result:
+            self._clear_cache_for_user(user_id)
+        return result
     
     def get_all_users(self) -> List[Dict[str, Any]]:
         """Get all users (sync)"""
@@ -222,7 +236,10 @@ class SyncDatabaseFacade:
     
     def update_user_activity(self, user_id: int, current_topic: str = None) -> bool:
         """Update user activity (sync)"""
-        return self.users.update_user_activity(user_id, current_topic)
+        result = self.users.update_user_activity(user_id, current_topic)
+        if result:
+            self._clear_cache_for_user(user_id)
+        return result
     
     def get_user_language(self, user_id: int) -> str:
         """Get user's language"""
@@ -236,14 +253,17 @@ class SyncDatabaseFacade:
     def set_user_info(self, user_id: int, full_name: str, grade: int) -> None:
         """Set user information (create or update)"""
         self.users.set_user_info(user_id, full_name, grade)
+        self._clear_cache_for_user(user_id)
     
     def set_user_info_with_language(self, user_id: int, full_name: str, grade: int, language: str) -> None:
         """Set user information with language (create or update)"""
         self.users.set_user_info_with_language(user_id, full_name, grade, language)
+        self._clear_cache_for_user(user_id)
     
     def update_user_language(self, user_id: int, language: str) -> None:
         """Update user's language"""
         self.users.update_user_language(user_id, language)
+        self._clear_cache_for_user(user_id)
     
     # User activity methods
     def is_user_active(self, user_id: int) -> bool:
@@ -258,6 +278,7 @@ class SyncDatabaseFacade:
     def set_user_inactive(self, user_id: int) -> None:
         """Set user as inactive and clear current topic"""
         self.users.update_user_activity(user_id, None)
+        self._clear_cache_for_user(user_id)
     
     # Additional user access methods from main branch - delegate to UserRepository
     def has_user_access(self, user_id: int) -> bool:
@@ -297,8 +318,11 @@ class SyncDatabaseFacade:
     
     def update_allowed_user_by_id(self, user_id: int, full_name: str = None, grade: int = None, 
                                  has_access: bool = None) -> bool:
-        """Update allowed user info by user_id"""
-        return self.users.update_allowed_user_by_id(user_id, full_name, grade, has_access)
+        """Update allowed user by ID (sync)"""
+        result = self.users.update_allowed_user_by_id(user_id, full_name, grade, has_access)
+        if result:
+            self._clear_cache_for_user(user_id)
+        return result
     
     def get_all_allowed_users(self) -> List[Dict[str, Any]]:
         """Get all allowed users"""
