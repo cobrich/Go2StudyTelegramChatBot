@@ -92,7 +92,8 @@ class AdminBaseHandler:
             context=context,
             text=text,
             reply_markup=reply_markup,
-            message_type="admin_panel"
+            message_type="admin_panel",
+            parse_mode='HTML'
         )
 
     async def handle_admin_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
