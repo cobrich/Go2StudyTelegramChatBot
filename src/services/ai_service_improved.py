@@ -132,7 +132,10 @@ class ImprovedAIService:
 
             # .splitlines() правильно обрабатывает разные типы переносов строк (\n, \r\n)
             incorrect_options_raw = data.get('INCORRECT_OPTIONS', '').splitlines()
-            incorrect_options = [self._clean_option_text(opt) for opt in incorrect_options_raw if opt.strip()]
+            # First, clean all potential options
+            cleaned_options = [self._clean_option_text(opt) for opt in incorrect_options_raw]
+            # Then, filter out any junk options that are empty or just a single character (like '.')
+            incorrect_options = [opt for opt in cleaned_options if len(opt) > 1]
 
             explanation = self._clean_explanation_text(data.get('EXPLANATION'))
 

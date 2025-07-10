@@ -215,8 +215,8 @@ class QuestionService:
         Основная логика для получения или генерации задач для теста.
         Эта функция является сердцем системы адаптивного обучения.
         """
-        # Define a semaphore to limit concurrent AI calls to 2. This prevents API rate limiting per minute.
-        semaphore = asyncio.Semaphore(2)
+        # On a paid plan, we can be more aggressive. Increase concurrency to 10.
+        semaphore = asyncio.Semaphore(10)
 
         async def _semaphored_generate():
             """Wraps the sync AI call in a semaphore-controlled async task."""
@@ -518,12 +518,12 @@ class QuestionService:
             # ИСПРАВЛЕНИЕ: Убираем ограничения и генерируем до достижения нужного количества
             valid_questions = 0
             attempt_batch = 1
-            max_batches = 3  # Be more conservative to save daily quota
+            max_batches = 5 # Restore to 5 for better chances
             
             while valid_questions < ai_questions_to_generate and attempt_batch <= max_batches:
-                # To conserve the daily API quota, we now generate exactly the number of questions needed, not more.
+                # To speed up, generate more attempts than needed as some will be invalid.
                 remaining_needed = ai_questions_to_generate - valid_questions
-                batch_size = remaining_needed
+                batch_size = int(remaining_needed * 1.5)
                 
                 logging.info(f"[get_or_generate_tasks] AI generation batch {attempt_batch}: need {remaining_needed} more questions, generating {batch_size} attempts")
                 
