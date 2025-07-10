@@ -325,6 +325,10 @@ class SyncDatabaseFacade:
         """Add a new question (sync) and return its ID"""
         return self.questions.add_question(question)
     
+    def get_similar_incorrect_options(self, topic: str, limit: int = 10) -> List[str]:
+        """Gets a set of random, but relevant incorrect options from the same topic."""
+        return self.questions.get_similar_incorrect_options(topic, limit)
+
     def get_all_questions(self) -> List[Dict]:
         """Get all questions (sync)"""
         return self.questions.get_all_questions()

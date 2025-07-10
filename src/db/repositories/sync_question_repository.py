@@ -208,7 +208,35 @@ class SyncQuestionRepository(SyncBaseRepository):
         except Exception as e:
             logger.error(f"❌ Error adding question: {e}")
             return None
-    
+
+    def get_similar_incorrect_options(self, topic: str, limit: int = 10) -> List[str]:
+        """
+        Получает набор случайных, но релевантных неправильных ответов из той же темы.
+        """
+        logger.info(f"🔍 Getting similar incorrect options for topic: {topic}")
+        try:
+            # Этот запрос извлекает неправильные варианты из других вопросов той же темы.
+            # `unnest` разворачивает строки с неправильными ответами в отдельные строки,
+            # а `ORDER BY RANDOM()` обеспечивает случайный порядок.
+            query = """
+                SELECT DISTINCT unnest(string_to_array(q.incorrect_options, '\n')) AS incorrect_option
+                FROM questions q
+                JOIN subtopics s ON q.topic_id = s.id
+                WHERE s.subtopic_name = %s
+                AND q.incorrect_options IS NOT NULL AND q.incorrect_options != ''
+                ORDER BY RANDOM()
+                LIMIT %s;
+            """
+            result = self.fetch_all(query, (topic, limit))
+            
+            options = [row['incorrect_option'] for row in result if row['incorrect_option'].strip()]
+            logger.info(f"📊 Found {len(options)} similar incorrect options.")
+            return options
+
+        except Exception as e:
+            logger.error(f"❌ Error getting similar incorrect options for topic '{topic}': {e}")
+            return []
+
     def get_all_questions(self) -> List[Dict]:
         """Get all questions (sync)"""
         logger.info("📋 Getting all questions")
