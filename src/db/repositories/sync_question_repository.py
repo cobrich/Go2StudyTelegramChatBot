@@ -104,14 +104,14 @@ class SyncQuestionRepository(SyncBaseRepository):
             try:
                 fuzzy_query = """
                     SELECT explanation FROM questions
-                    WHERE public.similarity(question_text, %s) > 0.7
+                    WHERE public.similarity(question_text, %s) > 0.85
                     ORDER BY public.similarity(question_text, %s) DESC
                     LIMIT 1
                 """
                 fuzzy_result = self.fetch_val(fuzzy_query, (question_text, question_text))
 
                 if fuzzy_result:
-                    logger.info("📊 Found fuzzy match explanation with similarity > 0.7")
+                    logger.info("📊 Found fuzzy match explanation with similarity > 0.85")
                     return fuzzy_result
             except Exception as e:
                 # Логируем ошибку, если, например, расширение pg_trgm не установлено,
