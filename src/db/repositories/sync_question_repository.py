@@ -218,12 +218,15 @@ class SyncQuestionRepository(SyncBaseRepository):
             # Этот запрос извлекает неправильные варианты из других вопросов той же темы.
             # `unnest` разворачивает строки с неправильными ответами в отдельные строки,
             # а `ORDER BY RANDOM()` обеспечивает случайный порядок.
+            # ИСПРАВЛЕНО: `ORDER BY RANDOM()` вынесен во внешний запрос, чтобы избежать ошибки с `SELECT DISTINCT`.
             query = """
-                SELECT DISTINCT unnest(string_to_array(q.incorrect_options, '\n')) AS incorrect_option
-                FROM questions q
-                JOIN subtopics s ON q.topic_id = s.id
-                WHERE s.subtopic_name = %s
-                AND q.incorrect_options IS NOT NULL AND q.incorrect_options != ''
+                SELECT incorrect_option FROM (
+                    SELECT DISTINCT unnest(string_to_array(q.incorrect_options, '\n')) AS incorrect_option
+                    FROM questions q
+                    JOIN subtopics s ON q.topic_id = s.id
+                    WHERE s.subtopic_name = %s
+                    AND q.incorrect_options IS NOT NULL AND q.incorrect_options != ''
+                ) AS distinct_options
                 ORDER BY RANDOM()
                 LIMIT %s;
             """
