@@ -278,7 +278,7 @@ class QuestionService:
                     tasks.append((
                         task['question'],
                         task['answer'],
-                        self.ai_service._clean_explanation_text(task['explanation']),
+                        task['explanation'],
                         options,  # Теперь гарантированно список
                         'db_error',
                         task['image_path'] if 'image_path' in task else None,
@@ -434,7 +434,7 @@ class QuestionService:
                     tasks.append((
                         task['question'],
                         task['answer'],
-                        self.ai_service._clean_explanation_text(task['explanation']),
+                        task['explanation'],
                         options,  # Теперь гарантированно список
                         'db',
                         task['image_path'] if 'image_path' in task else None,
@@ -493,7 +493,7 @@ class QuestionService:
                         tasks.append((
                             task['question'],
                             task['answer'],
-                            self.ai_service._clean_explanation_text(task['explanation']),
+                            task['explanation'],
                             options,  # Теперь гарантированно список
                             task.get('source', 'db'),
                             task['image_path'] if 'image_path' in task else None,
