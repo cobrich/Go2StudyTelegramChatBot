@@ -13,6 +13,18 @@ from src.services.ai_service_improved import ImprovedAIService
 from src.config.constants import DEFAULT_QUESTIONS_PER_TEST, MAX_OPTION_LENGTH, get_active_topics
 import re
 
+# Настройка выделенного логгера для ответов от AI
+ai_responses_logger = logging.getLogger('ai_responses')
+ai_responses_logger.setLevel(logging.INFO)
+# Предотвращаем двойное логирование в основной поток
+ai_responses_logger.propagate = False
+if not ai_responses_logger.handlers:
+    # Добавляем файловый обработчик, если его еще нет
+    ai_handler = logging.FileHandler('ai_responses.log', mode='a', encoding='utf-8')
+    ai_formatter = logging.Formatter('%(asctime)s - %(levelname)s\n%(message)s\n' + '-'*80)
+    ai_handler.setFormatter(ai_formatter)
+    ai_responses_logger.addHandler(ai_handler)
+
 class QuestionService:
     def __init__(self, db=None, ai_service: ImprovedAIService = None):
         self.db = db if db else get_sync_database_facade()
@@ -296,8 +308,15 @@ class QuestionService:
                 # чтобы распределить запросы во времени и избежать превышения лимита.
                 await asyncio.sleep(1)
                 
-                # Теперь вызываем асинхронную генерацию
-                return await self.ai_service.generate_task_v3(topic, main_topic, language)
+                # Запускаем СИНХРОННУЮ функцию в отдельном потоке, чтобы не блокировать asyncio.
+                # Это исправляет ошибку "object tuple can't be used in 'await' expression".
+                return await loop.run_in_executor(
+                    None,
+                    self.ai_service.generate_task_v3,
+                    topic,
+                    main_topic,
+                    language
+                )
 
         if is_retake:
             # ЛОГИКА ПЕРЕСДАЧИ: только ошибки + ИИ вопросы для достижения нужного количества
@@ -609,6 +628,15 @@ class QuestionService:
                             logging.warning(f"[get_or_generate_tasks][AI generation] Skipping result with None fields: question={question is not None}, answer={correct_answer is not None}, explanation={explanation is not None}")
                             continue
                         
+                        # Логируем сырой ответ от AI для анализа
+                        raw_response_for_log = (
+                            f"Topic: {topic}\n"
+                            f"Question: {question}\n"
+                            f"Correct Answer: {correct_answer}\n"
+                            f"Incorrect Options: {incorrect_options}\n"
+                            f"Explanation: {explanation}"
+                        )
+
                         # Проверяем валидность вопроса
                         is_valid, error_msg = self._validate_ai_question(question, correct_answer, explanation, topic)
                         if not is_valid:
@@ -618,10 +646,16 @@ class QuestionService:
                             # else:
                             #     logging.warning(f"[get_or_generate_tasks][AI generation] Skipping invalid AI question: {error_msg}. Question: {question[:100]}...")
                             #     continue
+                            ai_responses_logger.warning(
+                                f"REJECTED\nReason: {error_msg}\n---\n{raw_response_for_log}"
+                            )
                             logging.warning(f"[get_or_generate_tasks][AI generation] Skipping invalid AI question: {error_msg}. Question: {question[:100]}...")
                             continue
                         
                         if question not in existing_question_texts_to_exclude:
+                            ai_responses_logger.info(
+                                f"ACCEPTED\n---\n{raw_response_for_log}"
+                            )
                             # Сохраняем сгенерированный ИИ вопрос в базу
                             saved_question_id = None
                             if not self.db.get_explanation_by_question_text(question):
