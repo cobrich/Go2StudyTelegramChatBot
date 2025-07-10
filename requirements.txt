@@ -8,6 +8,7 @@ PyMuPDF==1.23.8
 
 # Database dependencies for Neon PostgreSQL
 asyncpg==0.29.0
+sqlalchemy==2.0.23
 
 # Additional dependencies for Railway
 psycopg2-binary==2.9.9
