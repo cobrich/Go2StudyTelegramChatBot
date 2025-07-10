@@ -1,11 +1,12 @@
 import logging
+from typing import Optional
 from ..sync_base_repository import SyncBaseRepository
 
 logger = logging.getLogger(__name__)
 
 class SyncManagedMessageRepository(SyncBaseRepository):
 
-    def get(self, user_id: int, message_type: str) -> dict | None:
+    def get(self, user_id: int, message_type: str) -> Optional[dict]:
         """
         Получает информацию об управляемом сообщении по его типу.
         """

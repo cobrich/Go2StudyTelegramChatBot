@@ -839,9 +839,9 @@ class SyncDatabaseFacade:
         return self.questions.update_question_options(question_id, options_list)
 
     # Managed Message operations
-    def get_managed_message(self, user_id: int, message_type: str) -> dict | None:
+    def get_managed_message(self, user_id: int, message_type: str) -> Optional[dict]:
         """
-        Получает информацию об управляемом сообщении.
+        Retrieves information about a managed message by its type.
         """
         return self.managed_messages.get(user_id, message_type)
 
