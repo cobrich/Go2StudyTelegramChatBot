@@ -87,9 +87,12 @@ class SyncQuestionRepository(SyncBaseRepository):
             logger.error(f"❌ Error getting tasks for topic '{topic}': {e}")
             return []
     
-    def get_explanation_by_question_text(self, question_text: str) -> Optional[str]:
-        """Get explanation by question text (sync) with fuzzy matching for better deduplication"""
-        logger.info(f"🔍 Getting explanation for question: {question_text[:50]}...")
+    def get_explanation_by_question_text(self, question_text: str, exact_only: bool = False) -> Optional[str]:
+        """
+        Get explanation by question text (sync).
+        Can perform fuzzy matching for better deduplication unless `exact_only` is True.
+        """
+        logger.info(f"🔍 Getting explanation for question: {question_text[:50]}... (exact_only={exact_only})")
         
         try:
             # Сначала пробуем точное совпадение
@@ -99,53 +102,31 @@ class SyncQuestionRepository(SyncBaseRepository):
             if result:
                 logger.info(f"📊 Found exact match explanation for question")
                 return result
-            
-            # Если точного совпадения нет, используем pg_trgm для "умного" нечеткого поиска
-            try:
-                fuzzy_query = """
-                    SELECT explanation FROM questions
-                    WHERE public.similarity(question_text, %s) > 0.85
-                    ORDER BY public.similarity(question_text, %s) DESC
-                    LIMIT 1
-                """
-                fuzzy_result = self.fetch_val(fuzzy_query, (question_text, question_text))
 
-                if fuzzy_result:
-                    logger.info("📊 Found fuzzy match explanation with similarity > 0.85")
-                    return fuzzy_result
-            except Exception as e:
-                # Логируем ошибку, если, например, расширение pg_trgm не установлено,
-                # и продолжаем выполнение, чтобы не сломать приложение.
-                logger.warning(f"⚠️ Could not perform fuzzy search with similarity: {e}")
+            # Если точного совпадения нет и разрешен нечеткий поиск
+            if not exact_only:
+                try:
+                    fuzzy_query = """
+                        SELECT explanation FROM questions
+                        WHERE public.similarity(question_text, %s) > 0.85
+                        ORDER BY public.similarity(question_text, %s) DESC
+                        LIMIT 1
+                    """
+                    fuzzy_result = self.fetch_val(fuzzy_query, (question_text, question_text))
 
-            logger.info(f"📊 No explanation found for question (exact or fuzzy)")
+                    if fuzzy_result:
+                        logger.info("📊 Found fuzzy match explanation with similarity > 0.85")
+                        return fuzzy_result
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not perform fuzzy search with similarity: {e}")
+
+            logger.info(f"📊 No explanation found for question (exact_only={exact_only})")
             return None
                 
         except Exception as e:
             logger.error(f"❌ Error getting explanation: {e}")
             return None
     
-    def question_exists_exact(self, question_text: str) -> bool:
-        """
-        Checks if a question with the exact same text already exists.
-        Used for strict duplicate checking, e.g., during PDF import.
-        """
-        logger.info(f"🔍 Checking exact existence for question: {question_text[:50]}...")
-        try:
-            query = "SELECT 1 FROM questions WHERE question_text = %s LIMIT 1"
-            result = self.fetch_val(query, (question_text,))
-            
-            if result:
-                logger.info("📊 Exact match found.")
-                return True
-            
-            logger.info("📊 No exact match found.")
-            return False
-        except Exception as e:
-            logger.error(f"❌ Error checking exact question existence: {e}")
-            # В случае ошибки, лучше считать, что вопроса нет, чтобы не потерять данные
-            return False
-
     def add_question(self, question: dict) -> Optional[int]:
         """Add a new question (sync) and return its ID"""
         logger.info(f"➕ Adding question: {question.get('question', 'Unknown')[:50]}...")

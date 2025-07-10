@@ -317,14 +317,10 @@ class SyncDatabaseFacade:
         """Get tasks for topic (sync)"""
         return self.questions.get_tasks_for_topic(topic, limit)
     
-    def get_explanation_by_question_text(self, question_text: str) -> Optional[str]:
+    def get_explanation_by_question_text(self, question_text: str, exact_only: bool = False) -> Optional[str]:
         """Get explanation by question text (sync)"""
-        return self.questions.get_explanation_by_question_text(question_text)
+        return self.questions.get_explanation_by_question_text(question_text, exact_only=exact_only)
     
-    def question_exists_exact(self, question_text: str) -> bool:
-        """Checks if a question with the exact same text already exists."""
-        return self.questions.question_exists_exact(question_text)
-
     def add_question(self, question: dict) -> Optional[int]:
         """Add a new question (sync) and return its ID"""
         return self.questions.add_question(question)

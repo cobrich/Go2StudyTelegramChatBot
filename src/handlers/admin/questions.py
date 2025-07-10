@@ -510,7 +510,7 @@ class QuestionsHandler(AdminBaseHandler):
                 topic_stats[topic] = topic_stats.get(topic, 0) + 1
                 
                 # Проверяем уникальность
-                exists = self.db.get_explanation_by_question_text(question_text)
+                exists = self.db.get_explanation_by_question_text(question_text, exact_only=True)
                 if exists:
                     skipped_count += 1
                     continue

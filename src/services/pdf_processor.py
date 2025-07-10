@@ -785,7 +785,8 @@ def add_questions_to_db(questions: List[Dict], db, ai_service) -> Dict[str, int]
             topic_stats[topic] = topic_stats.get(topic, 0) + 1
             
             # ИСПРАВЛЕНО: Проверяем уникальность по ТОЧНОМУ совпадению текста вопроса
-            exists = db.question_exists_exact(question_text)
+            # exists = db.get_explanation_by_question_text(question_text)
+            exists = db.get_explanation_by_question_text(question_text, exact_only=True)
             if exists:
                 print(f"[SKIP][{idx}/{total}] Вопрос уже существует (точное совпадение): {question_text[:100]}...")
                 continue
