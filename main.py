@@ -4,6 +4,7 @@ import sys
 import threading
 import time
 from datetime import datetime
+from flask import Flask, jsonify
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from telegram.request import HTTPXRequest
@@ -31,8 +32,23 @@ logging.basicConfig(
 logging.getLogger('httpx').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 logging.getLogger('httpcore').setLevel(logging.WARNING)
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
+# Flask app for health checks
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    """Health check endpoint for Railway."""
+    return jsonify(status="ok", message="Bot is running"), 200
+
+def run_flask_app():
+    """Run Flask app in a separate thread."""
+    port = int(os.environ.get("PORT", 8000))
+    # Use '0.0.0.0' to be accessible from outside the container
+    app.run(host='0.0.0.0', port=port)
 
 def main() -> None:
     """Start the bot."""
@@ -563,4 +579,9 @@ def main() -> None:
         sys.exit(1)
 
 if __name__ == '__main__':
+    # Run Flask app in a background thread
+    flask_thread = threading.Thread(target=run_flask_app)
+    flask_thread.daemon = True
+    flask_thread.start()
+    
     main() 
