@@ -2,7 +2,10 @@ venv/
 .env
 __pycache__/
 math_bot.db
+*.sqlite3
+*.db3
 files/
+question_images/
 
 # Deployment files
 *.log
