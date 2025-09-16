@@ -15,3 +15,5 @@ psycopg2-binary==2.9.9
 
 # Alternative for newer systems (commented out by default)
 # python-telegram-bot>=21.0  # Use only if you know your system supports it 
+
+Flask==3.1.1
