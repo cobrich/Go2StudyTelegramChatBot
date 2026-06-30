@@ -7,15 +7,17 @@ Go2Study combines curated educational content, adaptive testing, AI-generated qu
 
 Built for production deployment with Python, PostgreSQL, Google Gemini, Docker, Railway, and Telegram Bot API.
 
-![Python](https://img.shields.io/badge/Python-3.9-3776AB?style=for-the-badge&logo=python)
+![Python](https://img.shields.io/badge/Python-3.9-blue?style=for-the-badge&logo=python)
 
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql)
 
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker)
 
-![Railway](https://img.shields.io/badge/Railway-0B0D0E?style=for-the-badge&logo=railway)
+![Google Gemini](https://img.shields.io/badge/Google-Gemini-blue?style=for-the-badge)
 
-![License](https://img.shields.io/github/license/cobrich/Go2StudyTelegramChatBot?style=for-the-badge)
+![Railway](https://img.shields.io/badge/Railway-Deployed-black?style=for-the-badge)
+
+![MIT License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 ---
 
