@@ -1,4 +1,3 @@
-````markdown
 ## 🎓 Go2Study
 
 AI-powered adaptive learning platform for NIS entrance exam preparation.
