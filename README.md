@@ -11,7 +11,6 @@ Built for production deployment with Python, PostgreSQL, Google Gemini, Docker, 
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker)
 ![Google Gemini](https://img.shields.io/badge/Google-Gemini-blue?style=for-the-badge)
 ![Railway](https://img.shields.io/badge/Railway-Deployed-black?style=for-the-badge)
-![MIT License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 ![License](https://img.shields.io/github/license/cobrich/Go2StudyTelegramChatBot?style=for-the-badge)
 
 ---
