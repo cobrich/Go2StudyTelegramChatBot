@@ -1,65 +1,79 @@
-# Go2Study Bot
+````markdown
+# 🎓 Go2Study
 
-**Telegram-бот для подготовки к экзаменам НИШ (5–7 классы)** с адаптивным тестированием, генерацией вопросов через Google Gemini и полноценной админ-панелью.
+AI-powered adaptive learning platform for NIS entrance exam preparation.
 
-> Проект развёрнут в production. Исходный код приватный — этот README описывает архитектуру, функционал и технические решения для портфолио.
+Go2Study combines curated educational content, adaptive testing, AI-generated questions, student analytics, PDF question import, and a complete administration system inside Telegram.
 
----
+Built for production deployment with Python, PostgreSQL, Google Gemini, Docker, Railway, and Telegram Bot API.
 
-## Демонстрация
-
-<!-- Замените ссылку на запись экрана или GIF -->
-<!-- ![Демонстрация работы бота](docs/demo.gif) -->
-
-| Сценарий | Описание |
-|----------|----------|
-| Выбор темы | Иерархическое меню: раздел → подтема → тест из 10 вопросов |
-| Ответ на вопрос | Мгновенная обратная связь + развёрнутое объяснение |
-| Пересдача | Повтор ошибок + новые AI-вопросы по слабым местам |
-| Админ-панель | Управление учениками, темами, вопросами, импорт из PDF |
+![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker)
+![Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?style=for-the-badge&logo=google)
+![Railway](https://img.shields.io/badge/Railway-0B0D0E?style=for-the-badge)
+![License](https://img.shields.io/github/license/cobrich/Go2StudyTelegramChatBot?style=for-the-badge)
 
 ---
 
-## Ключевые возможности
+## Overview
 
-### Для учеников
+Go2Study is a Telegram-based adaptive learning platform designed for students preparing for NIS entrance exams.
 
-- **Адаптивные тесты** — приоритет вопросов, на которых ученик ошибался ранее
-- **Гибридный банк вопросов** — curated-вопросы из PostgreSQL + свежие задачи от Gemini AI
-- **Режим пересдачи** — повторение ошибок с догенерацией похожих AI-вопросов
-- **Рандомный тест** — сбалансированная выборка вопросов из разных тем
-- **Подробная аналитика** — история тестов, прогресс по темам
-- **Двуязычный интерфейс** — русский и казахский (отдельные иерархии тем)
-- **Чистый UX** — inline-клавиатуры, управляемые сообщения без «мусора» в чате
-
-### Для администраторов
-
-- **Whitelist-доступ** — только одобренные ученики могут проходить тесты
-- **CRUD учеников** — добавление по Telegram ID, редактирование ФИО, класса, языка, статуса
-- **Управление учебной программой** — разделы и подтемы на двух языках
-- **Банк вопросов** — ручное добавление, редактирование, поиск, удаление
-- **Импорт из PDF** — парсинг вопросов с извлечением изображений (PyMuPDF)
-- **AI-объяснения** — автогенерация пояснений к существующим вопросам
-- **Статистика** — системная аналитика и история активности учеников
-- **Управление админами** — роли суперадмина и обычного администратора
+The system provides topic-based tests, tracks student mistakes, generates new AI-powered questions, stores test history, and gives administrators full control over students, topics, question banks, and analytics.
 
 ---
 
-## Учебная программа
+## Features
 
-5 разделов, **23 подтемы** на каждом языке (русский / казахский):
-
-| Раздел | Подтемы |
-|--------|---------|
-| Числа и арифметика | Дроби, сравнение чисел, проценты, пропорции, порядок действий, модуль, неравенства |
-| Алгебраические выражения | Упрощение, выражения, скобки, линейные уравнения, системы уравнений |
-| Геометрия | Площадь и периметр, углы, масштабы, круг и окружность |
-| Анализ данных и статистика | Среднее арифметическое, последовательности, текстовые задачи, функции |
-| Логико-математическое мышление | Закономерности, логические задачи, сравнение выражений |
+| Feature                | Description                                              |
+| ---------------------- | -------------------------------------------------------- |
+| Adaptive Testing       | Prioritizes questions based on previous student mistakes |
+| AI Question Generation | Uses Google Gemini to generate new practice questions    |
+| Question Bank          | Stores curated, AI-generated, and PDF-imported questions |
+| Retake Mode            | Helps students practice previous mistakes                |
+| Random Tests           | Generates mixed tests from different topics              |
+| Student Analytics      | Tracks progress, history, and weak areas                 |
+| Admin Panel            | CRUD for students, topics, questions, and admins         |
+| PDF Import             | Extracts and imports questions from PDF files            |
+| Bilingual UI           | Russian and Kazakh language support                      |
+| Whitelist Access       | Only approved students can use the bot                   |
+| Clean Telegram UX      | Managed messages prevent chat clutter                    |
 
 ---
 
-## Архитектура
+## Engineering Highlights
+
+- Adaptive testing algorithm based on student mistakes
+- AI-generated exam questions with Google Gemini
+- Complete administration system with CRUD operations
+- PostgreSQL repository architecture
+- SQLAlchemy-based database layer
+- PDF question import pipeline
+- Student progress analytics
+- Test history tracking
+- Bilingual interface: Russian and Kazakh
+- Managed Telegram messages for clean UX
+- Production deployment on Railway
+- Dockerized application
+
+---
+
+## Curriculum
+
+The platform contains 5 main sections and 23 subtopics for each language.
+
+| Section                       | Example Topics                                    |
+| ----------------------------- | ------------------------------------------------- |
+| Numbers and Arithmetic        | Fractions, percentages, proportions, inequalities |
+| Algebraic Expressions         | Simplification, equations, systems of equations   |
+| Geometry                      | Area, perimeter, angles, scale, circles           |
+| Data Analysis and Statistics  | Average, sequences, word problems, functions      |
+| Logical-Mathematical Thinking | Patterns, logic problems, expression comparison   |
+
+---
+
+## Architecture
 
 ```mermaid
 flowchart TB
@@ -67,235 +81,196 @@ flowchart TB
         TG[Telegram Client]
     end
 
-    subgraph App["Go2Study Bot (Docker / Railway)"]
+    subgraph App["Go2Study Bot"]
         MAIN[main.py]
-        FLASK[Flask Health Check :8000]
-        CMD[CommandHandlers]
-        CB[CallbackHandlers]
-        ADM[AdminHandlers]
-        QS[QuestionService]
-        AI[ImprovedAIService]
-        PDF[PDFProcessor]
-        RTS[RandomTestService]
-        MM[MessageManager]
+        HEALTH[Flask Health Check]
+        CMD[Command Handlers]
+        CB[Callback Handlers]
+        ADM[Admin Handlers]
+        QS[Question Service]
+        AI[Gemini AI Service]
+        PDF[PDF Processor]
+        RTS[Random Test Service]
+        MM[Message Manager]
+    end
+
+    subgraph Data
+        FACADE[Database Facade]
+        REPOS[Repositories]
+        PG[(PostgreSQL)]
     end
 
     subgraph External
         GEMINI[Google Gemini API]
-        PG[(PostgreSQL / Neon)]
     end
 
-    TG <-->|Bot API| MAIN
-    MAIN --> FLASK
-    MAIN --> CMD & CB & ADM
-    CMD & CB & ADM --> QS & RTS & PDF & MM
+    TG <-->|Telegram Bot API| MAIN
+    MAIN --> HEALTH
+    MAIN --> CMD
+    MAIN --> CB
+    MAIN --> ADM
+
+    CMD --> QS
+    CB --> QS
+    ADM --> QS
+    ADM --> PDF
+
     QS --> AI
+    QS --> RTS
+    QS --> MM
     PDF --> AI
     AI <-->|REST| GEMINI
-    CMD & CB & ADM & QS & RTS & MM --> FACADE[SyncDatabaseFacade]
-    FACADE --> REPOS[Repositories]
-    REPOS <-->|SQLAlchemy + psycopg2| PG
-```
 
-### Слои приложения
-
-```
-go2study_bot/
-├── main.py                          # Точка входа: Telegram polling + Flask health check
-├── Dockerfile                       # Production-образ (Python 3.9-slim)
-├── railway.json                     # Конфигурация деплоя на Railway
-├── requirements.txt
-├── tests/
-│   └── test_ai_service_improved.py
-└── src/
-    ├── init_app.py                  # Автоинициализация БД при первом запуске
-    ├── init_database.py             # Создание схемы (SQLAlchemy)
-    ├── init_topics.py               # Seed: 5 разделов × 23 подтемы × 2 языка
-    ├── init_superadmin.py           # Создание суперадмина
-    ├── config/
-    │   ├── constants.py             # RU: темы, меню, HELP_TEXT
-    │   ├── constants_kk.py          # KK: темы + маппинг переводов
-    │   └── messages_kk.py           # Казахские UI-строки
-    ├── handlers/
-    │   ├── command_handlers.py      # /start, /stop, /reset, onboarding
-    │   ├── callback_handlers.py     # Тесты, ответы, навигация
-    │   └── admin/                   # Админ-панель (students, topics, questions, stats)
-    ├── services/
-    │   ├── question_service.py      # Адаптивная генерация тестов (ядро)
-    │   ├── ai_service_improved.py   # Gemini: промпты, парсинг, retry
-    │   ├── pdf_processor.py         # Импорт вопросов из PDF
-    │   └── random_test_service.py   # Кросс-тематические рандом-тесты
-    ├── db/
-    │   ├── models.py                # SQLAlchemy ORM-модели
-    │   ├── sync_database_facade.py  # Единый API доступа к данным + кэш
-    │   └── repositories/            # Репозитории по доменам
-    └── utils/
-        ├── keyboards.py             # Inline/reply-клавиатуры
-        ├── message_manager.py       # Дедупликация UI-сообщений
-        └── translations.py          # RU ↔ KK
-```
-
-### Поток прохождения теста
-
-1. Ученик выбирает подтему через inline-клавиатуру
-2. `QuestionService.get_or_generate_tasks()` собирает 10 вопросов по адаптивному алгоритму
-3. Ответы обрабатываются в `CallbackHandlers`; ошибки сохраняются в `user_errors`
-4. Результаты записываются в `user_test_results` и `user_progress`
-5. При пересдаче (`retake`) — приоритет прежних ошибок + AI-догенерация
-
-### Адаптивный алгоритм генерации теста
-
-**Обычный режим** (10 вопросов):
-1. Вопросы из `user_errors` (слабые места ученика)
-2. Вопросы из банка PostgreSQL (до 8 шт.)
-3. Минимум 2 свежих AI-вопроса от Gemini
-
-**Режим пересдачи**:
-1. Все доступные ошибки по теме
-2. Недостающее количество — AI-вопросы с контекстом «пересдача»
-
-AI-вопросы проходят строгую валидацию (длина, соответствие теме, отсутствие мета-текста), дедупликацию через `pg_trgm` (порог similarity > 0.85) и сохраняются в БД для повторного использования.
+    QS --> FACADE
+    ADM --> FACADE
+    MM --> FACADE
+    FACADE --> REPOS
+    REPOS --> PG
+````
 
 ---
 
-## Технологический стек
+## Test Flow
 
-| Компонент | Технология |
-|-----------|------------|
-| Язык | Python 3.9 |
-| Bot framework | python-telegram-bot 20.8 (async polling) |
-| AI | Google Gemini (`google-generativeai`) |
-| База данных | PostgreSQL (Neon / Supabase) |
-| ORM | SQLAlchemy 2.0 |
-| DB driver | psycopg2-binary, asyncpg |
-| PDF | PyPDF2, PyMuPDF (fitz), Pillow |
-| Health check | Flask 3.1.1 |
-| Конфигурация | python-dotenv |
-| Деплой | Docker + Railway |
-| Тесты | unittest + mocks |
+1. Student selects a section and subtopic using Telegram inline buttons.
+2. `QuestionService` builds a 10-question test.
+3. The system prioritizes previous mistakes.
+4. Existing questions are loaded from PostgreSQL.
+5. Missing questions are generated using Google Gemini.
+6. Answers are processed and stored.
+7. Student progress and test history are updated.
+8. Retake mode uses previous mistakes and AI-generated similar questions.
 
 ---
 
-## Схема базы данных
+## Adaptive Algorithm
 
-| Таблица | Назначение |
-|---------|------------|
-| `admins` | Администраторы (user_id, роль суперадмина) |
-| `allowed_users` | Whitelist учеников (ФИО, класс, язык, доступ) |
-| `main_topics` | Основные разделы (RU/KK) |
-| `subtopics` | Подтемы, привязанные к разделам |
-| `questions` | Вопросы с вариантами ответов и объяснениями (`source`: manual / ai / pdf) |
-| `user_errors` | Ошибки учеников (для адаптивного обучения) |
-| `user_progress` | Прогресс по темам (correct / total) |
-| `user_test_results` | История результатов тестов |
-| `managed_messages` | ID UI-сообщений для дедупликации в чате |
+### Normal Test Mode
 
----
+1. Questions from previous mistakes.
+2. Questions from PostgreSQL question bank.
+3. At least several fresh AI-generated questions.
 
-## Команды и интерфейс
+### Retake Mode
 
-### Команды
-
-| Команда | Описание |
-|---------|----------|
-| `/start` | Регистрация (ФИО, класс 5–7), проверка whitelist, главное меню |
-| `/stop` | Очистка сессии и данных активности |
-| `/reset` | Сброс «застрявшего» состояния теста |
-| `/myid` | Показать Telegram user ID (для добавления в whitelist) |
-| `/language` | Выбор языка интерфейса (RU / KK) |
-| `/admin` | Админ-панель (только для администраторов) |
-| `/clear_cache <user_id>` | Сброс кэша доступа (только для админов) |
-
-Справка доступна через кнопку **❓ Помощь** в главном меню.
-
-### Главное меню
-
-- **📚 Выбрать тему и начать** — иерархический выбор → тест
-- **🎯 Начать рандомный тест** — вопросы из разных тем
-- **📊 Мой прогресс** — последние 10 результатов
-- **❓ Помощь** — инструкция по использованию
-- **🔧 Админ-панель** — для администраторов
+1. Previous mistakes from the selected topic.
+2. Missing questions are generated by AI.
+3. Results are saved for future analytics.
 
 ---
 
-## Технические решения
+## Tech Stack
 
-### Структурированная генерация AI-вопросов
+| Component      | Technology              |
+| -------------- | ----------------------- |
+| Language       | Python 3.9              |
+| Bot Framework  | python-telegram-bot     |
+| AI             | Google Gemini           |
+| Database       | PostgreSQL              |
+| ORM            | SQLAlchemy              |
+| DB Driver      | psycopg2 / asyncpg      |
+| PDF Processing | PyPDF2, PyMuPDF, Pillow |
+| Health Check   | Flask                   |
+| Deployment     | Docker, Railway         |
+| Testing        | unittest, mocks         |
 
-Промпт требует ответ в фиксированном формате с маркерами `[QUESTION]`, `[CORRECT_ANSWER]`, `[INCORRECT_OPTIONS]`, `[EXPLANATION]`. Модель проходит self-verification: объяснение должно совпадать с правильным ответом. При rate limit (429) — exponential backoff (2 → 4 → 8 сек).
+---
 
-```python
-# src/services/ai_service_improved.py
-def generate_task(self, topic, task_type, main_topic=None, language='ru', max_retries=3):
-    prompt = self._get_universal_prompt(topic, task_type, main_topic, language)
-    retries = 0
-    while retries < max_retries:
-        try:
-            response_text = self.model.generate_content(prompt).text
-            return self._parse_structured_response(response_text)
-        except exceptions.ResourceExhausted:
-            retries += 1
-            time.sleep(2 ** retries)
+## Project Structure
+
+```text
+src/
+├── config/              # Constants, translations, localized messages
+├── db/                  # Models, repositories, database facade
+├── handlers/            # Telegram command, callback and admin handlers
+├── services/            # AI, questions, PDF, random tests, topics
+├── utils/               # Keyboards, translations, message manager
+├── init_app.py          # Application initialization
+├── init_database.py     # Database schema initialization
+├── init_superadmin.py   # Superadmin creation
+└── init_topics.py       # Curriculum seeding
+
+tests/
+└── test_ai_service_improved.py
+
+Dockerfile
+railway.json
+main.py
+requirements.txt
 ```
 
-### Параллельная генерация без блокировки event loop
+---
 
-```python
-# src/services/question_service.py
-semaphore = asyncio.Semaphore(10)
+## Database Schema
 
-async def _semaphored_generate(task_type):
-    async with semaphore:
-        return await asyncio.to_thread(self._generate_ai_task, topic, task_type, main_topic, language)
-```
-
-### Управляемые сообщения (чистый чат)
-
-`MessageManager` хранит одно сообщение на `message_type` в БД. При обновлении UI — редактирует существующее или удаляет старое перед отправкой нового. Исключает накопление десятков сообщений в чате.
-
-### Zero-touch деплой
-
-При первом запуске на пустой PostgreSQL (`USE_POSTGRESQL=true`) `init_app.py` автоматически:
-1. Создаёт таблицы (`init_database`)
-2. Наполняет темами RU + KK (`init_topics`)
-3. Создаёт суперадмина из env-переменных (`init_superadmin`)
+| Table             | Purpose                                          |
+| ----------------- | ------------------------------------------------ |
+| admins            | Administrator accounts and roles                 |
+| allowed_users     | Whitelisted students                             |
+| main_topics       | Main curriculum sections                         |
+| subtopics         | Subtopics linked to sections                     |
+| questions         | Manual, AI-generated, and PDF-imported questions |
+| user_errors       | Student mistakes for adaptive testing            |
+| user_progress     | Topic progress statistics                        |
+| user_test_results | Test history                                     |
+| managed_messages  | Telegram UI message management                   |
 
 ---
 
-## Быстрый старт (локально)
+## Bot Commands
 
-### 1. Установка зависимостей
+| Command      | Description                         |
+| ------------ | ----------------------------------- |
+| /start       | Register student and open main menu |
+| /stop        | Clear active session                |
+| /reset       | Reset stuck test state              |
+| /myid        | Show Telegram user ID               |
+| /language    | Change interface language           |
+| /admin       | Open admin panel                    |
+| /clear_cache | Clear user access cache             |
+
+---
+
+## Admin Features
+
+* Manage students
+* Manage admins
+* Manage sections and topics
+* Add, edit, search and delete questions
+* Import questions from PDF
+* View student statistics
+* View system analytics
+* Manage whitelist access
+
+---
+
+## Getting Started
+
+### 1. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Переменные окружения
-
-Создайте файл `.env`:
+### 2. Create `.env`
 
 ```env
-# Telegram
 TELEGRAM_BOT_TOKEN=your_bot_token
 
-# Google Gemini
 GEMINI_API_KEY=your_gemini_key
 GEMINI_MODEL=gemini-2.0-flash
 
-# PostgreSQL
 DATABASE_URL=postgresql://user:password@host:5432/dbname
 USE_POSTGRESQL=true
 
-# Суперадмин (для автоматической инициализации)
 SUPERADMIN_ID=123456789
 SUPERADMIN_USERNAME=admin_username
-SUPERADMIN_FIO=Иванов Иван Иванович
+SUPERADMIN_FIO=Admin Name
 
-# Health check (опционально)
 PORT=8000
 ```
 
-### 3. Инициализация (если `USE_POSTGRESQL=false` или ручной запуск)
+### 3. Initialize database manually if needed
 
 ```bash
 python src/init_database.py
@@ -303,7 +278,7 @@ python src/init_topics.py
 python src/init_superadmin.py
 ```
 
-### 4. Запуск
+### 4. Run locally
 
 ```bash
 python main.py
@@ -311,39 +286,115 @@ python main.py
 
 ---
 
-## Деплой в production
-
-### Railway + Neon (рекомендуется)
-
-1. Создайте PostgreSQL на [neon.tech](https://neon.tech)
-2. Создайте проект на [railway.app](https://railway.app) и подключите репозиторий
-3. Установите переменные окружения (`DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `USE_POSTGRESQL=true`, `SUPERADMIN_*`)
-4. Railway соберёт Docker-образ и запустит `python main.py`
-5. При первом запуске бот автоматически инициализирует БД
-
-Flask health check на `GET /` возвращает `{"status": "ok"}` — Railway использует его для мониторинга.
-
-### Docker
+## Docker
 
 ```bash
 docker build -t go2study-bot .
 docker run --env-file .env -p 8000:8000 go2study-bot
 ```
 
-Образ запускается от непривилегированного пользователя `botuser` (uid 1000).
+---
+
+## Deployment
+
+The project is designed for Railway deployment.
+
+Deployment flow:
+
+```text
+GitHub
+  ↓
+Railway
+  ↓
+Docker Build
+  ↓
+PostgreSQL
+  ↓
+Telegram Bot
+```
+
+Health check:
+
+```http
+GET /
+```
+
+Response:
+
+```json
+{
+  "status": "ok"
+}
+```
 
 ---
 
-## Тестирование
+## Testing
 
 ```bash
 python -m unittest tests/test_ai_service_improved.py
 ```
 
-Покрытие: парсинг структурированных AI-ответов, обработка ошибок API, валидация формата вопросов.
+Tests cover:
+
+* AI response parsing
+* Invalid response handling
+* Structured question format validation
+* Gemini service mocking
 
 ---
 
-## Дополнительная документация
+## Roadmap
 
-Подробный changelog и технические заметки — в [DOCS.md](DOCS.md).
+* [x] Adaptive testing
+* [x] Google Gemini integration
+* [x] PostgreSQL support
+* [x] Admin panel
+* [x] Student whitelist
+* [x] PDF question import
+* [x] Russian and Kazakh interface
+* [x] Test history
+* [x] Student analytics
+* [x] Railway deployment
+* [x] Docker deployment
+* [ ] Web dashboard
+* [ ] Parent access
+* [ ] Teacher analytics dashboard
+* [ ] More exam modes
+* [ ] CI/CD pipeline
+* [ ] Advanced reporting
+
+---
+
+## Lessons Learned
+
+Building Go2Study helped me improve:
+
+* Telegram Bot architecture
+* PostgreSQL database design
+* SQLAlchemy ORM usage
+* Repository pattern
+* AI prompt engineering
+* Adaptive learning logic
+* PDF processing
+* Docker deployment
+* Railway deployment
+* Production debugging
+* Large Python project organization
+
+---
+
+## License
+
+This project is licensed under the MIT License.
+
+---
+
+## Author
+
+Bekzat Tursun
+
+GitHub: https://github.com/cobrich
+
+```
+```
